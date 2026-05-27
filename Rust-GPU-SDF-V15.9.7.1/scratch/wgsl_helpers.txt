@@ -1,0 +1,34 @@
+
+fn apply_profile_union(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
+    if (profile == 1u) { let h = max(k - abs(d1 - d2), 0.0) / k; return min(d1, d2) - h * h * h * k * 0.166666; }
+    else if (profile == 2u) { return -k * log2(max(exp2(-d1 / k) + exp2(-d2 / k), 1e-10)); }
+    else if (profile == 3u) { let h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0); return mix(d2, d1, h) - k * h * h * (1.0 - h) * (1.0 - h) * 2.0; }
+    else if (profile == 4u) {
+        let ch = min(min(d1, d2), (d1 + d2 - k) * 0.70710678);
+        if (cs > 0.0) { let h = clamp(0.5 + 0.5 * (ch - min(d1, d2)) / cs, 0.0, 1.0); return mix(ch, min(d1, d2), h) - cs * h * (1.0 - h); }
+        return ch;
+    }
+    let h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0); return mix(d2, d1, h) - k * h * (1.0 - h);
+}
+fn apply_profile_sub(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
+    if (profile == 1u) { let h = max(k - abs(d1 + d2), 0.0) / k; return max(d1, -d2) + h * h * h * k * 0.166666; }
+    else if (profile == 2u) { return k * log2(max(exp2(d1 / k) + exp2(-d2 / k), 1e-10)); }
+    else if (profile == 3u) { let h = clamp(0.5 + 0.5 * (-d2 - d1) / k, 0.0, 1.0); return mix(-d2, d1, h) + k * h * h * (1.0 - h) * (1.0 - h) * 2.0; }
+    else if (profile == 4u) {
+        let ch = max(max(d1, -d2), (d1 - d2 + k) * 0.70710678);
+        if (cs > 0.0) { let h = clamp(0.5 + 0.5 * (ch - max(d1, -d2)) / cs, 0.0, 1.0); return mix(ch, max(d1, -d2), 1.0 - h) + cs * h * (1.0 - h); }
+        return ch;
+    }
+    let h = clamp(0.5 + 0.5 * (d1 + d2) / k, 0.0, 1.0); return mix(-d2, d1, h) + k * h * (1.0 - h);
+}
+fn apply_profile_int(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
+    if (profile == 1u) { let h = max(k - abs(d1 - d2), 0.0) / k; return max(d1, d2) + h * h * h * k * 0.166666; }
+    else if (profile == 2u) { return k * log2(max(exp2(d1 / k) + exp2(d2 / k), 1e-10)); }
+    else if (profile == 3u) { let h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0); return mix(d1, d2, h) + k * h * h * (1.0 - h) * (1.0 - h) * 2.0; }
+    else if (profile == 4u) {
+        let ch = max(max(d1, d2), (d1 + d2 + k) * 0.70710678);
+        if (cs > 0.0) { let h = clamp(0.5 + 0.5 * (ch - max(d1, d2)) / cs, 0.0, 1.0); return mix(ch, max(d1, d2), 1.0 - h) + cs * h * (1.0 - h); }
+        return ch;
+    }
+    let h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0); return mix(d1, d2, h) + k * h * (1.0 - h);
+}

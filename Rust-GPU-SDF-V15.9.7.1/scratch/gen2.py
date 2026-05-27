@@ -1,0 +1,43 @@
+import json
+
+rust_helpers = """
+fn apply_profile_union(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
+    if profile == 1 { let h = (k - (d1 - d2).abs()).max(0.0) / k; d1.min(d2) - h * h * h * k * 0.166666 }
+    else if profile == 2 { -k * ((-d1 / k).exp2() + (-d2 / k).exp2()).max(1e-10).log2() }
+    else if profile == 3 { let h = (0.5 + 0.5 * (d2 - d1) / k).clamp(0.0, 1.0); crate::math::lerp(d2, d1, h) - k * h * h * (1.0 - h) * (1.0 - h) * 2.0 }
+    else if profile == 4 {
+        let ch = d1.min(d2).min((d1 + d2 - k) * 0.70710678);
+        if cs > 0.0 { let h = (0.5 + 0.5 * (ch - d1.min(d2)) / cs).clamp(0.0, 1.0); crate::math::lerp(ch, d1.min(d2), h) - cs * h * (1.0 - h) }
+        else { ch }
+    } else {
+        let h = (0.5 + 0.5 * (d2 - d1) / k).clamp(0.0, 1.0); crate::math::lerp(d2, d1, h) - k * h * (1.0 - h)
+    }
+}
+fn apply_profile_sub(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
+    if profile == 1 { let h = (k - (d1 + d2).abs()).max(0.0) / k; d1.max(-d2) + h * h * h * k * 0.166666 }
+    else if profile == 2 { k * ((d1 / k).exp2() + (-d2 / k).exp2()).max(1e-10).log2() }
+    else if profile == 3 { let h = (0.5 + 0.5 * (-d2 - d1) / k).clamp(0.0, 1.0); crate::math::lerp(-d2, d1, h) + k * h * h * (1.0 - h) * (1.0 - h) * 2.0 }
+    else if profile == 4 {
+        let ch = d1.max(-d2).max((d1 - d2 + k) * 0.70710678);
+        if cs > 0.0 { let h = (0.5 + 0.5 * (ch - d1.max(-d2)) / cs).clamp(0.0, 1.0); crate::math::lerp(ch, d1.max(-d2), 1.0 - h) + cs * h * (1.0 - h) }
+        else { ch }
+    } else {
+        let h = (0.5 + 0.5 * (d1 + d2) / k).clamp(0.0, 1.0); crate::math::lerp(-d2, d1, h) + k * h * (1.0 - h)
+    }
+}
+fn apply_profile_int(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
+    if profile == 1 { let h = (k - (d1 - d2).abs()).max(0.0) / k; d1.max(d2) + h * h * h * k * 0.166666 }
+    else if profile == 2 { k * ((d1 / k).exp2() + (d2 / k).exp2()).max(1e-10).log2() }
+    else if profile == 3 { let h = (0.5 + 0.5 * (d2 - d1) / k).clamp(0.0, 1.0); crate::math::lerp(d1, d2, h) + k * h * h * (1.0 - h) * (1.0 - h) * 2.0 }
+    else if profile == 4 {
+        let ch = d1.max(d2).max((d1 + d2 + k) * 0.70710678);
+        if cs > 0.0 { let h = (0.5 + 0.5 * (ch - d1.max(d2)) / cs).clamp(0.0, 1.0); crate::math::lerp(ch, d1.max(d2), 1.0 - h) + cs * h * (1.0 - h) }
+        else { ch }
+    } else {
+        let h = (0.5 + 0.5 * (d2 - d1) / k).clamp(0.0, 1.0); crate::math::lerp(d1, d2, h) + k * h * (1.0 - h)
+    }
+}
+"""
+
+with open("scratch/rust_helpers.txt", "w") as f:
+    f.write(rust_helpers)
