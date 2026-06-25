@@ -51,7 +51,13 @@ find "$BIN_DIR" -maxdepth 1 -type f -name 'rust_gpu_sdf*' ! -name 'README.txt' -
 DEST_FILE="$BIN_DIR/rust_gpu_sdf${EXT_SUFFIX}"
 cp "$SOURCE_FILE" "$DEST_FILE"
 
+# Keep the addon folder itself ready for direct zipping.
+find "$ADDON_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} +
+find "$ADDON_DIR" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+
 echo "Build Complete: $DEST_FILE"
+echo "Addon folder ready: $ADDON_DIR"
+echo "You can zip the rust_gpu_sdf_addon folder directly for distribution."
 echo "--- Packaging Addon ZIP ---"
 
 ZIP_FILE="SDF_R_15_9_8_1_LINUX.zip"
