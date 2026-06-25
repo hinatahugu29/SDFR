@@ -6,6 +6,9 @@
 **/__pycache__/
 **/*.pyc
 **/*.pyo
+**/*.pyd
+**/*.so
+**/*.dylib
 # ビルドされたPython拡張モジュール（バイナリ）
 **/*.pyd
 
