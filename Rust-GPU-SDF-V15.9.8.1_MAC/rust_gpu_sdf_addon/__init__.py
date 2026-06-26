@@ -76,6 +76,22 @@ bl_info = {
     "category": "Mesh",
 }
 
+# Some Blender install paths can execute __init__.py as a standalone module
+# instead of a package entrypoint. Normalize package context so relative
+# imports continue to work in both cases.
+if __package__ in {None, ""}:
+    import os
+    import sys
+
+    _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+    _PARENT_DIR = os.path.dirname(_PACKAGE_DIR)
+    _PACKAGE_NAME = os.path.basename(_PACKAGE_DIR)
+
+    if _PARENT_DIR not in sys.path:
+        sys.path.insert(0, _PARENT_DIR)
+
+    __package__ = _PACKAGE_NAME
+
 if "bpy" in locals():
     import importlib
     importlib.reload(constants)

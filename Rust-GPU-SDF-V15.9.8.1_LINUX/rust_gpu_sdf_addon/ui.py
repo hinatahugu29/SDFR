@@ -1,5 +1,5 @@
 import bpy
-from . import rust_gpu_sdf
+from ._native import rust_gpu_sdf
 from .constants import PRIMITIVE_UI_DEFS
 
 class SDF_UL_stack_list(bpy.types.UIList):
