@@ -41,7 +41,7 @@ jobs:
           path: Rust-GPU-SDF-V15.9.8.1_MAC/SDF_R_15_9_8_1_MAC.zip
 
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: Rust-GPU-SDF-V15.9.8.1_LINUX

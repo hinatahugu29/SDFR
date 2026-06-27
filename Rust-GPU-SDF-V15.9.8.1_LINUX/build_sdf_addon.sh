@@ -21,11 +21,7 @@ export PYO3_BUILD_EXTENSION_MODULE=1
 echo "--- Rust SDF Module Build Start (Linux) ---"
 cargo build --release
 
-EXT_SUFFIX="$("$PYTHON_BIN" - <<'PY'
-import sysconfig
-print(sysconfig.get_config_var("EXT_SUFFIX") or ".so")
-PY
-)"
+EXT_SUFFIX=".so"
 
 SOURCE_FILE=""
 for candidate in \
