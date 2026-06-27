@@ -91,9 +91,13 @@ if __package__ in {None, ""}:
         sys.path.insert(0, _PARENT_DIR)
 
     __package__ = _PACKAGE_NAME
+    __path__ = [_PACKAGE_DIR]
+    sys.modules.setdefault(_PACKAGE_NAME, sys.modules[__name__])
+
+import importlib
+import os
 
 if "bpy" in locals():
-    import importlib
     importlib.reload(constants)
     importlib.reload(properties)
     importlib.reload(operators)
@@ -103,16 +107,15 @@ if "bpy" in locals():
     importlib.reload(shader)
 else:
     import bpy
-    import os
-    from . import constants
-    from . import properties
-    from . import operators
-    from . import ui
-    from . import handlers
-    from . import engine
-    from . import shader
+    constants = importlib.import_module(f"{__package__}.constants")
+    properties = importlib.import_module(f"{__package__}.properties")
+    operators = importlib.import_module(f"{__package__}.operators")
+    ui = importlib.import_module(f"{__package__}.ui")
+    handlers = importlib.import_module(f"{__package__}.handlers")
+    engine = importlib.import_module(f"{__package__}.engine")
+    shader = importlib.import_module(f"{__package__}.shader")
 
-from .engine import _update_preview
+_update_preview = engine._update_preview
 
 _LAYOUT_FLAG_FILE = os.path.join(os.path.dirname(__file__), "SDF_DEBUG_LAYOUT.ON")
 _LAYOUT_DEBUG_ENV = os.environ.get("SDF_DEBUG_LAYOUT", "").strip().lower() in {"1", "true", "yes", "on"}
