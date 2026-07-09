@@ -15,7 +15,7 @@ else
   exit 1
 fi
 
-export PYO3_PYTHON="$PYTHON_BIN"
+export PYO3_PYTHON="$(command -v "$PYTHON_BIN")"
 export PYO3_BUILD_EXTENSION_MODULE=1
 
 echo "--- Rust SDF Module Build Start (macOS) ---"
