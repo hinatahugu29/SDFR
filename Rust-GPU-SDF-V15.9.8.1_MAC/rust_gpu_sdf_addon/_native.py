@@ -5,7 +5,11 @@ import platform
 
 
 _PACKAGE_DIR = os.path.dirname(__file__)
-_MODULE_NAME = f"{__package__}.rust_gpu_sdf"
+# __package__ が None または空になる環境（Blender 4.2+ / 5.1 のレガシーインストール一時処理等）に対応するための安全な解決
+_parent_package = __package__ or __name__.rpartition('.')[0]
+if not _parent_package:
+    _parent_package = os.path.basename(_PACKAGE_DIR)
+_MODULE_NAME = f"{_parent_package}.rust_gpu_sdf"
 _PLATFORM_SUBDIRS = {
     "Windows": "win",
     "Darwin": "mac",
