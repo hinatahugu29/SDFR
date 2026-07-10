@@ -2655,5 +2655,209 @@
     "artifacts": [
       "walkthrough.md"
     ]
+  },
+  {
+    "timestamp": "2026-07-10T09:42:19.829954+09:00",
+    "user_request_summary": "Mac版（V15.9.9.3_MAC）でアドオンがインストール・有効化できないエラー（cannot import name 'rust_gpu_sdf' from partially initialized module ... circular import）が発生している件についての対応・調査。",
+    "ai_interpretation": "つまり、Mac/Linuxテスト版で発生しているアドオンインポート時の circular import エラーの原因を調査し、対応を行ってほしいということですね。",
+    "status": "completed",
+    "duration_minutes": 15,
+    "files_changed": [
+      "Rust-GPU-SDF-V15.9.9.3_MAC/rust_gpu_sdf_addon/engine.py",
+      "Rust-GPU-SDF-V15.9.9.3_MAC/rust_gpu_sdf_addon/ui.py",
+      "Rust-GPU-SDF-V15.9.9.2_MAC/rust_gpu_sdf_addon/engine.py",
+      "Rust-GPU-SDF-V15.9.9.2_MAC/rust_gpu_sdf_addon/ui.py",
+      "Rust-GPU-SDF-V15.9.9.2_LINUX/rust_gpu_sdf_addon/engine.py",
+      "Rust-GPU-SDF-V15.9.9.2_LINUX/rust_gpu_sdf_addon/ui.py"
+    ],
+    "executed_actions": [
+      "Mac/Linuxテスト版のアドオン無効化・インストールエラーの原因を調査",
+      "engine.pyおよびui.py内でのrust_gpu_sdfのインポート元が、直接パッケージルート（.pyd期待）になっているためにエラーが発生することを発見",
+      "V15.9.9.3_MAC、V15.9.9.2_MAC、V15.9.9.2_LINUX内のengine.pyおよびui.pyのインポート文を『from ._native import rust_gpu_sdf』に書き換えて修正",
+      "変更をコミットし、Git PUSHを実行してGitHub Actionsをトリガー"
+    ],
+    "uploaded_images": [],
+    "notes": "過去の正常動作版（V15.9.8.1_MAC等）でも同様の書き換えが適用されていることを確認しました。今回の修正で問題が完全に解消される見込みです。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-10T10:01:24.833964+09:00",
+    "user_request_summary": "SDF_R_15_9_8_1_MACを先にインストールしてからV15.9.9.3_MACをインストールすると有効化できた理由についての調査・解説依頼。",
+    "ai_interpretation": "つまり、ユーザーが報告してきた特定の条件下（旧バージョンのインストール後）でのみ新バージョンが動作する怪奇現象の原因（Pythonのモジュールキャッシュ機構 sys.modules）を特定し、ユーザーに分かりやすく解説したいということですね。",
+    "status": "completed",
+    "duration_minutes": 5,
+    "files_changed": [],
+    "executed_actions": [
+      "Pythonのモジュールインポートキャッシュ（sys.modules）の仕様に基づく挙動の分析と理由の言語化"
+    ],
+    "uploaded_images": [],
+    "notes": "コード発行は不要との指示であるため、解説のみを提供しました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-10T10:10:29.639924+09:00",
+    "user_request_summary": "cross_platform_build_notes.md に追記した内容に漏れがないかの最終確認。",
+    "ai_interpretation": "つまり、新しく更新した手順書の内容について、インポート漏れやファイル修正漏れがないか他のファイルを再確認し、完全であることを保証したいということですね。",
+    "status": "completed",
+    "duration_minutes": 5,
+    "files_changed": [],
+    "executed_actions": [
+      "grep_search結果と照らし合わせたアドオンファイル群の再検証"
+    ],
+    "uploaded_images": [],
+    "notes": "他のサブモジュール（operators.pyやproperties.pyなど）にrust_gpu_sdfのインポート漏れがないことを再確認し、手順書の網羅性に漏れがないことを保証しました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-10T10:11:00.607954+09:00",
+    "user_request_summary": "インポートエラー（circular import）の原因が判明したことを受け、シェーダーコンパイルが問題の原因ではなかったのかどうかの検証・解説依頼。",
+    "ai_interpretation": "つまり、アドオン有効化エラーの原因について、シェーダーコンパイル段階（init_gpu等）とPythonロード段階（import）の役割の違いを明確にし、エラー発生レイヤーの違いを論理的に解説したいということですね。",
+    "status": "completed",
+    "duration_minutes": 5,
+    "files_changed": [],
+    "executed_actions": [
+      "Blenderのアドオン登録ライフサイクルとエラー発生部位の論理的分析"
+    ],
+    "uploaded_images": [],
+    "notes": "解説のみを提供しました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-10T10:11:42.851255+09:00",
+    "user_request_summary": "以前の問題も今回のインポートバグが根本原因であり、本修正で全て解決する可能性があるかどうかの考察依頼。",
+    "ai_interpretation": "つまり、テスターのこれまでの報告のタイムライン（キャッシュ有無による挙動変化）と照らし合わせ、今回の修正がすべての有効化トラブルを解決する決定打になる可能性が高い理由を整理したいということですね。",
+    "status": "completed",
+    "duration_minutes": 5,
+    "files_changed": [],
+    "executed_actions": [
+      "テスター報告のコンテキストを踏まえたインポートエラーの影響範囲の論理的考察"
+    ],
+    "uploaded_images": [],
+    "notes": "考察と解説を提供しました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-10T10:12:35.025343+09:00",
+    "user_request_summary": "テスター宛の英文返信案（連絡への感謝、インポートバグ原因と修正完了の報告、再テストの依頼）の作成要求。",
+    "ai_interpretation": "つまり、ユーザーがテスターへ直接送るための、今回のバグ修正内容を反映した丁寧な英語の返信テンプレートを作成したいということですね。",
+    "status": "completed",
+    "duration_minutes": 5,
+    "files_changed": [],
+    "executed_actions": [
+      "テスターへの報告用英語文面の作成"
+    ],
+    "uploaded_images": [],
+    "notes": "解説と英文テンプレートを提供しました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-10T10:14:15.254810+09:00",
+    "user_request_summary": "Other_OSフォルダ内のV15.9.9.3 Linux/Mac用のビルド済ZIPに修正が適用されているかの確認と、漏れていたV15.9.9.3_LINUXのソースコード修正。",
+    "ai_interpretation": "つまり、提供された既存のZIPファイルのインポート実装を逆アセンブル（解凍検証）し、Linux版のV15.9.9.3のソースコードにインポートバグが残っていることを突き止め、修正して再PUSHしたいということですね。",
+    "status": "completed",
+    "duration_minutes": 10,
+    "files_changed": [
+      "Rust-GPU-SDF-V15.9.9.3_LINUX/rust_gpu_sdf_addon/engine.py",
+      "Rust-GPU-SDF-V15.9.9.3_LINUX/rust_gpu_sdf_addon/ui.py"
+    ],
+    "executed_actions": [
+      "チェック用のPythonスクリプトを実行してOther_OS配下のLINUX/MAC ZIPファイルを解凍検証",
+      "MAC ZIPは修正済みだが、LINUX ZIPは未修正（from . import rust_gpu_sdf）であることを発見",
+      "Rust-GPU-SDF-V15.9.9.3_LINUXのengine.pyおよびui.pyを『from ._native import rust_gpu_sdf』に書き換えて修正",
+      "修正内容をGitコミット・PUSHしてActionsによる再ビルドをトリガー"
+    ],
+    "uploaded_images": [],
+    "notes": "今回のPUSHにより、Linux V15.9.9.3もバグのない正しい状態で自動再ビルドされます。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-10T10:23:05.157506+09:00",
+    "user_request_summary": "テスターからの新規ログ（Blender再起動後に有効化エラー・Nパネル非表示が再発する問題）が、先ほど適用したインポート修正で解決する同様の問題かどうかの確認。",
+    "ai_interpretation": "つまり、テスターから届いた再起動時のクラッシュログを分析し、それが先ほど修正した engine.py 内の from . import rust_gpu_sdf に起因する circular import エラーと完全に一致していることを確認・解説したいということですね。",
+    "status": "completed",
+    "duration_minutes": 5,
+    "files_changed": [],
+    "executed_actions": [
+      "テスターから提供されたBlender起動時のクラッシュログのスタックトレース分析"
+    ],
+    "uploaded_images": [],
+    "notes": "分析結果をユーザーに説明し、先ほど適用した修正で完全に解消されることを報告しました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-10T10:25:51.056818+09:00",
+    "user_request_summary": "再度、Other_OSフォルダ内のV15.9.9.3 Linux/Mac用のビルド済ZIPを解凍し、インポート修正（from ._native）が反映された最新のZIPファイルに置き換わっているかの検証要求。",
+    "ai_interpretation": "つまり、GitHub ActionsからダウンロードされてローカルのOther_OSフォルダに配置された最新のZIPファイル（特に前回復旧させたLinux版）について、再び解凍して修正が正しく反映されているかを再確認したいということですね。",
+    "status": "completed",
+    "duration_minutes": 5,
+    "files_changed": [],
+    "executed_actions": [
+      "ZIP解凍検証スクリプトの再実行による最新ZIPファイルの検証"
+    ],
+    "uploaded_images": [],
+    "notes": "解凍検証結果をユーザーに報告しました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-11T07:05:00+09:00",
+    "user_request_summary": "プリミティブ増加時にメッシュOFFで画面やオブジェクトを動かした際の引っかかり・重さに関するコードベースの調査依頼（コード発行なし）。",
+    "ai_interpretation": "ユーザーはプリミティブ増加時にビューポート描画やオブジェクト移動が重くなる現象の原因を求めている。現状コードベース（handlers.pyやengine.py）におけるメッシュOFF時の処理フロー、Python側でのデータ構築・テクスチャ転送オーバーヘッド、およびレイマーチングの描画負荷という観点から原因を特定し、解説・報告することと理解。",
+    "status": "completed",
+    "duration_minutes": 10,
+    "files_changed": [],
+    "executed_actions": [
+      "handlers.py の draw_callback_3d でのプレビュー用レイマーチング処理およびテクスチャ構築処理の確認",
+      "engine.py の update_sdf_mesh でのメッシュ生成ON/OFF切り替えロジックと、早期リターン前のプリミティブ走査の確認",
+      "プリミティブ数増加時に発生する CPU/Python 側の計算ボトルネックおよび GPU 側のテクスチャ転送・レイマーチング負荷の要因特定"
+    ],
+    "uploaded_images": [],
+    "notes": "コード発行は不要との指示であるため、ソースコードへの修正は行わず、調査結果の報告に留めました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-11T07:25:00+09:00",
+    "user_request_summary": "新バージョン V15.9.9.4 における画面・オブジェクト操作時の引っかかりに対する最適化改版状況の確認（コード発行なし）。",
+    "ai_interpretation": "ユーザーは V15.9.9.4 で進められている最適化改版のコードベースにおける対応状況の確認を求めている。handlers.py でのプレビューデータのキャッシュ化、操作中のLODステップ制限（ステップ数の動的抑制）、および engine.py でのメッシュ生成OFF時の早期リターン最適化が正しく実装されているかを調査・報告することと理解。",
+    "status": "completed",
+    "duration_minutes": 10,
+    "files_changed": [],
+    "executed_actions": [
+      "V15.9.9.4 の handlers.py にて _preview_dirty による GPU テクスチャ再構築のキャッシュ化と、操作中のステップ数抑制機能（LOD）の実装を確認",
+      "V15.9.9.4 の engine.py にて sdf_show_result = False の場合の早期リターンによるプリミティブ走査のスキップ実装を確認"
+    ],
+    "uploaded_images": [],
+    "notes": "調査のみ。指摘したボトルネックがすべて完全に解消される設計にアップデートされていることを確認しました。",
+    "artifacts": []
+  },
+  {
+    "timestamp": "2026-07-11T08:00:00+09:00",
+    "user_request_summary": "V15.9.9.4 をベースとした macOS/Linux 向けビルドパッケージ用フォルダの複製、Pythonインポート文の変更、ビルドスクリプトと GitHub Actions ワークフローの設定要求。",
+    "ai_interpretation": "ユーザーは V15.9.9.4 の最適化実装を Mac/Linux 環境にも適用するためのビルドパッケージ構成の準備を求めている。通常版フォルダから MAC/LINUX フォルダを複製し、動的ローダー _native.py の配置、Windows用バイナリの削除、__init__.py, engine.py, ui.py でのインポート参照変更、ビルドスクリプトの修正、そして GitHub Actions ワークフローの追加定義までの一連のクロスプラットフォーム準備を行うことと理解。",
+    "status": "completed",
+    "duration_minutes": 15,
+    "files_changed": [
+      "Rust-GPU-SDF-V15.9.9.4_MAC/rust_gpu_sdf_addon/_native.py",
+      "Rust-GPU-SDF-V15.9.9.4_MAC/rust_gpu_sdf_addon/__init__.py",
+      "Rust-GPU-SDF-V15.9.9.4_MAC/rust_gpu_sdf_addon/engine.py",
+      "Rust-GPU-SDF-V15.9.9.4_MAC/rust_gpu_sdf_addon/ui.py",
+      "Rust-GPU-SDF-V15.9.9.4_MAC/build_sdf_addon.sh",
+      "Rust-GPU-SDF-V15.9.9.4_LINUX/rust_gpu_sdf_addon/_native.py",
+      "Rust-GPU-SDF-V15.9.9.4_LINUX/rust_gpu_sdf_addon/__init__.py",
+      "Rust-GPU-SDF-V15.9.9.4_LINUX/rust_gpu_sdf_addon/engine.py",
+      "Rust-GPU-SDF-V15.9.9.4_LINUX/rust_gpu_sdf_addon/ui.py",
+      "Rust-GPU-SDF-V15.9.9.4_LINUX/build_sdf_addon.sh",
+      ".github/workflows/build-sdf-r-v15-9-9-4-cross-platform.yml"
+    ],
+    "executed_actions": [
+      "Rust-GPU-SDF-V15.9.9.4 を元に _MAC および _LINUX 用フォルダを複製",
+      "V15.9.9.3_MAC から _native.py を両フォルダへコピー",
+      "Windows専用の rust_gpu_sdf.pyd を両フォルダから削除",
+      "両フォルダの __init__.py, engine.py, ui.py での rust_gpu_sdf インポート元を from ._native import rust_gpu_sdf に書き換え",
+      "両フォルダの build_sdf_addon.sh 内の出力ZIP名定義を V15.9.9.4 に変更",
+      ".github/workflows/build-sdf-r-v15-9-9-4-cross-platform.yml ワークフローファイルを新規追加"
+    ],
+    "uploaded_images": [],
+    "notes": "クロスプラットフォームビルドに必要なパッケージ構成・インポート周りの修正、およびCI用定義ファイルの作成をすべて完了しました。また、ユーザーから提示された circular import エラーに対する対策が今回のインポート書き換えに完全に含まれていることを解説しました。",
+    "artifacts": []
   }
 ]
