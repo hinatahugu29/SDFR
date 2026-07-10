@@ -2,7 +2,7 @@ import bpy
 import numpy as np
 import os
 from mathutils import Matrix, Vector, Euler
-from . import rust_gpu_sdf
+from ._native import rust_gpu_sdf
 
 
 # -------------------------------------------------------------------------
