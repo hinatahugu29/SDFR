@@ -615,5 +615,19 @@
     ],
     "uploaded_images": [],
     "notes": "ナレッジとしてmacOSビルド時のシンボル未解決エラー対策をビルドノートに記載した。"
+  },
+  {
+    "timestamp": "2026-07-15T21:50:00+09:00",
+    "user_request_summary": "MAC/Linux用ビルド成果物ZIP（SDF_R_16_0_4_MAC.zip, SDF_R_16_0_4_LINUX.zip）のファイル構成とパッケージ構造の検証を指示。",
+    "ai_interpretation": "ユーザーは再パッケージングしたMAC/Linux用のアドオンZIPが、二重ZIPの回避、各プラットフォーム用.soの配置、_native.pyの存在、Windows用.pydの排除など、正常な配布仕様を満たしているか検証を求めていると理解。検証用Pythonスクリプトを作成・実行し、すべてのチェック項目が正常に合格していることを確認し報告する。",
+    "status": "completed",
+    "duration_minutes": 5,
+    "files_changed": [],
+    "executed_actions": [
+      "ZIP構造を走査する検証用Pythonスクリプト（validate_zips.py）を作成",
+      "pyコマンドを用いて検証スクリプトを実行し、MAC/LinuxそれぞれのZIPのファイル一覧とインポート設定（__init__.pyの._nativeロード切り替え）を検証"
+    ],
+    "uploaded_images": [],
+    "notes": "検証結果、二重ZIPの回避、バイナリパスの正しさ、不要ファイルのクリーンアップがすべて確認された。"
   }
 ]
