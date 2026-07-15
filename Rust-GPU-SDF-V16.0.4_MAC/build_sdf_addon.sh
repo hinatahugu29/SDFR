@@ -16,6 +16,9 @@ export PYO3_PYTHON=$(which python3.11 || which python3)
 echo "Using Python for PyO3: $PYO3_PYTHON"
 
 # 2. Build Rust
+if [ "$(uname)" == "Darwin" ]; then
+    export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
+fi
 cargo build --release
 
 # 3. Deploy
