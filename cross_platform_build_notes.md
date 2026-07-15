@@ -65,6 +65,8 @@ _MODULE_NAME = f"{_parent_package}.rust_gpu_sdf"
 ### macOS用ビルド (`macos-14` ランナー)
 * **ランナー:** Apple Silicon Mシリーズ対応のため `macos-14` ランナーを指定し、アドオンZIPを生成。
 * **出力ファイル:** `SDF_R_15_9_8_1_MAC.zip`
+* **⚠️ PyO3リンクエラー対策 (macOS特有):**
+  macOS上で PyO3 拡張モジュールをビルドする際、Pythonのシンボル（`_Py_IsInitialized` 等）が解決できずに `ld: symbol(s) not found for architecture arm64` エラーでビルドが失敗する現象を防止するため、ビルドスクリプト (`build_sdf_addon.sh`) 内で `RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"` を事前に設定（エクスポート）しておく必要があります。
 
 ### Linux用ビルド (`ubuntu-22.04` ランナーの明示指定)
 * **互換性のための注意点（glibcへの配慮）:**
@@ -116,6 +118,8 @@ GitHub Actionsの「Artifacts」からダウンロードしたZIPファイル（
 ### ステップ3: ビルドスクリプトの調整
 1. 作業フォルダ直下にある `build_sdf_addon.sh` をテキストエディタで開く。
 2. スクリプト下部（60行目付近）の `ZIP_FILE="..."` のバージョン表記を、今回ビルドするバージョン名（例: `SDF_R_15_9_9_2_MAC.zip`）へ書き換える。
+3. **macOSビルド用のリンカフラグの指定**:
+   `cargo build --release` の直前で、OSが macOS (`Darwin`) の場合に `export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"` をエクスポートするロジックが入っていることを確認します。（新規作成や通常版から流用したスクリプトでは抜け落ちている可能性があるため注意）
 
 ### ステップ4: GitHub Actions ワークフローの設定
 1. `.github/workflows/build-sdf-r-v15-9-8-1-cross-platform.yml` などのCI設定ファイル（必要に応じて最新版用に複製）を開く。
