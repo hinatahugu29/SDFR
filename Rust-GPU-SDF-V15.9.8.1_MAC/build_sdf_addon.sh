@@ -19,6 +19,7 @@ export PYO3_PYTHON="$PYTHON_BIN"
 export PYO3_BUILD_EXTENSION_MODULE=1
 
 echo "--- Rust SDF Module Build Start (macOS) ---"
+export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
 cargo build --release
 
 EXT_SUFFIX=".so"

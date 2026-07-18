@@ -930,6 +930,7 @@ dependencies = [
  "once_cell",
  "pollster",
  "pyo3",
+ "pyo3-build-config",
  "rayon",
  "wgpu",
 ]
