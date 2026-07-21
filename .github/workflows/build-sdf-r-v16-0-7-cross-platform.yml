@@ -1,0 +1,76 @@
+name: Build SDF.R V16.0.7 Cross Platform
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/build-sdf-r-v16-0-7-cross-platform.yml"
+      - "Rust-GPU-SDF-V16.0.7_MAC/**"
+      - "Rust-GPU-SDF-V16.0.7_LINUX/**"
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: Rust-GPU-SDF-V16.0.7_MAC
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build macOS addon zip
+        run: |
+          chmod +x build_sdf_addon.sh
+          set +e
+          ./build_sdf_addon.sh 2>&1 | tee build-macos.log
+          exit_code=${PIPESTATUS[0]}
+          echo "macOS build exit code: ${exit_code}"
+          exit ${exit_code}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SDF_R_16_0_7_MAC_logs
+          path: Rust-GPU-SDF-V16.0.7_MAC/build-macos.log
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: SDF_R_16_0_7_MAC
+          path: Rust-GPU-SDF-V16.0.7_MAC/SDF_R_16_0_7_Darwin.zip
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: Rust-GPU-SDF-V16.0.7_LINUX
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libx11-dev libxkbcommon-dev libwayland-dev libasound2-dev libudev-dev
+      - name: Build Linux addon zip
+        run: |
+          chmod +x build_sdf_addon.sh
+          set +e
+          ./build_sdf_addon.sh 2>&1 | tee build-linux.log
+          exit_code=${PIPESTATUS[0]}
+          echo "Linux build exit code: ${exit_code}"
+          exit ${exit_code}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SDF_R_16_0_7_LINUX_logs
+          path: Rust-GPU-SDF-V16.0.7_LINUX/build-linux.log
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: SDF_R_16_0_7_LINUX
+          path: Rust-GPU-SDF-V16.0.7_LINUX/SDF_R_16_0_7_Linux.zip
