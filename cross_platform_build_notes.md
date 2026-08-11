@@ -97,6 +97,9 @@ Windows 通常版 `Rust-GPU-SDF-VX.Y.Z` を Mac/Linux 用に移植するとき�
       → ドキュメント類には `_MAC` / `_LINUX` 表記で記載しているため、この対応付けが必要
 - [ ] （再圧縮する場合のみ）`rust_gpu_sdf_addon` フォルダを**外側から**圧縮した
       → 中身を選んで圧縮すると階層が消えてインポートエラーになる
+- [ ] **展開に使った作業フォルダを削除し、`Other_OS/` 直下を zip 2個だけにした**
+      → 中間ファイルが残ると、次に見たときどれが配布物か分からなくなる（セクション4の最終レイアウト）
+- [ ] [セクション6-B の配布物検証](#6-b-配布物の検証アップロード直前)を流して ALL OK
 
 ---
 
@@ -213,6 +216,29 @@ GitHub Actionsの「Artifacts」からダウンロードしたZIPファイルは
 
 > `Darwin` / `Linux` はビルドスクリプト内の `$(uname)` に由来します。
 > **ドキュメント側は `_MAC` / `_LINUX` で統一している**ため、配布時にリネームが必要です。
+
+### ✅ 配布物の最終レイアウト（`Other_OS/`）
+
+**プラットフォームごとに zip 1個だけ。展開フォルダも中間 zip も残さない。**
+
+```text
+Other_OS/
+├── SDF_R_X_Y_Z_MAC.zip      ← 配布物そのもの（中を開くと rust_gpu_sdf_addon/）
+└── SDF_R_X_Y_Z_LINUX.zip    ← 配布物そのもの
+```
+
+**なぜ徹底するか:** 名前と中身が1対1なら取り違えようがないためです。
+V16.1.1 の作業では、`SDF_R_16_1_1_MAC.zip` という**配布名のファイルの中身が artifact のまま（二重ZIP）**という状態が発生しました。
+名前が正しいぶん、開かない限り気づけません。**この状態のままアップロードすると購入者のインストールが構造エラーになります。**
+
+展開に使った作業フォルダは削除して構いません。すべて復元可能です。
+
+* Python ソース → git の `Rust-GPU-SDF-VX.Y.Z_MAC` / `_LINUX`
+* バイナリを含む完全な中身 → 残した zip を展開すれば取り出せる
+* そもそも中身の重複が大半（`nodes.blend` 34MB × 2、バイナリが直下と `bin/` に二重）
+
+**削除は必ず「昇格 → 検証 → 検証が通ってから削除」の順で行ってください。**
+消してから間違いに気づくと、Actions からダウンロードし直しになります。
 
 ### ⚠️ フォルダ構造の維持（圧縮時のルール）
 手動でアドオンを再圧縮する場合は、**必ず `rust_gpu_sdf_addon` というフォルダそのものを外側から圧縮**してください。
@@ -341,13 +367,103 @@ for path in re.findall(r"path: (Rust-GPU-SDF-[^\s]+)", wf):
     check("path の親が実在: %s" % path, os.path.isdir(os.path.join(BASE, os.path.dirname(path))))
 
 print()
+def _paths(cmd):
+    r = subprocess.run(cmd, cwd=BASE, capture_output=True, text=True)
+    return {l.strip() for l in r.stdout.splitlines() if l.strip()}
+
 for name in NEW:
-    r = subprocess.run(["git", "add", "-An", "--", name], cwd=BASE, capture_output=True, text=True)
-    n = len([l for l in r.stdout.splitlines() if l.strip()])
-    check("%s の追跡ファイル数が34" % name, n == 34, "実際 %d" % n)
+    # 「追跡済み」と「未追跡（無視対象を除く）」の和集合を数える。
+    # 足し算にすると、変更済みのファイルが両方に出て二重に数えられる。
+    # 集合で持てば commit の前後どちらでも同じ数になる。
+    n = len(_paths(["git", "ls-files", "--", name]) |
+            _paths(["git", "ls-files", "--others", "--exclude-standard", "--", name]))
+    check("%s の対象ファイル数が34" % name, n == 34, "実際 %d" % n)
 
 print()
 print("RESULT:", "ALL OK" if ok else "PROBLEMS FOUND")
+```
+
+---
+
+## 6-B. 配布物の検証（アップロード直前）
+
+セクション6は「push 前にソースが正しいか」を見ます。**こちらは「出来上がった zip が正しいか」を見ます。**
+CI が緑でも、取り出し方を間違えれば配布物は壊れます。**アップロード直前に必ず流してください。**
+
+```python
+# verify_artifacts.py
+import os, zipfile
+
+BASE = r"E:\blender_addon\外部テスト\Other_OS"
+WIN  = r"E:\blender_addon\外部テスト\Rust-GPU-SDF-V16.1.1\rust_gpu_sdf_addon"  # 通常版のアドオン
+UND  = "16_1_1"
+P    = "rust_gpu_sdf_addon/"
+PY   = ["__init__.py","constants.py","engine.py","handlers.py",
+        "operators.py","properties.py","shader.py","ui.py"]
+ok = True
+
+def check(label, cond, detail=""):
+    global ok
+    if not cond: ok = False
+    print("  [%s] %s%s" % ("OK" if cond else "NG", label, ("  -> " + detail) if detail else ""))
+
+for name, zf, binrel in [
+    ("macOS", "SDF_R_%s_MAC.zip"   % UND, "bin/mac/rust_gpu_sdf.so"),
+    ("Linux", "SDF_R_%s_LINUX.zip" % UND, "bin/linux/rust_gpu_sdf.so"),
+]:
+    print("===", name, zf)
+    z = zipfile.ZipFile(os.path.join(BASE, zf))
+    names = [n for n in z.namelist() if not n.endswith("/")]
+    check("二重ZIPでない", not [n for n in names if n.endswith(".zip")],
+          str([n for n in names if n.endswith(".zip")]))
+    check("ルートが rust_gpu_sdf_addon 単一",
+          sorted({n.split("/")[0] for n in names}) == ["rust_gpu_sdf_addon"])
+    for req in ["__init__.py","_native.py","assets/nodes.blend","license.txt",binrel]:
+        check("必須: %s" % req, P + req in names)
+    if P + binrel in names:
+        sz = z.getinfo(P + binrel).file_size / 1024 / 1024
+        check("ネイティブバイナリが実体を持つ", sz > 1.0, "%.1f MB" % sz)
+    check("キャッシュ/.pyd 混入なし",
+          not [n for n in names if "__pycache__" in n or n.endswith((".pyc",".pyd"))])
+    for f in ("__init__.py","engine.py","ui.py"):
+        s = z.read(P + f).decode("utf-8-sig")
+        check("%s が ._native 経由" % f,
+              "from ._native import rust_gpu_sdf" in s and "from . import rust_gpu_sdf" not in s)
+    diff = []
+    for f in PY:
+        a = open(os.path.join(WIN, f), encoding="utf-8-sig").read()
+        a = a.replace("from . import rust_gpu_sdf", "from ._native import rust_gpu_sdf")
+        b = z.read(P + f).decode("utf-8-sig")
+        if a.replace("\r\n","\n") != b.replace("\r\n","\n"): diff.append(f)
+    check("Python が通常版と一致", not diff, str(diff))
+    check("bl_info version", "(%s)" % UND.replace("_", ", ") in
+          z.read(P + "__init__.py").decode("utf-8-sig"))
+    print()
+
+print("=== Other_OS 直下（zip 2個だけが理想）")
+for n in sorted(os.listdir(BASE)):
+    if UND in n:
+        p = os.path.join(BASE, n)
+        print("  %-32s %s" % (n, "dir ← 消す" if os.path.isdir(p)
+                              else "%.1f MB" % (os.path.getsize(p)/1024/1024)))
+print()
+print("RESULT:", "ALL OK" if ok else "PROBLEMS FOUND")
+```
+
+**「Python が通常版と一致」が特に重要です。** ここが通れば、CI が意図したバージョンをビルドしたこと
+（＝`working-directory` の変更漏れが無かったこと）を成果物側から裏付けられます。
+
+さらに、そのリリースの修正が実際に入っているかを成果物ベースで確認しておくと確実です。
+V16.1.1 では以下を見ました。
+
+```python
+h = z.read(P + "handlers.py").decode("utf-8-sig")
+e = z.read(P + "engine.py").decode("utf-8-sig")
+o = z.read(P + "operators.py").decode("utf-8-sig")
+check("修正1: ビューポート別のビュー判定",      "_last_view_hashes" in h)
+check("修正2: オフスクリーンのサイズ別キャッシュ", "_offscreens" in h)
+check("修正3: 頂点インデックス範囲ガード",      "vertex index out of range" in e)
+check("修正4: users_collection のスナップショット", "list(obj.users_collection)" in o)
 ```
 
 ---

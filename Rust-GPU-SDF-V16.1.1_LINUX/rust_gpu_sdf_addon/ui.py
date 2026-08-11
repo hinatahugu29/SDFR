@@ -3,6 +3,54 @@ from ._native import rust_gpu_sdf
 from .constants import PRIMITIVE_UI_DEFS
 from .engine import _resolve_curve_sync_target
 
+
+def _gn_input_binding(mod, identifier):
+    """Geometry Nodes モディファイアの入力1件を layout.prop() へ渡す形にして返す。
+
+    戻り値は (データ, プロパティ名)。見つからなければ None。
+
+    Blender 5.2 で、モディファイアの入力値がカスタムプロパティから通常のRNAプロパティへ
+    変わった（5.2 リリースノート / Geometry Nodes の項）。
+
+        # 5.1 まで
+        modifier["Socket_3"] = 5.0
+        # 5.2 から
+        modifier.properties.inputs.Socket_3.value = 5.0
+
+    5.2 の NodesModifier 自身はカスタムプロパティを持たないため、旧来の
+    `"Socket_3" in mod` は TypeError を投げる。
+
+    バージョン番号では分岐せず、新しい形から順に実際に引けるかで判定する。
+    こうしておけば 5.1/5.2 のどちらでも同じコードが動き、将来また変わっても
+    候補を1つ足すだけで済む。
+    """
+    # 5.2 以降: mod.properties.inputs.<identifier>.value
+    inputs = getattr(getattr(mod, "properties", None), "inputs", None)
+    if inputs is not None:
+        socket = getattr(inputs, identifier, None)
+        if socket is None:
+            # コレクション風に引ける実装だった場合の保険
+            try:
+                socket = inputs[identifier]
+            except Exception:
+                socket = None
+        if socket is not None:
+            try:
+                if socket.bl_rna.properties.get("value") is not None:
+                    return socket, "value"
+            except Exception:
+                pass
+
+    # 5.1 まで: mod["Socket_3"]（カスタムプロパティ）
+    try:
+        if identifier in mod:
+            return mod, f'["{identifier}"]'
+    except TypeError:
+        pass
+
+    return None
+
+
 class SDF_UL_stack_list(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
@@ -265,12 +313,34 @@ class SDF_PT_main(bpy.types.Panel):
             node_group = georem_mod.node_group
             if node_group and node_group.interface:
                 col = box.column(align=True)
+                shown = 0
+                missing = []
                 for item in node_group.interface.items_tree:
                     if item.in_out == 'INPUT' and item.socket_type != 'NodeSocketGeometry':
+                        # V16.1.1: 入力の持ち方はバージョンで変わる（_gn_input_binding 参照）。
+                        # 実体が無い指定を prop() に渡すと property not found が出るうえ、
+                        # そこで描画が止まって以降の項目が一切出なくなる。
+                        binding = _gn_input_binding(georem_mod, item.identifier)
+                        if binding is None:
+                            missing.append(item.name)
+                            continue
+                        data, prop_path = binding
                         if item.socket_type == 'NodeSocketMenu':
-                            col.prop(georem_mod, f'["{item.identifier}"]', expand=True)
+                            col.prop(data, prop_path, expand=True)
                         else:
-                            col.prop(georem_mod, f'["{item.identifier}"]', text=item.name)
+                            col.prop(data, prop_path, text=item.name)
+                        shown += 1
+                if missing and shown == 0:
+                    # 1つも解決できない = この版での持ち方が未知。機能自体は生きているので、
+                    # Blender 標準のモディファイアパネルから調整してもらう
+                    col.label(text="Not editable here on this Blender version", icon='INFO')
+                    col.label(text="Adjust in Properties > Modifiers > GeoRemesh_R")
+                elif missing:
+                    warn = box.column(align=True)
+                    warn.label(text="Inputs not available:", icon='ERROR')
+                    warn.label(text=", ".join(missing))
+                    warn.operator("sdf.setup_post_process",
+                                  text="Re-apply Node Group", icon='FILE_REFRESH')
         else:
             box.operator("sdf.setup_post_process", text="Setup Post Process", icon='ADD')
 

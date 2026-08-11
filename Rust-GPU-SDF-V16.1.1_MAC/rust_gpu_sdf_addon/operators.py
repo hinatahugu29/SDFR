@@ -985,6 +985,61 @@ class SDF_OT_match_math_field_axis_to_scale(bpy.types.Operator):
         self.report({'INFO'}, f"Math Field Axis matched to scale: X {sx:.3g}, Y {sy:.3g}, Z {sz:.3g}")
         return {'FINISHED'}
 
+def _ensure_gn_modifier_inputs(mod, node_group):
+    """ノードグループの入力に対応するIDプロパティが無ければ、既定値から作る。
+
+    Geometry Nodes モディファイアは入力値を `["Socket_3"]` のようなIDプロパティとして
+    持つ。UIからノードグループを選んだ場合は Blender が用意するが、Python から
+    `mod.node_group = ...` と代入した場合に作られるかはバージョン依存なので、
+    足りないものをここで補う。既にあるものは触らないので、調整済みの値は保持される。
+    戻り値は新しく作った識別子のリスト。
+    """
+    created = []
+    if not node_group or not getattr(node_group, "interface", None):
+        return created
+
+    # 入力値の持ち方はバージョンで変わる（ui._gn_input_binding を参照）。
+    # 判定ロジックを二重に持つと片方だけ直して食い違うので、UI 側と同じ関数を使う。
+    from .ui import _gn_input_binding
+
+    # IDプロパティを置ける先を探す。5.2 のように通常のRNAプロパティとして
+    # 生えている版では、こちらから作る必要も余地も無いので何もしない。
+    owner = None
+    for candidate in (getattr(mod, "properties", None), mod):
+        if candidate is None:
+            continue
+        try:
+            "Socket_0" in candidate
+            owner = candidate
+            break
+        except TypeError:
+            continue
+    if owner is None:
+        return created
+
+    for item in node_group.interface.items_tree:
+        if getattr(item, "in_out", None) != 'INPUT':
+            continue
+        if item.socket_type == 'NodeSocketGeometry':
+            continue
+        if _gn_input_binding(mod, item.identifier) is not None:
+            continue
+        default = getattr(item, "default_value", None)
+        if default is None:
+            continue
+        try:
+            # ベクトルやカラーは bpy_prop_array なので list 化してから渡す
+            if hasattr(default, "__len__") and not isinstance(default, str):
+                owner[item.identifier] = list(default)
+            else:
+                owner[item.identifier] = default
+            created.append(item.identifier)
+        except Exception as exc:
+            print(f"SDF.R: could not initialize modifier input "
+                  f"{item.identifier} ({item.name}): {exc}")
+    return created
+
+
 class SDF_OT_setup_post_process(bpy.types.Operator):
     bl_idname = "sdf.setup_post_process"
     bl_label = "Setup Post Process (GN)"
@@ -1020,8 +1075,16 @@ class SDF_OT_setup_post_process(bpy.types.Operator):
         if not mod:
             mod = obj.modifiers.new(name=mod_name, type='NODES')
         
-        mod.node_group = bpy.data.node_groups.get(node_group_name)
-        
+        node_group = bpy.data.node_groups.get(node_group_name)
+        mod.node_group = node_group
+
+        # V16.1.1: 入力のIDプロパティが用意されなかった場合に備えて補う。
+        # 既に存在するものは触らないので、ユーザーが調整済みの値は保持される。
+        created = _ensure_gn_modifier_inputs(mod, node_group)
+        if created:
+            print(f"SDF.R: initialized {len(created)} GeoRemesh modifier input(s): "
+                  f"{', '.join(created)}")
+
         return {'FINISHED'}
 
 class SDF_OT_finalize(bpy.types.Operator):
