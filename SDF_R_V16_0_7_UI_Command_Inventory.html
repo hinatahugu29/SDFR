@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>SDF.R V16.0.7 UI / Command Inventory</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+      color: #222;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+      background: #fafafa;
+    }
+    h1, h2, h3 { line-height: 1.25; }
+    h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+    h2 {
+      margin-top: 42px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #222;
+      font-size: 1.35rem;
+    }
+    h3 {
+      margin-top: 26px;
+      font-size: 1.05rem;
+      color: #333;
+    }
+    .meta, .note {
+      color: #555;
+      font-size: 0.95rem;
+    }
+    .note {
+      background: #fff8dc;
+      border-left: 5px solid #e0b100;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 18px 0;
+    }
+    .ok {
+      background: #edf8f0;
+      border-left: 5px solid #40a060;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 18px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      margin: 14px 0 28px;
+      font-size: 0.94rem;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 9px 10px;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f3f5;
+      text-align: left;
+      white-space: nowrap;
+    }
+    code {
+      font-family: "Cascadia Mono", Consolas, monospace;
+      background: #f3f3f3;
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .tag {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 0.82em;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .mesh { background: #e8f1ff; color: #174a8b; }
+    .light { background: #eaf8ef; color: #22613a; }
+    .none { background: #f3f3f3; color: #555; }
+    .danger { background: #fff0f0; color: #9b1c1c; }
+    .small { font-size: 0.88rem; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>SDF.R V16.0.7 UI / Command Inventory</h1>
+  <p class="meta">対象: <strong>Rust-GPU-SDF / SDF.R V16.0.7</strong> | 作成日: 2026-07-19 | 用途: UIボタン・主要コントロールの棚卸し資料</p>
+
+  <div class="note">
+    <strong>再計算の読み方:</strong>
+    <span class="tag mesh">Mesh再計算</span> はSDFを再評価して結果メッシュを作り直す操作、
+    <span class="tag light">軽量更新</span> は既存メッシュ属性や表示だけを更新する操作、
+    <span class="tag none">表示/管理</span> は主にUI・選択・表示・管理の操作です。
+  </div>
+
+  <div class="ok">
+    <strong>色まわりの重要整理:</strong>
+    <code>Apply Color All</code> は全体一色化なので軽量更新できます。一方、Stack上の色チップや個別 <code>Color</code> はカラーブレンディングに関わるため、正しい境界色を保つにはMesh再計算が必要です。
+  </div>
+
+  <h2>1. Header / Status</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Live Update</td>
+      <td>トグル</td>
+      <td>パラメータ変更やTransform変更を結果メッシュへ自動反映する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>ON時は多くの編集操作で自動的にMesh再計算が走る。重い作業では一時OFFも有効。</td>
+    </tr>
+    <tr>
+      <td>Mesh icon</td>
+      <td>トグル</td>
+      <td>結果メッシュ <code>SDF_Result</code> の表示/生成系ワークフローを切り替える。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>OFF時はGhost Preview中心の軽量編集に向く。</td>
+    </tr>
+    <tr>
+      <td>Wire/BBox icon</td>
+      <td>トグル</td>
+      <td>SDFプリミティブの表示をWireまたはBounds系表示へ切り替える。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>ソースオブジェクトの見え方だけを変える。</td>
+    </tr>
+    <tr>
+      <td>Ghost icon</td>
+      <td>トグル</td>
+      <td>GPU Ghost Previewの表示を切り替える。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>メッシュ化前のリアルタイムプレビュー用。</td>
+    </tr>
+    <tr>
+      <td>GPU: Ready / Updating</td>
+      <td>状態表示</td>
+      <td>Rust/GPUエンジンの状態を表示する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>Updating中はメッシュ生成処理が進行中。</td>
+    </tr>
+    <tr>
+      <td>New SDF Workspace</td>
+      <td>ボタン <code>sdf.make_output</code></td>
+      <td>新しい <code>SDF_Collection</code> と <code>SDF_Result</code> を作成する。既存作業があれば履歴側へ退避する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>ワークスペース開始ボタン。初回はここから。</td>
+    </tr>
+  </table>
+
+  <h2>2. Engine Diagnostics</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Engine Diagnostics</td>
+      <td>展開トグル</td>
+      <td>エンジン状態、ログパス、直近メッシュ診断、Backend、Resolutionを表示する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>問題調査時の最初の確認場所。</td>
+    </tr>
+    <tr>
+      <td>Perf</td>
+      <td>診断トグル</td>
+      <td>パフォーマンスログを出力する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td><code>SDF_PERF_LOG.ON</code> を使う診断系。</td>
+    </tr>
+    <tr>
+      <td>Mesh</td>
+      <td>診断トグル</td>
+      <td>メッシュ生成デバッグログを出力する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>Rust Debugログ確認に使う。</td>
+    </tr>
+    <tr>
+      <td>Layout</td>
+      <td>診断トグル</td>
+      <td>Layout展開やCollection Divider関連のログを出す。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>Mirror/Radial/Grid/Layer Boundary調査向け。</td>
+    </tr>
+  </table>
+
+  <h2>3. Output &amp; Quality</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Low / High</td>
+      <td>ボタン <code>sdf.set_resolution_preset</code></td>
+      <td>Resolutionを低/高プリセットへ切り替える。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>High切替時、設定によりLive Normalsを自動ON。</td>
+    </tr>
+    <tr>
+      <td>L-Val / H-Val</td>
+      <td>数値</td>
+      <td>Low/Highボタンで使うResolution値を設定する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>値の保存のみ。実際の切替はLow/Highボタン。</td>
+    </tr>
+    <tr>
+      <td>Res</td>
+      <td>数値</td>
+      <td>SDFグリッド解像度を設定する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>品質と処理負荷の中心パラメータ。</td>
+    </tr>
+    <tr>
+      <td>Domain</td>
+      <td>数値</td>
+      <td>SDF計算領域の大きさを設定する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>形が欠ける場合は広げる。Auto Domain ONなら自動調整される。</td>
+    </tr>
+    <tr>
+      <td>Auto Domain</td>
+      <td>トグル</td>
+      <td>スタック内の形状に合わせて計算領域を自動拡張する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>通常ON推奨。</td>
+    </tr>
+    <tr>
+      <td>Preview Quality</td>
+      <td>選択</td>
+      <td>Ghost Previewの品質を Low / Mid / High から選ぶ。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>メッシュ品質ではなくPreview側の負荷と見た目。</td>
+    </tr>
+    <tr>
+      <td>Symmetry X/Y/Z</td>
+      <td>トグル</td>
+      <td>指定軸でSDF計算を対称化する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Mirror Layoutとは別の計算対称。</td>
+    </tr>
+    <tr>
+      <td>Marching Cubes</td>
+      <td>ボタン <code>sdf.switch_algo</code></td>
+      <td>メッシュ生成方式をMCに切り替える。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>滑らか・有機的な形状向け。</td>
+    </tr>
+    <tr>
+      <td>Dual Contouring</td>
+      <td>ボタン <code>sdf.switch_algo</code></td>
+      <td>メッシュ生成方式をDCに切り替える。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>硬いエッジ向け。初回はDCパイプラインのコンパイルが走る場合がある。</td>
+    </tr>
+    <tr>
+      <td>Backend</td>
+      <td>選択</td>
+      <td>通常/Chunked系などメッシュ生成バックエンドを選ぶ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>高解像度・大規模メッシュ時の安定性に関わる。</td>
+    </tr>
+    <tr>
+      <td>Chunk / Seam / From</td>
+      <td>数値</td>
+      <td>Chunked生成の分割サイズ、継ぎ目Weld、開始解像度を調整する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>高解像度時の救済・安定化用。</td>
+    </tr>
+    <tr>
+      <td>Weld (Merge)</td>
+      <td>トグル</td>
+      <td>生成メッシュの近接頂点を統合する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>頂点整理・継ぎ目軽減向け。美観専用の曲率判断Weldではない。</td>
+    </tr>
+    <tr>
+      <td>Scale</td>
+      <td>数値</td>
+      <td>Weld距離スケールを調整する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>上げすぎると形状が潰れる可能性がある。</td>
+    </tr>
+    <tr>
+      <td>Live Normals (Heavy)</td>
+      <td>トグル</td>
+      <td>生成時に高品質な法線を計算し、滑らかな表示にする。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>重いが見た目の確認に有効。</td>
+    </tr>
+    <tr>
+      <td>Auto-enable Live Normals on High</td>
+      <td>トグル</td>
+      <td>Highプリセット切替時にLive Normalsを自動ONにする。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>仕上げ確認向けの自動化。</td>
+    </tr>
+    <tr>
+      <td>Protect Partial Mesh</td>
+      <td>トグル</td>
+      <td>容量不足や空結果などの危険な結果を適用しないよう保護する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>診断表示時に出る保護系設定。</td>
+    </tr>
+    <tr>
+      <td>Auto Safe Retry</td>
+      <td>トグル</td>
+      <td>問題発生時、低解像度で自動再試行する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>安全側のフォールバック。</td>
+    </tr>
+    <tr>
+      <td>Chunked CPU/GPU Fallback</td>
+      <td>トグル</td>
+      <td>通常生成が厳しい場合にChunked生成へ逃がす。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>大規模シーン向け。</td>
+    </tr>
+  </table>
+
+  <h2>4. Post-Process (Smoothing)</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Setup Post Process</td>
+      <td>ボタン <code>sdf.setup_post_process</code></td>
+      <td><code>GeoRemesh_R</code> Geometry Nodesモディファイアを結果メッシュへ追加する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>SDFメッシュ生成後の後段スムージング・整形用。</td>
+    </tr>
+    <tr>
+      <td>GeoRemesh_R入力</td>
+      <td>GNパラメータ</td>
+      <td>追加済みGNノードグループの入力値をUIに展開する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>Blenderのモディファイア評価として反映。SDF計算自体とは別。</td>
+    </tr>
+  </table>
+
+  <h2>5. The Stack</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>色チップ</td>
+      <td>カラー</td>
+      <td>プリミティブ個別のColorを変更する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>カラーブレンディング保持のため再計算が必要。</td>
+    </tr>
+    <tr>
+      <td>行クリック / Object名</td>
+      <td>ボタン <code>sdf.select_stack_obj</code></td>
+      <td>対応するSDFオブジェクトを選択する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>StackとViewport選択を同期する。</td>
+    </tr>
+    <tr>
+      <td>Operationアイコン</td>
+      <td>選択</td>
+      <td>Union / Subtract / Intersect を切り替える。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>形状評価の根幹。Layer Boundary内ではローカル層へ作用。</td>
+    </tr>
+    <tr>
+      <td>Enabledチェック</td>
+      <td>トグル</td>
+      <td>Stack項目を有効/無効にする。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>無効項目はSDF評価から外れる。</td>
+    </tr>
+    <tr>
+      <td>Collection行名</td>
+      <td>ボタン <code>sdf.select_stack_obj</code></td>
+      <td>Collection DividerのEmptyを選択する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>Group Settingsを出す入口。</td>
+    </tr>
+    <tr>
+      <td>Duplicate</td>
+      <td>ボタン <code>sdf.duplicate_collection</code></td>
+      <td>Collection Dividerとその対象グループを複製する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>複製後は新しいEmptyが選択される。</td>
+    </tr>
+    <tr>
+      <td>Layer Boundary icon</td>
+      <td>トグル</td>
+      <td>そのDivider以下をローカルLayerとして評価し、結果を全体へUnionする。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Math FieldのIntersect範囲制御に重要。</td>
+    </tr>
+    <tr>
+      <td>Break Parent icon</td>
+      <td>トグル</td>
+      <td>親子関係のグルーピングを区切る。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Collection Dividerによる階層・移動単位の調整。</td>
+    </tr>
+    <tr>
+      <td>Up / Down</td>
+      <td>ボタン <code>sdf.stack_move</code></td>
+      <td>Stack項目の評価順を上下へ移動する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>SDFは順序依存。見た目が大きく変わる。</td>
+    </tr>
+    <tr>
+      <td>Solo</td>
+      <td>トグル</td>
+      <td>選択中Stack項目を単独確認する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>複雑なStackの確認用。</td>
+    </tr>
+    <tr>
+      <td>X</td>
+      <td>ボタン <code>sdf.stack_remove</code></td>
+      <td>選択中Stack項目を削除する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Collectionの場合はEmptyと子の扱いに注意。</td>
+    </tr>
+    <tr>
+      <td>Add Collection Divider</td>
+      <td>ボタン <code>sdf.add_collection_divider</code></td>
+      <td>Stack内にグループ区切り用のEmpty/Dividerを追加する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>追加後、そのEmptyが選択される。</td>
+    </tr>
+  </table>
+
+  <h2>6. Material</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Setup Nodes</td>
+      <td>ボタン <code>sdf.setup_material</code></td>
+      <td><code>Color</code> / <code>Metallic</code> / <code>Roughness</code> 属性を読む標準マテリアルノードを作成する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>シェーダーノード構築のみ。</td>
+    </tr>
+    <tr>
+      <td>Reset</td>
+      <td>ボタン <code>sdf.reset_material</code></td>
+      <td>標準マテリアルノード構成へ戻す。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>共有Metallic/Roughnessも初期値へ戻る。</td>
+    </tr>
+    <tr>
+      <td>Base Color + Apply Color All</td>
+      <td>カラー + ボタン <code>sdf.apply_color_all</code></td>
+      <td>全プリミティブへ同じColorを適用する。</td>
+      <td><span class="tag light">軽量更新</span></td>
+      <td>全体一色化なので既存メッシュのColor属性更新で対応。</td>
+    </tr>
+    <tr>
+      <td>Metallic / Roughness + Apply Material All</td>
+      <td>数値 + ボタン <code>sdf.apply_material_all</code></td>
+      <td>全プリミティブへ同じMetallic/Roughnessを適用する。</td>
+      <td><span class="tag light">軽量更新</span></td>
+      <td>既存メッシュ属性を更新し、SDF再評価は避ける。</td>
+    </tr>
+  </table>
+
+  <h2>7. Finalize / Output</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Fix Normals</td>
+      <td>ボタン <code>sdf.update_normals</code></td>
+      <td>高品質法線を再計算して適用する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>見た目の仕上げ確認向け。</td>
+    </tr>
+    <tr>
+      <td>Force Update</td>
+      <td>ボタン <code>sdf.generate_mesh</code></td>
+      <td>手動でSDF結果メッシュを再生成する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Live Update OFF後の反映や確認に使う。</td>
+    </tr>
+    <tr>
+      <td>Snapshot Mesh</td>
+      <td>ボタン <code>sdf.bake_mesh</code></td>
+      <td>現在のSDF結果から静的メッシュコピーを作る。Live SDFワークスペースは維持する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>作成されたSnapshotだけが選択状態になる。</td>
+    </tr>
+    <tr>
+      <td>Finalize (Bake)</td>
+      <td>ボタン <code>sdf.finalize</code></td>
+      <td>SDF結果を通常メッシュとして確定し、使用プリミティブを履歴へ退避する。</td>
+      <td><span class="tag mesh">Mesh再計算/確定</span></td>
+      <td>Live編集を終える操作。戻すなら履歴や前バージョンを使う。</td>
+    </tr>
+  </table>
+
+  <h2>8. Group Settings: Collection Divider</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Name</td>
+      <td>テキスト</td>
+      <td>Stack上のCollection Divider表示名を変える。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>名前自体は形状に影響しないが、現状は通常更新経路。</td>
+    </tr>
+    <tr>
+      <td>Layer Boundary</td>
+      <td>トグル</td>
+      <td>Divider以下をローカルLayerとして評価する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td><code>Base ∪ (Layer内評価結果)</code> のイメージ。</td>
+    </tr>
+    <tr>
+      <td>Break Parent (Start New Group)</td>
+      <td>トグル</td>
+      <td>親子/グループのつながりを区切る。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>グループ単位での移動・複製整理に使う。</td>
+    </tr>
+    <tr>
+      <td>Group Layout: Mirror / Radial / Spiral / Grid / Jitter</td>
+      <td>トグル群</td>
+      <td>Group全体へ配置展開をかける。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>プリミティブ単体のLayoutと同様の考え方。</td>
+    </tr>
+    <tr>
+      <td>Mirror X/Y/Z / Offset</td>
+      <td>トグル/数値</td>
+      <td>Groupを指定軸でミラー複製する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>左右対称配置など。</td>
+    </tr>
+    <tr>
+      <td>Radial Count / Radius / Axis</td>
+      <td>数値/選択</td>
+      <td>Groupを円周上に複製する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>放射配置。</td>
+    </tr>
+    <tr>
+      <td>Spiral Count / Radius / Pitch / Axis</td>
+      <td>数値/選択</td>
+      <td>Groupを螺旋状に複製する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Radialの高さ方向拡張。</td>
+    </tr>
+    <tr>
+      <td>Grid Count X/Y/Z / Spacing X/Y/Z</td>
+      <td>数値</td>
+      <td>Groupを格子状に複製する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>規則的な反復構造向け。</td>
+    </tr>
+    <tr>
+      <td>Rotation (Indiv &amp; Accum)</td>
+      <td>角度</td>
+      <td>各インスタンスの個別回転と累積回転を設定する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Radial/Spiralで特に効く。</td>
+    </tr>
+    <tr>
+      <td>Jitter Seed / Strength</td>
+      <td>数値</td>
+      <td>配置にランダム揺らぎを加える。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>手作り感・自然さを足す。</td>
+    </tr>
+  </table>
+
+  <h2>9. Primitive Settings</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Shape</td>
+      <td>選択</td>
+      <td>選択プリミティブの形状タイプを変更する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Sphere / Box / Math Fieldなど。</td>
+    </tr>
+    <tr>
+      <td>Union / Subtract / Intersect</td>
+      <td>ボタン/選択</td>
+      <td>選択プリミティブのブーリアン演算を指定する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Stack上のOperationアイコンと同じ。</td>
+    </tr>
+    <tr>
+      <td>Blend Profile</td>
+      <td>選択</td>
+      <td>ブレンド形状の質感をRound/Sharp/Soft/Tight/Chamferから選ぶ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Smoothnessと組み合わせて接続感を作る。</td>
+    </tr>
+    <tr>
+      <td>Chamfer Factor</td>
+      <td>数値</td>
+      <td>Blend ProfileがChamferの場合の係数。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>平面的な接続表現。</td>
+    </tr>
+    <tr>
+      <td>Smoothness</td>
+      <td>数値</td>
+      <td>ブレンド幅・接続の滑らかさを調整する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>作品全体の統一感に強く関わる。</td>
+    </tr>
+    <tr>
+      <td>Noise / Scale</td>
+      <td>数値</td>
+      <td>SDF表面にノイズ変形を加える。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>表情付け・荒れ表現。</td>
+    </tr>
+    <tr>
+      <td>Color</td>
+      <td>カラー</td>
+      <td>個別プリミティブ色を変更する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>カラーブレンディングを正しく再評価するため再計算が必要。</td>
+    </tr>
+    <tr>
+      <td>Color Mode</td>
+      <td>選択</td>
+      <td>新規プリミティブ追加時の色割当方式を選ぶ。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>Fixed Palette / Auto Hue / Single Color。</td>
+    </tr>
+    <tr>
+      <td>Auto Hue: Saturation / Value / Hue Step / Hue Offset</td>
+      <td>数値</td>
+      <td>Auto Hue時の自動色割当を調整する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>次に追加するプリミティブへ効く。</td>
+    </tr>
+    <tr>
+      <td>Single Color: Base Color</td>
+      <td>カラー</td>
+      <td>Single Color時に新規プリミティブへ使う色。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>既存プリミティブの色は自動変更しない。</td>
+    </tr>
+    <tr>
+      <td>Metallic / Roughness</td>
+      <td>数値</td>
+      <td>個別プリミティブのマテリアル属性を設定する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>個別値はSDF結果属性へ反映するため通常更新。</td>
+    </tr>
+    <tr>
+      <td>Shape Parameters</td>
+      <td>数値</td>
+      <td>形状ごとの半径・高さ・角度・辺数などを調整する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>詳細は下のPrimitive一覧参照。</td>
+    </tr>
+    <tr>
+      <td>Edge</td>
+      <td>選択</td>
+      <td>プリミティブのエッジ処理をRound/Sharp/Soft/Tight/Chamferから選ぶ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Math Fieldでは非表示。</td>
+    </tr>
+    <tr>
+      <td>Edge Size</td>
+      <td>数値</td>
+      <td>エッジ処理のサイズを調整する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>R-BoxやCylinder系の面取り感に関わる。</td>
+    </tr>
+    <tr>
+      <td>Edge Chamfer Smoothness</td>
+      <td>数値</td>
+      <td>EdgeがChamferの場合の滑らかさ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>尖りと丸みの調整。</td>
+    </tr>
+    <tr>
+      <td>Shell (Hollow)</td>
+      <td>数値</td>
+      <td>形状を中空化する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td><code>abs(d) - shell_thickness</code> 系のSDF処理。</td>
+    </tr>
+  </table>
+
+  <h2>10. Math Field 専用コマンド</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Formula</td>
+      <td>選択</td>
+      <td>Gyroid / Schwarz P / Schwarz D を選ぶ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>TPMS系の数理フィールド式。</td>
+    </tr>
+    <tr>
+      <td>Preset</td>
+      <td>選択</td>
+      <td>Fine / Medium / Coarse / Thick / Shellなどの初期設定を適用する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Scale/Thickness/Extent等をまとめて設定。</td>
+    </tr>
+    <tr>
+      <td>Mask</td>
+      <td>選択</td>
+      <td>Box / Sphere / Cylinder系の境界形状を選ぶ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Math Fieldを有限範囲へ切る。</td>
+    </tr>
+    <tr>
+      <td>Boundary</td>
+      <td>選択</td>
+      <td>Fade / Open / Box Clip系の境界挙動を選ぶ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>端部の見え方に影響。</td>
+    </tr>
+    <tr>
+      <td>Use Previous as Mask</td>
+      <td>ボタン <code>sdf.use_previous_as_mask</code></td>
+      <td>直前のプリミティブを外形マスクとして、Math FieldをIntersect設定にする。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>旧ラベル上はGyroid由来だが、V16.0.7ではMath Field向け。</td>
+    </tr>
+    <tr>
+      <td>Phase</td>
+      <td>数値</td>
+      <td>フィールド周期を位相シフトする。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>穴や稜線の位置調整。</td>
+    </tr>
+    <tr>
+      <td>Axis X/Y/Z</td>
+      <td>数値</td>
+      <td>各軸方向のフィールド密度を調整する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>非均一スケール時の見た目調整に重要。</td>
+    </tr>
+    <tr>
+      <td>Auto Match Scale</td>
+      <td>ボタン <code>sdf.match_math_field_axis_to_scale</code></td>
+      <td>Object Scaleの絶対値をAxis X/Y/Zへ反映する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>伸縮後もワールド密度を揃えたい時に使う。値は0.05から8.0にClamp。</td>
+    </tr>
+    <tr>
+      <td>Scale / Thickness / Bias / Extent</td>
+      <td>数値</td>
+      <td>Math Fieldのセル密度、厚み、オフセット、範囲を設定する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>Formula共通の基本パラメータ。</td>
+    </tr>
+  </table>
+
+  <h2>11. Layout (Instancing)</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr><td>Mirror</td><td>トグル</td><td>選択プリミティブをミラー複製する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>X/Y/Z軸指定とOffsetを使う。</td></tr>
+    <tr><td>Radial</td><td>トグル</td><td>円周上に複製する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>Count/Radius/Axisを設定。</td></tr>
+    <tr><td>Spiral</td><td>トグル</td><td>螺旋状に複製する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>Pitchで高さ方向を制御。</td></tr>
+    <tr><td>Grid</td><td>トグル</td><td>格子状に複製する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>Count X/Y/ZとSpacing X/Y/Zを設定。</td></tr>
+    <tr><td>Jitter</td><td>トグル</td><td>配置にランダム揺らぎを加える。</td><td><span class="tag mesh">Mesh再計算</span></td><td>Seed/Strengthを設定。</td></tr>
+    <tr><td>Rotation (Indiv &amp; Accum)</td><td>角度</td><td>個別回転と累積回転を設定する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>Radial/Spiral/Grid配置の方向付けに使う。</td></tr>
+  </table>
+
+  <h2>12. Deform (Stack)</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr><td>+</td><td>ボタン <code>sdf.deform_add</code></td><td>Deform Stackに変形を追加する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>最大2つまで。</td></tr>
+    <tr><td>-</td><td>ボタン <code>sdf.deform_remove</code></td><td>選択中の変形を削除する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>変形順序も結果に影響。</td></tr>
+    <tr><td>Up / Down</td><td>ボタン <code>sdf.deform_move</code></td><td>変形の順番を入れ替える。</td><td><span class="tag mesh">Mesh再計算</span></td><td>例: Bend後TwistとTwist後Bendは違う。</td></tr>
+    <tr><td>Enabled</td><td>トグル</td><td>選択中変形の有効/無効を切り替える。</td><td><span class="tag mesh">Mesh再計算</span></td><td>一時比較に便利。</td></tr>
+    <tr><td>Type</td><td>選択</td><td>Elongate / Bend / Twist / Taperを選ぶ。</td><td><span class="tag mesh">Mesh再計算</span></td><td>SDF空間変形。</td></tr>
+    <tr><td>Axis</td><td>選択</td><td>変形軸を選ぶ。</td><td><span class="tag mesh">Mesh再計算</span></td><td>X/Y/Z。</td></tr>
+    <tr><td>Angle / Factor</td><td>数値</td><td>Bend/Twist角度、Taper係数などを調整する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>Typeにより意味が変わる。</td></tr>
+    <tr><td>Origin Offset</td><td>数値</td><td>変形中心をずらす。</td><td><span class="tag mesh">Mesh再計算</span></td><td>選択軸に応じて表示成分が変わる。</td></tr>
+    <tr><td>Elongate X/Y/Z</td><td>数値</td><td>空間を各軸方向へ伸長する。</td><td><span class="tag mesh">Mesh再計算</span></td><td>Elongate専用。</td></tr>
+  </table>
+
+  <h2>13. Add New Primitives</h2>
+  <table>
+    <tr><th>ボタン</th><th>shape_type</th><th>主なパラメータ</th><th>再計算</th><th>用途</th></tr>
+    <tr><td>Sphere</td><td><code>sphere</code></td><td>Radius</td><td><span class="tag mesh">Mesh再計算</span></td><td>基本球。</td></tr>
+    <tr><td>Box</td><td><code>box</code></td><td>Object Scale</td><td><span class="tag mesh">Mesh再計算</span></td><td>基本箱。</td></tr>
+    <tr><td>R-Box</td><td><code>rounded_box</code></td><td>Roundness</td><td><span class="tag mesh">Mesh再計算</span></td><td>角丸箱。</td></tr>
+    <tr><td>Torus</td><td><code>torus</code></td><td>Main Radius / Pipe Radius</td><td><span class="tag mesh">Mesh再計算</span></td><td>輪形状。</td></tr>
+    <tr><td>Cylinder</td><td><code>cylinder</code></td><td>Radius / Height (Half)</td><td><span class="tag mesh">Mesh再計算</span></td><td>円柱。</td></tr>
+    <tr><td>Capsule</td><td><code>capsule</code></td><td>Radius / Height (Half)</td><td><span class="tag mesh">Mesh再計算</span></td><td>カプセル形状。</td></tr>
+    <tr><td>Hex</td><td><code>hex_prism</code></td><td>Radius / Height (Half)</td><td><span class="tag mesh">Mesh再計算</span></td><td>六角柱。</td></tr>
+    <tr><td>Pyramid</td><td><code>pyramid</code></td><td>Base Size / Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>四角錐。</td></tr>
+    <tr><td>Taper</td><td><code>capped_cone</code></td><td>Bottom Radius / Top Radius / Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>テーパー円柱。</td></tr>
+    <tr><td>N-gon</td><td><code>ngon_prism</code></td><td>Radius / Sides / Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>多角柱。</td></tr>
+    <tr><td>Ellipsoid</td><td><code>ellipsoid</code></td><td>Radius X/Y/Z</td><td><span class="tag mesh">Mesh再計算</span></td><td>楕円体。</td></tr>
+    <tr><td>R-Cylinder</td><td><code>rounded_cylinder</code></td><td>Radius / Edge Radius / Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>丸め円柱。</td></tr>
+    <tr><td>C-Torus</td><td><code>capped_torus</code></td><td>Main Radius / Pipe Radius / Angle</td><td><span class="tag mesh">Mesh再計算</span></td><td>部分トーラス。</td></tr>
+    <tr><td>Octahedron</td><td><code>octahedron</code></td><td>Size</td><td><span class="tag mesh">Mesh再計算</span></td><td>八面体。</td></tr>
+    <tr><td>Cut Sphere</td><td><code>cut_sphere</code></td><td>Cut Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>切断球。</td></tr>
+    <tr><td>Math Field</td><td><code>math_field</code></td><td>Scale / Thickness / Bias / Extent</td><td><span class="tag mesh">Mesh再計算</span></td><td>Gyroid / Schwarz P / Schwarz Dなどの数理フィールド。</td></tr>
+  </table>
+
+  <h2>14. Object Utilities / Cleanup</h2>
+  <table>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+    <tr>
+      <td>Wire/Solid</td>
+      <td>ボタン <code>sdf.toggle_display</code></td>
+      <td>選択オブジェクトの表示をWire/Textured系で切り替える。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>見え方だけの変更。</td>
+    </tr>
+    <tr>
+      <td>Move to SDF</td>
+      <td>ボタン <code>sdf.move_to_sdf_collection</code></td>
+      <td>選択オブジェクトをSDF_Collectionへ移し、SDF Primitiveとして扱う。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>既存Blenderオブジェクトの取り込み用。形状推定は名前ベース。</td>
+    </tr>
+    <tr>
+      <td>Include Baked Results</td>
+      <td>トグル</td>
+      <td>All Clearで確定済み結果も削除対象に含める。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>ONは強い掃除。履歴を残したい場合はOFF。</td>
+    </tr>
+    <tr>
+      <td>All Clear</td>
+      <td>ボタン <code>sdf.all_clear</code></td>
+      <td>SDF関連オブジェクト/コレクションを削除する。</td>
+      <td><span class="tag danger">削除</span></td>
+      <td>作業空間を掃除する操作。Include Baked Resultsの状態に注意。</td>
+    </tr>
+  </table>
+
+  <h2>15. Operator ID一覧</h2>
+  <table>
+    <tr><th>Operator ID</th><th>ラベル</th><th>概要</th></tr>
+    <tr><td><code>sdf.add_primitive</code></td><td>Add SDF Primitive</td><td>プリミティブを追加する。</td></tr>
+    <tr><td><code>sdf.toggle_display</code></td><td>Toggle Wire/Solid</td><td>表示モードを切り替える。</td></tr>
+    <tr><td><code>sdf.move_to_sdf_collection</code></td><td>Move to SDF Collection</td><td>選択オブジェクトをSDF_Collectionへ移す。</td></tr>
+    <tr><td><code>sdf.duplicate_collection</code></td><td>Duplicate Collection</td><td>Collection Dividerグループを複製する。</td></tr>
+    <tr><td><code>sdf.bake_mesh</code></td><td>Snapshot Mesh</td><td>静的メッシュコピーを作る。</td></tr>
+    <tr><td><code>sdf.setup_material</code></td><td>Setup Color Material</td><td>標準マテリアルノードを作る。</td></tr>
+    <tr><td><code>sdf.reset_material</code></td><td>Reset Shader Nodes</td><td>標準ノード構成へ戻す。</td></tr>
+    <tr><td><code>sdf.apply_color_all</code></td><td>Apply Color To All</td><td>全体色を一括適用する。</td></tr>
+    <tr><td><code>sdf.apply_material_all</code></td><td>Apply Material To All</td><td>Metallic/Roughnessを一括適用する。</td></tr>
+    <tr><td><code>sdf.update_normals</code></td><td>Update Normals</td><td>法線を更新する。</td></tr>
+    <tr><td><code>sdf.generate_mesh</code></td><td>Generate SDF Mesh</td><td>結果メッシュを強制更新する。</td></tr>
+    <tr><td><code>sdf.add_selected</code></td><td>Add Selected to SDF</td><td>選択オブジェクトをSDF Stackへ追加する。</td></tr>
+    <tr><td><code>sdf.make_output</code></td><td>New SDF Workspace</td><td>新規SDFワークスペースを作る。</td></tr>
+    <tr><td><code>sdf.stack_move</code></td><td>Move Stack Item</td><td>Stack項目を移動する。</td></tr>
+    <tr><td><code>sdf.stack_remove</code></td><td>Remove Stack Item</td><td>Stack項目を削除する。</td></tr>
+    <tr><td><code>sdf.select_stack_obj</code></td><td>Select SDF Object</td><td>Stack対応オブジェクトを選択する。</td></tr>
+    <tr><td><code>sdf.use_previous_as_mask</code></td><td>Use Previous as Mask</td><td>Math Fieldを直前プリミティブでIntersectする設定にする。</td></tr>
+    <tr><td><code>sdf.match_math_field_axis_to_scale</code></td><td>Auto Match Scale</td><td>Math Field Axis値をObject Scaleに合わせる。</td></tr>
+    <tr><td><code>sdf.setup_post_process</code></td><td>Setup Post Process (GN)</td><td>GeoRemesh_Rを追加する。</td></tr>
+    <tr><td><code>sdf.finalize</code></td><td>Finalize (Bake All)</td><td>SDF結果を確定メッシュ化する。</td></tr>
+    <tr><td><code>sdf.set_resolution_preset</code></td><td>Set Resolution Preset</td><td>Low/Highプリセットへ切り替える。</td></tr>
+    <tr><td><code>sdf.all_clear</code></td><td>All Clear</td><td>SDF関連データを削除する。</td></tr>
+    <tr><td><code>sdf.deform_add</code></td><td>Add Deform</td><td>Deform Stackへ追加する。</td></tr>
+    <tr><td><code>sdf.deform_remove</code></td><td>Remove Deform</td><td>Deform Stackから削除する。</td></tr>
+    <tr><td><code>sdf.deform_move</code></td><td>Move Deform</td><td>Deform順序を移動する。</td></tr>
+    <tr><td><code>sdf.switch_algo</code></td><td>Switch Algorithm</td><td>MC/DCを切り替える。</td></tr>
+    <tr><td><code>sdf.add_collection_divider</code></td><td>Add Collection Divider</td><td>Collection Dividerを追加する。</td></tr>
+  </table>
+
+  <p class="small">Source basis: <code>rust_gpu_sdf_addon/ui.py</code>, <code>operators.py</code>, <code>properties.py</code>, <code>constants.py</code> in Rust-GPU-SDF-V16.0.7.</p>
+</body>
+</html>

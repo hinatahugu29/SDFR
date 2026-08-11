@@ -841,5 +841,23 @@
   "uploaded_images": [],
   "notes": "コード変更なしの技術解説",
   "artifacts": []
+},
+{
+  "timestamp": "2026-05-27T23:23:45+09:00",
+  "user_request_summary": "放射のY軸設定時における回転方向のバグについての現状調査依頼。",
+  "task_summary": "Y軸放射（Radial Pattern）処理におけるシェーダー（shader.py）と各生成系コード（common.wgsl, lib.rs, sdf.rs）の座標軸および回転方向の不一致箇所を特定・調査。",
+  "ai_interpretation": "ユーザーは放射パターンのY軸設定において、ビューポートでのプレビュー（GLSL）と実際の生成メッシュ（Rust/WGSL）で回転方向が異なってズレるバグの原因を特定したいと考えている。各レイヤーのコードを走査し、座標の定義や回転軸・基準軸のミスマッチがないか検証する。",
+  "status": "completed",
+  "duration_minutes": 10,
+  "files_changed": [
+    "agent-work-log.json"
+  ],
+  "executed_actions": [
+    "V15.9.7.1のソースコード（src/lib.rs, src/sdf.rs, src/common.wgsl, rust_gpu_sdf_addon/shader.py）を調査",
+    "Y軸（axis == 1）における放射パターンの実装が、ビューポート側（shader.py）と生成側（common.wgsl/lib.rs/sdf.rs）で異なる基準座標（Z軸基準 vs X軸基準）を使用しており、結果として回転方向と位置に食い違いが発生していることを特定"
+  ],
+  "uploaded_images": [],
+  "notes": "今回は現状調査のみであるため、修正作業は行わず不一致の具体的な原因の特定にとどめる。次回作業時に指示に従いV15.9.7.2フォルダを作成して修正を行う方針とする。",
+  "artifacts": []
 }
 ]

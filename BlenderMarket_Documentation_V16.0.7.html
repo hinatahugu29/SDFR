@@ -1,0 +1,220 @@
+<h1>SDF-R (Rust-GPU-SDF) Documentation &amp; User Guide</h1>
+<p><em>For V16.0.7</em></p>
+
+<p>Welcome to the official documentation for <strong>SDF-R (Rust-GPU-SDF)</strong>, a next-generation Signed Distance Field (SDF) modeling engine built using Rust and GPU (wgpu/WGSL) acceleration for Blender.</p>
+<p>SDF-R is designed for a direct, non-destructive modeling workflow: add primitive SDF shapes, blend or cut them with boolean operations, preview the result in real time, then generate or bake a standard Blender mesh when you are ready.</p>
+
+<hr />
+
+<h2>What's New in V16.0.7</h2>
+<ul>
+  <li><strong>Layer Boundary workflow:</strong> Collection Dividers can now act as layer boundaries. Primitives below a layer boundary are evaluated as an isolated layer, then the finished layer result is combined back into the global model. This is especially useful for Math Field pattern work where you want an Intersect cutter to affect only the current layer instead of every earlier shape.</li>
+  <li><strong>Snapshot Mesh:</strong> Create a static mesh copy of the current SDF result while keeping the live SDF workspace editable. The new snapshot object is selected automatically after creation.</li>
+  <li><strong>Finishing controls:</strong> Apply one color to all SDF primitives with <strong>Apply Color All</strong>, or apply shared <strong>Metallic</strong> and <strong>Roughness</strong> values with <strong>Apply Material All</strong>.</li>
+  <li><strong>Material Reset improvement:</strong> Resetting the material nodes also returns the shared Metallic and Roughness controls to their defaults.</li>
+  <li><strong>Math Field Auto Match Scale:</strong> Match Math Field Axis X/Y/Z values to the object's scale so the pattern keeps a consistent world-space density after non-uniform scaling.</li>
+  <li><strong>Math Field foundation:</strong> The previous Gyroid Field workflow is now a more general <strong>Math Field</strong> primitive with formula selection such as Gyroid, Schwarz P, and Schwarz D.</li>
+</ul>
+
+<hr />
+
+<h2>1. Quick Start &amp; Installation</h2>
+
+<h3>System Requirements</h3>
+<p>Before installing, please ensure your system matches the requirements:</p>
+<ul>
+  <li><strong>Supported OS:</strong> Windows 10/11 (64-bit) for the standard Blender Market package. Dedicated experimental test builds are also available for macOS and Linux.</li>
+  <li><strong>GPU:</strong> A dedicated graphics card (NVIDIA / AMD) supporting DirectX 12 or Vulkan is highly recommended. Integrated GPUs such as Intel Iris Xe are supported with automated memory optimization, but may have lower performance at very high resolutions.</li>
+  <li><strong>Blender Version:</strong> Blender 3.6 LTS, 4.x, or 5.x.</li>
+</ul>
+
+<h3>Installation Steps</h3>
+<ol>
+  <li>Download the addon zip file for your OS. Windows users should use the standard package, for example <code>SDF_R_16_0_7.zip</code>. If you are testing macOS or Linux, use the dedicated experimental platform zip instead, such as <code>SDF_R_16_0_7_MAC.zip</code> or <code>SDF_R_16_0_7_LINUX.zip</code>.</li>
+  <li>In Blender, go to <strong>Edit</strong> &gt; <strong>Preferences</strong> &gt; <strong>Add-ons</strong>.</li>
+  <li>Click <strong>Install...</strong> and select the downloaded zip file.</li>
+  <li>Check the box to enable <strong>SDF-R (Rust-GPU-SDF)</strong>.</li>
+  <li>Save your preferences.</li>
+</ol>
+
+<div style="background-color:#f8d7da;border-left:6px solid #dc3545;padding:15px;margin-bottom:20px;border-radius:4px;color:#721c24;font-family:sans-serif;">
+  <strong>Important: Before Updating to a New Version</strong><br />
+  If you are <strong>updating from a previous version</strong> of SDF-R, or if you have recently <strong>changed your GPU or updated your graphics driver</strong>, please clear the shader cache before launching Blender with the new version installed. Old cache data can occasionally be incompatible with a new build or a different GPU/driver, which may cause the initialization panel to appear stuck on "Initializing..." indefinitely.
+  <p style="margin-bottom:0;"><strong>How to clear the cache:</strong></p>
+  <ol style="margin-top:5px;">
+    <li>Close Blender completely.</li>
+    <li>Delete the following file. It will be safely rebuilt automatically on next startup:
+      <br /><code>%APPDATA%\Blender Foundation\Blender\&lt;your version&gt;\datafiles\rust_gpu_sdf\shader_cache.bin</code>
+    </li>
+    <li>Restart Blender and enable SDF-R. The first startup after clearing the cache will take the full warm-up time again.</li>
+  </ol>
+</div>
+
+<div style="background-color:#fff3cd;border-left:6px solid #ffc107;padding:15px;margin-bottom:20px;border-radius:4px;color:#856404;font-family:sans-serif;">
+  <strong>Important: The First Startup (Warm-up Delay)</strong><br />
+  When you first toggle <strong>Live Update</strong> in the SDF-R panel, you may experience a compilation delay of about <strong>15 to 45 seconds</strong> depending on your GPU.
+  <ul>
+    <li><strong>What is happening?</strong> The engine is compiling the high-performance GPU shaders (WGSL) and running a mandatory driver warm-up to optimize the rendering pipeline.</li>
+    <li><strong>Do not panic:</strong> Blender might seem temporarily unresponsive during this period. Do not close Blender.</li>
+    <li><strong>Disk caching:</strong> This optimization is cached to your local disk. Subsequent starts are much faster.</li>
+    <li><strong>Panel not updating?</strong> On rare occasions the sidebar panel does not visually refresh once warm-up finishes. Clicking another sidebar tab and switching back to the SDF-R tab will force it to refresh.</li>
+  </ul>
+</div>
+
+<hr />
+
+<h2>2. Interface Overview</h2>
+<p>Once enabled, you will find the <strong>SDF-R</strong> tab in the Sidebar of the 3D Viewport. Press <code>N</code> to open the sidebar.</p>
+<p>The main panel is organized into these areas:</p>
+<ol>
+  <li><strong>Engine and Output controls:</strong> Live Update, GPU status, resolution, domain, preview quality, algorithm selection, Weld, and Live Normals.</li>
+  <li><strong>Post-Process:</strong> Optional Geometry Nodes smoothing/remesh setup for the generated output mesh.</li>
+  <li><strong>The Stack:</strong> Manage primitive order, collection dividers, solo mode, visibility, grouping, and layer boundaries.</li>
+  <li><strong>Material:</strong> Set up shader nodes, reset material attributes, and apply color/metallic/roughness globally.</li>
+  <li><strong>Finalize:</strong> Fix normals, force a mesh update, create a snapshot mesh, or finalize the live SDF workspace into a baked mesh.</li>
+  <li><strong>Primitive Settings:</strong> Shape type, boolean operation, smoothness, edge profile, noise, color, material values, Math Field controls, layout instancing, and deform stack.</li>
+</ol>
+
+<hr />
+
+<h2>3. Core Concept: Dual Contouring vs. Marching Cubes</h2>
+<p>SDF-R features two mesh generation algorithms which you can choose depending on your model:</p>
+
+<h3>Marching Cubes (MC)</h3>
+<ul>
+  <li><strong>Best for:</strong> Smooth, organic, fluid, and clay-like shapes.</li>
+  <li><strong>Characteristics:</strong> Very stable topology and predictable output, ideal for soft round surfaces and general production modeling.</li>
+</ul>
+
+<h3>Dual Contouring (DC)</h3>
+<ul>
+  <li><strong>Best for:</strong> Hard-surface modeling, mechanical parts, and sharp boxy corners.</li>
+  <li><strong>Characteristics:</strong> Uses a GPU-accelerated Quadratic Error Function (QEF) solver to reconstruct sharp edges and creases that are often rounded off in traditional SDF meshing.</li>
+  <li><em>Note: First-time activation of DC may trigger a brief lazy-compilation warm-up.</em></li>
+</ul>
+
+<hr />
+
+<h2>4. The Stack, Layers, and Boolean Workflow</h2>
+<p>SDF-R evaluates shapes through <strong>The Stack</strong>. The stack order defines how each primitive contributes to the final SDF result.</p>
+
+<h3>Boolean Operations</h3>
+<ul>
+  <li><strong>Union:</strong> Adds the selected primitive to the existing shape.</li>
+  <li><strong>Subtract:</strong> Cuts the selected primitive out of the existing shape.</li>
+  <li><strong>Intersect:</strong> Keeps only the region shared by the existing shape and the selected primitive.</li>
+  <li><strong>Smoothness:</strong> Controls the softness of blend or transition areas. Smoothness is especially important for visual unity across a finished piece.</li>
+</ul>
+
+<h3>Collection Divider</h3>
+<p>Use <strong>Add Collection Divider</strong> to add an empty divider item inside The Stack. Divider items can organize primitives into groups, duplicate group structures, and carry group layout settings such as Mirror, Radial, Spiral, Grid, and Jitter.</p>
+
+<h3>Layer Boundary</h3>
+<p>In V16.0.7, a collection divider can also be marked as <strong>Layer Boundary</strong>.</p>
+<ul>
+  <li>Items above the boundary are evaluated normally.</li>
+  <li>Items below the boundary are evaluated as a separate layer.</li>
+  <li>The completed layer is then merged back into the global model.</li>
+  <li>This lets you use Subtract or Intersect inside a local layer without cutting every earlier primitive in the stack.</li>
+</ul>
+<p>A common pattern is:</p>
+<ol>
+  <li>Create the base form with normal Union/Subtract operations.</li>
+  <li>Add a Collection Divider and enable <strong>Layer Boundary</strong>.</li>
+  <li>Add a Math Field or decorative pattern below the boundary.</li>
+  <li>Add a cylinder, box, or sphere below it as an Intersect mask to trim only that layer.</li>
+</ol>
+
+<hr />
+
+<h2>5. Math Field Workflow</h2>
+<p><strong>Math Field</strong> is the V16 procedural field primitive. It replaces the older Gyroid Field entry with a formula-based design that can support multiple TPMS-style formulas.</p>
+<ul>
+  <li><strong>Formula:</strong> Choose from available field formulas such as Gyroid, Schwarz P, and Schwarz D.</li>
+  <li><strong>Preset:</strong> Quickly switch between common field thickness and scale setups.</li>
+  <li><strong>Mask:</strong> Limit the field with Box, Sphere, or Cylinder style bounds.</li>
+  <li><strong>Boundary:</strong> Control how the field behaves near the mask boundary.</li>
+  <li><strong>Phase:</strong> Shift the periodic field without moving the mask.</li>
+  <li><strong>Axis X/Y/Z:</strong> Adjust field density independently per axis.</li>
+  <li><strong>Auto Match Scale:</strong> Copy the object's scale into Axis X/Y/Z to help keep the pattern visually consistent after non-uniform scaling.</li>
+  <li><strong>Use Previous as Mask:</strong> Configure the selected Math Field to intersect with the previous stack primitive for quick filled-pattern workflows.</li>
+</ul>
+
+<hr />
+
+<h2>6. Deformers and Layout Stacking</h2>
+<p>SDF-R allows you to chain deformations and layout repetitions in real time.</p>
+
+<h3>Non-Destructive Deform Stack</h3>
+<p>Apply <strong>Twist</strong>, <strong>Bend</strong>, or <strong>Taper</strong> deformations by adding items to the Deform Stack.</p>
+<ul>
+  <li><strong>Dynamic ordering:</strong> You can reorder deformers in the list. Changing the order, such as tapering before twisting versus twisting before tapering, changes the final shape.</li>
+  <li><strong>Stacked control:</strong> Deformations remain editable while Live Update previews the result.</li>
+</ul>
+
+<h3>Layout Stacking</h3>
+<p>Duplicate your shapes or groups across space using:</p>
+<ul>
+  <li><strong>Mirror:</strong> Symmetry replication across selected axes.</li>
+  <li><strong>Grid:</strong> Compact repeat patterns.</li>
+  <li><strong>Radial / Spiral:</strong> Distribute duplicates in a circle or climbing spiral.</li>
+  <li><strong>Jitter:</strong> Add randomized offsets for more natural variation.</li>
+</ul>
+
+<hr />
+
+<h2>7. Attribute &amp; Material Workflow</h2>
+<p>SDF-R passes material attributes directly from primitives to the generated mesh. The default material node setup reads vertex attributes named <strong>Color</strong>, <strong>Metallic</strong>, and <strong>Roughness</strong>.</p>
+<ul>
+  <li><strong>Setup Nodes:</strong> Creates a material that reads SDF-R's generated mesh attributes.</li>
+  <li><strong>Reset:</strong> Rebuilds the default material node setup and resets shared Metallic/Roughness controls to default values.</li>
+  <li><strong>Apply Color All:</strong> Applies one shared base color to all SDF primitives.</li>
+  <li><strong>Apply Material All:</strong> Applies shared Metallic and Roughness values to all SDF primitives.</li>
+  <li><strong>Per-primitive control:</strong> Individual primitives can still have their own color, metallic, and roughness settings when needed.</li>
+  <li><strong>Subtractive painting:</strong> When a subtractive operation exposes an inner cut surface, the exposed surface can inherit the color and material properties of the cutting object.</li>
+</ul>
+
+<hr />
+
+<h2>8. Mesh Output, Snapshot, and Finalize</h2>
+<ul>
+  <li><strong>Force Update:</strong> Manually regenerates the output mesh from the current stack.</li>
+  <li><strong>Fix Normals:</strong> Recalculates high-quality normals for smoother display and rendering.</li>
+  <li><strong>Snapshot Mesh:</strong> Creates a static mesh copy from the current SDF result while leaving the live SDF workspace intact. This is useful when you want to test a material, compare variations, or keep a milestone mesh without committing the whole workspace.</li>
+  <li><strong>Finalize (Bake):</strong> Converts the live SDF setup into a standard mesh workflow and archives the source primitives in the SDF history structure.</li>
+</ul>
+
+<hr />
+
+<h2>9. Performance Optimization &amp; Troubleshooting</h2>
+
+<h3>Low VRAM / Integrated GPU Safeguard</h3>
+<p>If you are running on an integrated GPU like Intel Iris Xe or a low-end laptop GPU:</p>
+<ul>
+  <li>The addon dynamically queries hardware limits such as <code>max_storage_buffer_binding_size</code> on startup.</li>
+  <li>If memory is low, it scales down the maximum active blocks automatically to help prevent Blender from crashing.</li>
+  <li><strong>Tip:</strong> Keep the mesh generation resolution at a moderate level, such as 128 to 256, for optimal editing speed on integrated GPUs.</li>
+</ul>
+
+<h3>Common Troubleshooting</h3>
+
+<h4>Q: Blender freezes when I first click Live Update.</h4>
+<p><strong>A:</strong> This is normal. It is compiling shaders and caching them. Please wait up to 1 minute. Future activations should be much faster.</p>
+
+<h4>Q: The "Initializing..." panel never finishes, even after waiting several minutes.</h4>
+<p><strong>A:</strong> This is most commonly caused by a leftover shader cache file from a previous install, a previous GPU, or a previous driver version that is no longer compatible with your current setup. Close Blender, delete the cache file listed in the "Before Updating to a New Version" section above, and restart Blender.</p>
+
+<h4>Q: The generated mesh has holes or missing faces under high deformation.</h4>
+<p><strong>A:</strong> Make sure the domain size is large enough to contain the deformed shape, and the mesh resolution is adequate. Also verify that the deform parameters are within reasonable limits.</p>
+
+<h4>Q: MC and DC both show slightly uneven edges in certain areas.</h4>
+<p><strong>A:</strong> SDF meshing converts a continuous field into polygons, so small edge irregularities can appear around steep curvature, intersecting fields, or dense decorative patterns. Use higher resolution, Live Normals, Weld, and optional post-process smoothing when visual finish is more important than raw edit speed.</p>
+
+<h4>Q: A Math Field stretches when I scale the object on X/Y/Z.</h4>
+<p><strong>A:</strong> Select the Math Field and use <strong>Auto Match Scale</strong>. This matches the field's Axis X/Y/Z settings to the object's scale so the pattern density remains closer to the intended look.</p>
+
+<h4>Q: I get a shader validation error on startup.</h4>
+<p><strong>A:</strong> Ensure your graphics card drivers are updated to the latest version. Make sure your system defaults to using your dedicated graphics card (NVIDIA/AMD) rather than the motherboard's integrated chip when running Blender. If the error mentions the cache being created for a different device, follow the cache-clearing steps above.</p>
+
+<hr />
+<p><em>Documented on 2026-07-19 and reviewed on 2026-07-21 for SDF-R V16.0.7</em></p>

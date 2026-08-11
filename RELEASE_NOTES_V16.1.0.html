@@ -1,0 +1,192 @@
+<div style="font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:#333; line-height:1.7; max-width:820px; margin:auto; padding:10px;">
+
+  <h1 style="color:#222; font-weight:bold; font-size:2em; margin-bottom:4px;">SDF.R V16.1.0 Release Notes</h1>
+  <p style="font-size:1.2em; color:#555; margin-top:0; font-style:italic;">Curve Workflow</p>
+  <p style="font-size:0.9em; color:#888; margin-top:0;">Released 2026-07-26</p>
+
+  <p style="font-size:1.05em; margin:24px 0 30px 0;">
+    V16.1.0 opens up a new way to build shapes in SDF.R: instead of composing everything from numeric
+    primitives, you can now <strong>draw a path with Blender's own Curve tools and have SDF.R turn it into a
+    solid, blendable SDF pipe</strong>. Curves behave like any other stack item, so they blend smoothly with
+    neighbouring shapes and support Union, Subtract, and Intersect.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">✨ Highlights</h2>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Curve Sync — native Blender Curves as SDF geometry</h3>
+    <p style="font-size:0.97em; color:#444;">
+      Any Blender Curve object can now drive an SDF pipe. Add as many curves as you like; each one carries its
+      own Pipe Radius, boolean Operation, Smoothness, Color, Metallic, and Roughness.
+    </p>
+    <p style="font-size:0.97em; color:#444; margin-bottom:6px;">There are two ways to attach a curve, and both can be used in the same scene:</p>
+    <ul style="padding-left:20px; font-size:0.95em; color:#444; line-height:1.65;">
+      <li style="margin-bottom:10px;"><strong>Move it in.</strong> Select the curve and press <strong>Move to SDF</strong> (or drag it into the SDF Collection). The curve is registered directly as a Curve Sync stack item. Best when the curve exists purely to build the SDF shape.</li>
+      <li style="margin-bottom:0;"><strong>Reference it.</strong> Press <strong>Curve Ref</strong> in the Add New Primitives grid to create a small proxy item, then pick any curve in your scene as its <strong>Target Curve</strong>. The original object never moves and is never modified, so it stays available for animation, Geometry Nodes, or anything else. If a curve is already selected when you press the button, it is assigned automatically.</li>
+    </ul>
+    <p style="font-size:0.95em; color:#444; margin-bottom:0;">
+      Because the settings live on the proxy rather than on the curve, you can also point <strong>several Curve Ref
+      proxies at the same curve</strong> and give each one a different radius, colour, or boolean operation.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Edit the referenced curve in one click</h3>
+    <p style="font-size:0.97em; color:#444; margin-bottom:0;">
+      The Curve Sync panel includes an <strong>Edit</strong> button that selects the target curve and enters Edit
+      Mode immediately — no hunting through the Outliner. It safely exits any other object's edit mode first, and
+      unhides the curve if needed.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Supported curve types</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin-top:10px;">
+      <thead>
+        <tr style="background:#f0f0f0;">
+          <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Type</th>
+          <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Support</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Bezier</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Full, including handles. <strong>Subdiv Samples</strong> controls sampling density.</td></tr>
+        <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Poly</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Full; control points are used directly.</td></tr>
+        <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>NURBS</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Evaluated by Blender itself. <strong>Subdiv Samples does not apply</strong> — use the curve's own <em>Resolution Preview U</em>.</td></tr>
+        <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Cyclic (closed)</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Supported; the pipe closes back on itself.</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.9em; color:#666; font-style:italic; margin-bottom:0; margin-top:12px;">
+      Curves with Bevel or Extrude applied generate surfaces rather than a path, so Curve Sync falls back to a
+      coarser approximation. Keep the curve as a plain path for best results.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Bezier Curve primitive</h3>
+    <p style="font-size:0.97em; color:#444;">
+      Separate from Curve Sync, a new <strong>Bezier</strong> primitive is available in the Add New Primitives
+      grid. It is a self-contained 3D quadratic Bezier defined numerically rather than by a curve object:
+    </p>
+    <ul style="padding-left:20px; font-size:0.95em; color:#444; line-height:1.65;">
+      <li style="margin-bottom:8px;"><strong>Point B (Mid)</strong> and <strong>Point C (End)</strong> control points — the start point is the primitive's own origin, so moving the object moves the whole curve.</li>
+      <li style="margin-bottom:0;"><strong>Start R</strong> and <strong>End R</strong> give independent radii at each end for a smooth taper.</li>
+    </ul>
+    <p style="font-size:0.95em; color:#444; margin-bottom:0;">
+      Use Curve Sync when you want to draw a path by hand; use the Bezier primitive when you want a compact,
+      numerically-defined tapered arc that follows the object's transform and works with the Layout and Deform stacks.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Transmission &amp; IOR in the Material section</h3>
+    <p style="font-size:0.97em; color:#444;">
+      The Material section gains a <strong>Transmission</strong> slider with a paired <strong>IOR</strong> control
+      (enabled once Transmission is above zero) for glass-like results.
+    </p>
+    <div style="background:#fff8e1; padding:14px 16px; border-radius:6px; font-size:0.94em; color:#6d4c00; border-left:4px solid #ffb300;">
+      <strong>Scope note:</strong> Color, Metallic and Roughness are stored per vertex and can therefore differ per
+      primitive. Transmission is a <strong>single value applied to the whole SDF material</strong> — you cannot
+      currently make one primitive glass and another opaque within the same SDF object. Press <strong>Setup
+      Nodes</strong> first, then <strong>Apply Material All</strong>, and view in Material Preview or Rendered shading.
+    </div>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🎯 Performance</h2>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Lightweight Curve Sync preview</h3>
+    <p style="font-size:0.97em; color:#444;">
+      The real-time Ghost Preview draws Curve Sync as a <strong>coloured guide line along the curve</strong> rather
+      than a fully raymarched pipe. This is deliberate: the preview evaluates every primitive for every ray step, so
+      expanding each curve into a long chain of pipe segments would slow the whole viewport down as curves are added.
+    </p>
+    <ul style="padding-left:20px; font-size:0.95em; color:#444; line-height:1.65; margin-bottom:0;">
+      <li style="margin-bottom:8px;">The <strong>generated mesh is always exact</strong> — thickness, blending, and boolean operations are fully applied there.</li>
+      <li style="margin-bottom:8px;">Enable <strong>Show Result Mesh</strong> or press <strong>Force Update</strong> to see the true shape.</li>
+      <li style="margin-bottom:0;">The guide uses each item's colour, and its thickness is adjustable via <strong>Curve Sync Guide Width</strong> in the engine settings.</li>
+    </ul>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🔧 Fixes</h2>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#c0392b; font-size:1.2em; font-weight:bold;">Instancing accuracy — missing geometry with Radial + Rotation</h3>
+    <p style="font-size:0.97em; color:#444;">
+      Fixed geometry that could go missing when <strong>Radial or Spiral layouts were combined with
+      Individual/Step Rotation</strong>. The bounding volume used to skip empty regions during meshing did not
+      account for the extra per-copy rotation, so parts of elongated or asymmetric shapes could be culled away.
+      Also fixed the same calculation ignoring the <strong>Radial Axis</strong> setting, which caused losses when
+      the axis was set to X or Y instead of Z.
+    </p>
+    <p style="font-size:0.95em; color:#444; margin-bottom:0;">
+      This affects any elongated or asymmetric primitive, not just the new curve shapes.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#222; font-size:1.2em; font-weight:bold;">Other fixes</h3>
+    <ul style="padding-left:20px; font-size:0.95em; color:#444; line-height:1.65; margin-bottom:0;">
+      <li style="margin-bottom:8px;">Curve Sync items now respect stack order correctly, so <strong>Subtract and Intersect operate on the shapes above them</strong> as expected.</li>
+      <li style="margin-bottom:8px;">Adding a Curve Ref no longer produces a duplicate group entry in The Stack.</li>
+      <li style="margin-bottom:8px;">Solo mode now stops at the selected item reliably, even when a later item is incomplete.</li>
+      <li style="margin-bottom:8px;">Duplicating a Collection Divider group now carries Curve Sync items across correctly.</li>
+      <li style="margin-bottom:0;">Removing a Curve Ref proxy deletes only the proxy; the referenced curve is left untouched.</li>
+    </ul>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">📋 Interface Changes</h2>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:8px;"><strong>Curve Ref</strong> button added to the Add New Primitives grid.</li>
+    <li style="margin-bottom:8px;"><strong>Bezier</strong> primitive added to the Add New Primitives grid.</li>
+    <li style="margin-bottom:8px;"><strong>Curve Sync Settings</strong> panel appears when a synced Curve or Curve Ref proxy is selected.</li>
+    <li style="margin-bottom:8px;"><strong>Transmission</strong> and <strong>IOR</strong> added to the Material section.</li>
+    <li style="margin-bottom:8px;"><strong>Curve Sync Guide Width</strong> added to the engine settings.</li>
+    <li style="margin-bottom:0;"><strong>Extrude</strong> and <strong>Lathe</strong> have been removed from the Add New Primitives grid. Their two working cross-sections (rectangle and circle) overlapped almost entirely with the existing Rounded Box, Cylinder and Torus primitives, so the entry was removed rather than shipped half-complete. Arbitrary cross-section profiles remain on the roadmap. Existing objects are unaffected.</li>
+  </ul>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <div style="background-color:#f8d7da; padding:20px; border-radius:8px; border-left:6px solid #dc3545; color:#721c24; margin-bottom:30px;">
+    <h3 style="margin-top:0; font-size:1.2em; font-weight:bold;">⚠️ Upgrade Note</h3>
+    <p style="font-size:0.97em; margin-bottom:8px;">
+      This release changes the GPU shader code. When updating from V16.0.x, please <strong>clear the shader
+      cache</strong> before launching Blender:
+    </p>
+    <ol style="padding-left:20px; font-size:0.95em; line-height:1.65; margin-bottom:0;">
+      <li style="margin-bottom:6px;">Close Blender completely.</li>
+      <li style="margin-bottom:6px;">Delete <code>%APPDATA%\Blender Foundation\Blender\&lt;your version&gt;\datafiles\rust_gpu_sdf\shader_cache.bin</code></li>
+      <li style="margin-bottom:0;">Restart Blender. The first startup after clearing will take the full warm-up time again.</li>
+    </ol>
+  </div>
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">📦 Downloads</h2>
+  <p style="font-size:0.97em; color:#444;">All three platforms are available at V16.1.0.</p>
+  <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin-top:10px;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Platform</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">File</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Architecture</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Windows</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_0.zip</code> (standard package)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">x86-64</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>macOS</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_0_MAC.zip</code> (experimental test build)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Apple Silicon (arm64)</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Linux</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_0_LINUX.zip</code> (experimental test build)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">x86-64</td></tr>
+    </tbody>
+  </table>
+  <div style="background:#fff8e1; padding:14px 16px; border-radius:6px; font-size:0.94em; color:#6d4c00; border-left:4px solid #ffb300; margin-top:16px;">
+    <strong>macOS note:</strong> The test build is not code-signed. If Gatekeeper blocks it, open
+    <strong>System Settings → Privacy &amp; Security</strong>, find the message about <code>rust_gpu_sdf.so</code>,
+    and click <strong>Open Anyway</strong>, then re-enable the add-on in Blender.
+  </div>
+
+</div>

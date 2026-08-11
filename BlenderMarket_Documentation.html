@@ -1,0 +1,118 @@
+<h1>SDF-R (Rust-GPU-SDF) Documentation &amp; User Guide</h1>
+<p><em>For V15.9.x</em></p>
+
+<p>Welcome to the official documentation for <strong>SDF-R (Rust-GPU-SDF)</strong>, a next-generation Signed Distance Field (SDF) modeling engine built using Rust and GPU (wgpu/WGSL) acceleration for Blender.</p>
+
+<hr />
+
+<h2>1. Quick Start &amp; Installation</h2>
+
+<h3>System Requirements</h3>
+<p>Before installing, please ensure your system matches the requirements:</p>
+<ul>
+  <li><strong>Supported OS:</strong> Windows 10/11 (64-bit) ONLY. (macOS and Linux are not supported yet).</li>
+  <li><strong>GPU:</strong> A dedicated graphics card (NVIDIA / AMD) supporting DirectX 12 or Vulkan is highly recommended. Integrated GPUs (like Intel Iris Xe) are supported with automated memory optimization, but may have lower performance at very high resolutions.</li>
+  <li><strong>Blender Version:</strong> Blender 3.6 LTS, 4.x, or 5.x.</li>
+</ul>
+
+<h3>Installation Steps</h3>
+<ol>
+  <li>Download the addon zip file (e.g., <code>SDF_R_V15_9_x.zip</code>).</li>
+  <li>In Blender, go to <strong>Edit</strong> &gt; <strong>Preferences</strong> &gt; <strong>Add-ons</strong>.</li>
+  <li>Click <strong>Install...</strong> and select the downloaded zip file.</li>
+  <li>Check the box to enable <strong>SDF-R (Rust-GPU-SDF)</strong>.</li>
+  <li>Save your preferences.</li>
+</ol>
+
+<h3>Important: The First Startup (Warm-up Delay)</h3>
+<p>When you first toggle the <strong>Live Update</strong> in the SDF-R panel, you will experience a compilation delay of about <strong>15 to 45 seconds</strong> depending on your GPU.</p>
+<ul>
+  <li><strong>What is happening?</strong> The engine is compiling the high-performance GPU shaders (WGSL) and running a mandatory "driver warm-up" to optimize the rendering pipeline.</li>
+  <li><strong>Do not panic:</strong> Blender might seem temporarily unresponsive during this period. Do not close Blender.</li>
+  <li><strong>Disk Caching:</strong> This optimization is cached to your local disk. Subsequent starts will take only <strong>2 to 3 seconds</strong>.</li>
+</ul>
+
+<hr />
+
+<h2>2. Interface Overview</h2>
+<p>Once enabled, you will find the <strong>SDF-R</strong> tab in the Sidebar of the 3D Viewport (press <code>N</code> to open the sidebar).</p>
+<p>The panel is structured into four main areas:</p>
+<ol>
+  <li><strong>Core Controls:</strong> Toggles Live Update, Resolution, and Mesh Quality.</li>
+  <li><strong>Primitive List &amp; Settings:</strong> Manage shape types (Sphere, Box, Torus, Bezier Curve, etc.) and edit their individual dimensions, positions, and blending options.</li>
+  <li><strong>Deform Stack:</strong> Non-destructively apply deformations like Bend, Twist, and Taper.</li>
+  <li><strong>Layout Stacking:</strong> Repeat and mirror primitives in various spatial arrangements.</li>
+</ol>
+
+<hr />
+
+<h2>3. Core Concept: Dual Contouring vs. Marching Cubes</h2>
+<p>SDF-R features two mesh generation backends which you can choose depending on your model:</p>
+
+<h3>Marching Cubes (MC)</h3>
+<ul>
+  <li><strong>Best for:</strong> Smooth, organic, fluid, and clay-like shapes.</li>
+  <li><strong>Characteristics:</strong> Extremely stable topology, ideal for characters, liquids, or soft round surfaces.</li>
+</ul>
+
+<h3>Dual Contouring (DC)</h3>
+<ul>
+  <li><strong>Best for:</strong> Hard surface modeling, mechanical parts, sharp boxy corners.</li>
+  <li><strong>Characteristics:</strong> Uses a GPU-accelerated Quadratic Error Function (QEF) solver to identify and reconstruct sharp edges and creases that usually get rounded off in traditional SDF engines.</li>
+  <li><em>Note: First-time activation of DC triggers a brief lazy-compilation warm-up.</em></li>
+</ul>
+
+<hr />
+
+<h2>4. Working with Deformers and Layout Stacking</h2>
+<p>SDF-R allows you to chain deformations and layout repetitions in real time.</p>
+
+<h3>Non-Destructive Deform Stack</h3>
+<p>Apply <strong>Twist</strong>, <strong>Bend</strong>, or <strong>Taper</strong> deformations by adding items to the Deform List.</p>
+<ul>
+  <li><strong>Dynamic Ordering:</strong> You can reorder the deformers in the list. Changing the stack order (e.g., Tapering before Twisting vs. Twisting before Tapering) will change the final shape.</li>
+  <li><strong>Stretch Correction:</strong> The engine features an automatic mathematical distance correction so that extreme twists and bends do not cause mesh tearing or clipping.</li>
+</ul>
+
+<h3>Layout Stacking</h3>
+<p>Instantly duplicate your shapes across space using:</p>
+<ul>
+  <li><strong>Mirror:</strong> Symmetry replication across selected axes.</li>
+  <li><strong>Grid:</strong> Compact repeat patterns.</li>
+  <li><strong>Radial / Spiral:</strong> Distribute duplicates in a circle or a climbing spiral.</li>
+  <li><strong>Jitter:</strong> Add randomized offsets to your layouts to make them look hand-crafted.</li>
+</ul>
+
+<hr />
+
+<h2>5. Attribute &amp; Material Painting</h2>
+<p>SDF-R passes material attributes (color, metallic, roughness) directly from the primitives to the generated mesh.</p>
+<ul>
+  <li><strong>Subtractive Painting:</strong> When you perform a subtractive boolean operation (carving out shape A using shape B), the newly exposed inner surface created by the cut <strong>automatically inherits the color and material properties of the cutting object B</strong>. This allows you to "carving paint" multi-colored, multi-material details onto your models effortlessly.</li>
+</ul>
+
+<hr />
+
+<h2>6. Performance Optimization &amp; Troubleshooting</h2>
+
+<h3>Low VRAM / Integrated GPU (iGPU) Safeguard</h3>
+<p>If you are running on an integrated GPU like Intel Iris Xe or a low-end laptop GPU:</p>
+<ul>
+  <li>The addon dynamically queries the hardware limits (<code>max_storage_buffer_binding_size</code>) on startup.</li>
+  <li>If memory is low, it will scale down the maximum active blocks automatically to prevent Blender from crashing.</li>
+  <li><strong>Tip:</strong> Keep the mesh generation resolution slider at a moderate level (e.g., 128 to 256) for optimal editing speed on integrated GPUs.</li>
+</ul>
+
+<h3>Common Troubleshooting</h3>
+
+<h4>Q: Blender freezes when I first click Live Update.</h4>
+<p><strong>A:</strong> This is normal. It is compiling shaders and caching them. Please wait up to 1 minute. All future activations will be instantaneous.</p>
+
+<h4>Q: The generated mesh has holes or missing faces under high deformation.</h4>
+<p><strong>A:</strong> Make sure the domain size is large enough to contain the deformed shape, and the mesh quality resolution is adequate. Additionally, verify that the deform parameters are within reasonable limits.</p>
+
+<h4>Q: I get a shader validation error on startup.</h4>
+<p><strong>A:</strong> Ensure your graphics card drivers are updated to the latest version. Make sure your system defaults to using your dedicated graphics card (NVIDIA/AMD) rather than the motherboard's integrated chip when running Blender.</p>
+
+<hr />
+<p><em>Documented on 2026-05-19 by Antigravity</em></p>

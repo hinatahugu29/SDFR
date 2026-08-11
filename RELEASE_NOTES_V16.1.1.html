@@ -1,0 +1,170 @@
+<div style="font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:#333; line-height:1.7; max-width:820px; margin:auto; padding:10px;">
+
+  <h1 style="color:#222; font-weight:bold; font-size:2em; margin-bottom:4px;">SDF.R V16.1.1 Release Notes</h1>
+  <p style="font-size:1.2em; color:#555; margin-top:0; font-style:italic;">Viewport Preview Performance</p>
+  <p style="font-size:0.9em; color:#888; margin-top:0;">Released 2026-08-11</p>
+
+  <p style="font-size:1.05em; margin:24px 0 30px 0;">
+    V16.1.1 is a focused performance update for the real-time Ghost Preview. <strong>Nothing about mesh
+    generation changes</strong> — the geometry SDF.R produces is bit-for-bit identical to V16.1.0. Only how the
+    preview is drawn while you are actively navigating or editing has changed.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🎯 What changed</h2>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Adaptive preview resolution during interaction</h3>
+    <p style="font-size:0.97em; color:#444;">
+      The Ghost Preview is raymarched, which means its cost is roughly
+      <code>viewport pixels × ray steps × primitive count</code>. Step count was already reduced while you
+      navigate. V16.1.1 adds the missing piece: <strong>the preview is now rendered at a reduced resolution
+      while the camera is moving or an object is being transformed, then upscaled to fill the viewport.</strong>
+    </p>
+    <ul style="padding-left:20px; font-size:0.95em; color:#444; line-height:1.65;">
+      <li style="margin-bottom:8px;">Camera orbit / pan / zoom renders at 50% linear resolution — <strong>a quarter of the pixels</strong>.</li>
+      <li style="margin-bottom:8px;">Object transforms render at 65% linear resolution.</li>
+      <li style="margin-bottom:0;"><strong>The moment you stop, the preview is redrawn at full resolution.</strong> Still frames are unchanged.</li>
+    </ul>
+    <p style="font-size:0.95em; color:#444; margin-bottom:0;">
+      Because this scales down pixel count, it helps regardless of how complex the scene is — which is exactly
+      the case that used to degrade worst.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Faster normals while interacting</h3>
+    <p style="font-size:0.97em; color:#444; margin-bottom:0;">
+      When a ray hits a surface, the shading normal was estimated with a 6-tap central difference, meaning six
+      extra full-scene evaluations per hit pixel. During interaction this now uses a 3-tap forward difference
+      that reuses the distance already computed at the hit point, <strong>halving that cost</strong>. Full 6-tap
+      quality returns as soon as you stop moving.
+    </p>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">📊 What this does and does not help</h2>
+  <p style="font-size:0.97em; color:#444;">Being precise about this, because it sets expectations correctly:</p>
+  <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin-top:10px;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Situation</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Effect</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Camera orbit / pan / zoom</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Helps fully. The primitive buffer is cached, so this is pure draw cost.</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Dragging an object</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Helps the drawing portion only. Moving an object also rebuilds the preview's primitive buffer on the Python side, and that cost is untouched by this release.</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Still frames</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">No change — full resolution and full-quality normals, exactly as before.</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Generated mesh</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">No change whatsoever.</td></tr>
+    </tbody>
+  </table>
+  <div style="background:#eaf2f8; padding:15px; border-radius:6px; font-size:0.94em; color:#2c3e50; border-left:4px solid #3498db; margin-top:16px;">
+    <strong>Measuring it yourself:</strong> enable <strong>Engine Diagnostics &gt; Perf</strong> and watch the
+    system console. Note that <code>avg duration</code> in that log measures CPU-side command submission, not GPU
+    execution — <strong>FPS is the number to compare</strong>. A high <code>texture rebuilds</code> count
+    indicates the Python-side rebuild, not drawing, is your bottleneck.
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🔧 Also fixed</h2>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:10px;"><strong>Blender 5.2 support for the Post-Process panel.</strong> On Blender 5.2 the Post-Process (Smoothing) section came up empty, with <code>property not found</code> errors in the console. Blender 5.2 changed how Geometry Nodes modifier inputs are stored — they are now regular properties (<code>modifier.properties.inputs.&lt;id&gt;.value</code>) instead of custom properties (<code>modifier["&lt;id&gt;"]</code>). SDF.R now finds the values either way, so the same build works on 5.1 and 5.2. Note that this affects <strong>every earlier version of SDF.R too</strong> when run on Blender 5.2; it is not something V16.1.1 introduced.</li>
+    <li style="margin-bottom:10px;"><strong>Ghost Preview in split viewports.</strong> With more than one 3D Viewport open, the preview could fail to appear once the camera came to rest, and stayed locked in its reduced-quality interactive state. Motion was being detected with a single shared value, so simply alternating between two viewports looked like continuous camera movement. Detection is now tracked per viewport. This dates back to V15.9.9.4; the adaptive resolution added in V16.1.1 is what made it visible.</li>
+    <li style="margin-bottom:10px;"><strong>Reduced-resolution buffer reuse.</strong> With split viewports of differing sizes, the buffer used for reduced-resolution drawing was discarded and recreated on every frame, cancelling out the speed-up this release is built around. Buffers are now kept per size.</li>
+    <li style="margin-bottom:10px;"><strong>Mesh data safety check.</strong> Vertex indices coming back from the engine are now range-checked before being handed to Blender. Out-of-range data is rejected with a message in the system console rather than written into the mesh — writing it could corrupt memory and crash Blender later, in a place with no obvious connection to the real cause. Valid data is unaffected.</li>
+    <li style="margin-bottom:10px;"><strong>Collection cleanup when adding a primitive.</strong> An object that belonged to three or more collections could be left linked to some of them after being moved into <code>SDF_Collection</code>.</li>
+    <li style="margin-bottom:0;">Fixed the preview being drawn as a small patch in the middle of the viewport instead of filling it, under the new reduced-resolution path. (Introduced and fixed within V16.1.1 development; V16.1.0 is unaffected.)</li>
+  </ul>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🔍 Known issue — macOS, and a request</h2>
+
+  <p style="font-size:0.97em; color:#444;">
+    One user has reported Blender crashing immediately when adding any primitive, on
+    <strong>macOS 26.6 / Apple Silicon / Blender 5.2</strong>. I want to be upfront that
+    <strong>I have not been able to reproduce it.</strong> The same steps work here on Windows under both
+    Blender 5.1 and 5.2, and the crash lands inside Blender's own scene evaluation rather than anywhere I can
+    point to in the add-on. The cause is still unknown.
+  </p>
+
+  <div style="background:#e2f0d9; padding:15px 18px; border-radius:6px; font-size:0.95em; color:#385723; border-left:4px solid #385723; margin:16px 0;">
+    <strong>Workaround:</strong> turning <strong>Show Result Mesh</strong> off lets you add and shape
+    primitives normally. You keep the live Ghost Preview and the full modelling workflow — you just don't get
+    the final generated mesh until this is solved.
+  </div>
+
+  <p style="font-size:0.97em; color:#444;">
+    The mesh data safety check added in this release (see above) may or may not address it. That is an honest
+    "may" — it closes a real hole, but I have no evidence yet that this particular hole is the one being hit.
+  </p>
+
+  <div style="background:#eaf2f8; padding:18px; border-radius:6px; font-size:0.95em; color:#2c3e50; border-left:4px solid #3498db; margin-top:16px;">
+    <p style="margin-top:0; font-weight:bold; font-size:1.02em;">I would genuinely appreciate hearing from macOS and Linux users either way:</p>
+    <ul style="padding-left:20px; line-height:1.7; margin-bottom:0;">
+      <li style="margin-bottom:10px;"><strong>If it crashes for you</strong>, the single most useful thing is the console output. Launch Blender from Terminal with <code>/Applications/Blender.app/Contents/MacOS/Blender</code>, reproduce the crash, and send me whatever the Terminal printed. The engine's own log at <code>~/Library/Application Support/Blender/&lt;version&gt;/datafiles/rust_gpu_sdf/sdf_debug.log</code> helps too.</li>
+      <li style="margin-bottom:0;"><strong>If it works fine for you, please tell me that as well.</strong> Knowing which macOS versions, chips and Blender versions are <em>unaffected</em> narrows this down just as much as a crash report does. Right now I have exactly one data point, and I can't tell how widespread this is.</li>
+    </ul>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <div style="background-color:#e2f0d9; padding:20px; border-radius:8px; border-left:6px solid #385723; color:#385723; margin-bottom:20px;">
+    <h3 style="margin-top:0; font-size:1.2em; font-weight:bold;">✅ Upgrading from V16.1.0</h3>
+    <p style="font-size:0.97em; margin-bottom:0;">
+      No special steps. The GPU compute shaders are unchanged in this release, so
+      <strong>clearing the shader cache is not required.</strong>
+    </p>
+  </div>
+
+  <div style="background-color:#f8d7da; padding:20px; border-radius:8px; border-left:6px solid #dc3545; color:#721c24; margin-bottom:30px;">
+    <h3 style="margin-top:0; font-size:1.2em; font-weight:bold;">⚠️ Upgrading from V16.0.x or earlier</h3>
+    <p style="font-size:0.97em; margin-bottom:8px;">
+      Please clear the shader cache before launching Blender, since V16.1.0 did change the GPU shader code:
+    </p>
+    <ol style="padding-left:20px; font-size:0.95em; line-height:1.65; margin-bottom:0;">
+      <li style="margin-bottom:6px;">Close Blender completely.</li>
+      <li style="margin-bottom:6px;">Delete <code>%APPDATA%\Blender Foundation\Blender\&lt;your version&gt;\datafiles\rust_gpu_sdf\shader_cache.bin</code></li>
+      <li style="margin-bottom:0;">Restart Blender. The first startup after clearing takes the full warm-up time again.</li>
+    </ol>
+  </div>
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">📦 Downloads</h2>
+  <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin-top:10px;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Platform</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">File</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Architecture</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Windows</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_1.zip</code> (standard package)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">x86-64</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>macOS</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_1_MAC.zip</code> (experimental test build)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Apple Silicon (arm64)</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Linux</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_1_LINUX.zip</code> (experimental test build)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">x86-64</td></tr>
+    </tbody>
+  </table>
+  <div style="background:#fff8e1; padding:14px 16px; border-radius:6px; font-size:0.94em; color:#6d4c00; border-left:4px solid #ffb300; margin-top:16px;">
+    <strong>macOS note:</strong> The test build is not code-signed. If Gatekeeper blocks it, open
+    <strong>System Settings → Privacy &amp; Security</strong>, find the message about <code>rust_gpu_sdf.so</code>,
+    and click <strong>Open Anyway</strong>, then re-enable the add-on in Blender.
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">Previously in V16.1.0</h2>
+  <p style="font-size:0.97em; color:#444;">If you are updating from V16.0.x, V16.1.0 introduced the curve workflow:</p>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:8px;"><strong>Curve Sync</strong> — draw a path with Blender's own Curve tools and SDF.R turns it into a solid, blendable SDF pipe supporting Union, Subtract, and Intersect.</li>
+    <li style="margin-bottom:8px;"><strong>Curve Ref</strong> — reference a curve living anywhere else in your scene without moving it.</li>
+    <li style="margin-bottom:8px;"><strong>Bezier Curve primitive</strong> — a numerically-defined 3D quadratic Bezier with independent start and end radius.</li>
+    <li style="margin-bottom:8px;"><strong>Transmission &amp; IOR</strong> — glass-like transmission for the generated SDF material.</li>
+    <li style="margin-bottom:0;"><strong>Instancing accuracy fix</strong> — geometry no longer goes missing when Radial/Spiral layouts are combined with Individual/Step Rotation, or when Radial Axis is set to X or Y.</li>
+  </ul>
+  <p style="font-size:0.95em; color:#666; font-style:italic;">See the V16.1.0 release notes for full details.</p>
+
+</div>

@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>SDF.R V16.0.7 Workflow Examples</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.72;
+      color: #222;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 72px;
+      background: #fbfbfb;
+    }
+    h1, h2, h3 { line-height: 1.28; }
+    h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+    h2 {
+      margin-top: 48px;
+      padding: 12px 14px;
+      background: #222;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 1.28rem;
+    }
+    h3 {
+      margin-top: 30px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #ddd;
+      font-size: 1.08rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      margin: 12px 0 24px;
+      font-size: 0.94rem;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 9px 10px;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f3f5;
+      text-align: left;
+      white-space: nowrap;
+    }
+    code {
+      font-family: "Cascadia Mono", Consolas, monospace;
+      background: #f2f2f2;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-size: 0.9em;
+    }
+    .meta {
+      color: #555;
+      font-size: 0.95rem;
+      margin-bottom: 18px;
+    }
+    .lead {
+      background: #eef6ff;
+      border-left: 5px solid #2f7ed8;
+      padding: 14px 16px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .note {
+      background: #fff8dc;
+      border-left: 5px solid #e0b100;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 16px 0;
+    }
+    .good {
+      background: #edf8f0;
+      border-left: 5px solid #40a060;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 16px 0;
+    }
+    .warn {
+      background: #fff0f0;
+      border-left: 5px solid #d9534f;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 16px 0;
+    }
+    .recipe {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 18px 0 28px;
+    }
+    .recipe h3 { margin-top: 0; }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 0.82em;
+      font-weight: 700;
+      white-space: nowrap;
+      margin-right: 4px;
+    }
+    .beginner { background: #e8f1ff; color: #174a8b; }
+    .finish { background: #eaf8ef; color: #22613a; }
+    .field { background: #f0e8ff; color: #5a2ca0; }
+    .layer { background: #fff0e0; color: #8a4b00; }
+    .perf { background: #f3f3f3; color: #555; }
+    .steps {
+      counter-reset: step;
+      padding-left: 0;
+      list-style: none;
+    }
+    .steps li {
+      counter-increment: step;
+      margin: 10px 0;
+      padding-left: 40px;
+      position: relative;
+    }
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0.1em;
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      background: #222;
+      color: #fff;
+      text-align: center;
+      line-height: 25px;
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+    .compact li { margin: 5px 0; }
+    .cols {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .card strong { display: block; margin-bottom: 6px; }
+    .small { color: #666; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>SDF.R V16.0.7 Workflow Examples</h1>
+  <p class="meta">対象: <strong>Rust-GPU-SDF / SDF.R V16.0.7</strong> | 作成日: 2026-07-19 | 用途: 想定ワークフロー例・制作手順集</p>
+
+  <div class="lead">
+    この資料は「ボタンの意味」ではなく、「どう使うと制作が進みやすいか」をまとめたものです。SDF.Rは、プリミティブを積むだけでなく、Stack順序、Smoothness、Layer Boundary、Math Field、Material一括適用、Snapshot Meshを組み合わせることで、作品として仕上げやすくなります。
+  </div>
+
+  <div class="note">
+    <strong>基本思想:</strong> 形を作る段階では <code>Live Update</code> と <code>Ghost Preview</code> を活用し、重くなったら結果メッシュを隠して軽く動かします。見た目をまとめる段階では <code>Apply Color All</code> / <code>Apply Material All</code> / <code>Snapshot Mesh</code> を使い、確定が必要になったら <code>Finalize (Bake)</code> へ進みます。
+  </div>
+
+  <h2>0. 全体の制作フェーズ</h2>
+  <table>
+    <tr><th>フェーズ</th><th>主な操作</th><th>見るべきポイント</th><th>おすすめ設定</th></tr>
+    <tr>
+      <td>ラフ造形</td>
+      <td><code>Sphere</code>, <code>Box</code>, <code>Cylinder</code>, <code>Union/Subtract</code></td>
+      <td>大きなシルエット、比率、塊感</td>
+      <td><code>Res</code> 低め、<code>Preview Quality</code> Low/Mid</td>
+    </tr>
+    <tr>
+      <td>接続調整</td>
+      <td><code>Smoothness</code>, <code>Blend Profile</code>, <code>Edge</code></td>
+      <td>繋がりの自然さ、角の残り方、面の張り</td>
+      <td>Smoothnessを前の値から継承しつつ微調整</td>
+    </tr>
+    <tr>
+      <td>装飾/パターン</td>
+      <td><code>Math Field</code>, <code>Use Previous as Mask</code>, <code>Layer Boundary</code></td>
+      <td>穴、繰り返し、模様、切り抜き範囲</td>
+      <td>Layer BoundaryでIntersectionsの影響範囲を限定</td>
+    </tr>
+    <tr>
+      <td>仕上げ</td>
+      <td><code>Apply Color All</code>, <code>Apply Material All</code>, <code>Live Normals</code></td>
+      <td>作品としての統一感、質感、見え方</td>
+      <td>High preset + Live Normals</td>
+    </tr>
+    <tr>
+      <td>比較/保存</td>
+      <td><code>Snapshot Mesh</code>, <code>Finalize (Bake)</code></td>
+      <td>案の保存、メッシュとしての扱いやすさ</td>
+      <td>試作はSnapshot、確定はFinalize</td>
+    </tr>
+  </table>
+
+  <h2>1. 最短の基本ワークフロー: まず形を出す</h2>
+  <div class="recipe">
+    <h3><span class="tag beginner">Basic</span> Sphere + BoxでSDFの感覚を掴む</h3>
+    <p>最初に覚えるべき最小構成です。SDF.Rの強みは「置く、重ねる、削る、滑らかにつなぐ」がすぐ見えることです。</p>
+    <ol class="steps">
+      <li><code>New SDF Workspace</code> を押して作業空間を作ります。</li>
+      <li><code>Sphere</code> を追加します。ViewportにGhost PreviewとSDFソースが出ます。</li>
+      <li><code>Box</code> を追加し、Sphereに重なる位置へ移動します。</li>
+      <li>Boxの <code>Op</code> を <code>Subtract</code> に変えます。</li>
+      <li><code>Smoothness</code> を0.1から0.4程度で動かし、切り口の柔らかさを確認します。</li>
+      <li><code>Force Update</code> で結果メッシュを明示更新し、必要なら <code>Fix Normals</code> を押します。</li>
+    </ol>
+    <div class="good">
+      <strong>狙い:</strong> SDFは順番と演算で結果が変わります。まず「Unionで足す」「Subtractで削る」「Smoothnessで繋げる」を身体に入れると、以後のワークフローがかなり楽になります。
+    </div>
+  </div>
+
+  <h2>2. 有機的な塊を作るワークフロー</h2>
+  <div class="recipe">
+    <h3><span class="tag beginner">Organic</span> 複数Sphereを滑らかに融合してベース形状を作る</h3>
+    <p>キャラクターのラフ、液体、骨格、丸いプロダクト形状などに向く流れです。</p>
+    <ol class="steps">
+      <li><code>Sphere</code> を1つ追加し、中心の塊にします。</li>
+      <li>追加で <code>Sphere</code> や <code>Capsule</code> を置き、すべて <code>Union</code> にします。</li>
+      <li><code>Smoothness</code> を0.25から0.8程度に上げ、接続部をなじませます。</li>
+      <li>形状ごとの色を一旦変えておくと、どの塊がどこに効いているか把握しやすくなります。</li>
+      <li>全体のシルエットが見えたら <code>Apply Color All</code> で一色化し、作品としてのまとまりを確認します。</li>
+      <li><code>High</code> に切り替え、<code>Live Normals</code> を使って面の流れを確認します。</li>
+    </ol>
+    <div class="note">
+      <strong>色の使い分け:</strong> 制作途中は個別色で構造理解、仕上げでは <code>Apply Color All</code> で統一、という切り替えが使いやすいです。個別色変更はブレンド色再評価のためMesh再計算が走ります。
+    </div>
+  </div>
+
+  <h2>3. ハードサーフェス寄りのワークフロー</h2>
+  <div class="recipe">
+    <h3><span class="tag beginner">Hard Surface</span> Box / Cylinder / DCで角を残す</h3>
+    <p>機械部品、ケース、ジョイント、ブロック形状などに向く流れです。</p>
+    <ol class="steps">
+      <li><code>Box</code> を追加し、Object Scaleで大きさを決めます。</li>
+      <li><code>Cylinder</code> を追加して <code>Subtract</code> にし、穴やスロットを作ります。</li>
+      <li><code>Edge</code> を <code>Chamfer</code> や <code>Tight</code> にして角の表情を調整します。</li>
+      <li><code>Smoothness</code> は低めにし、角が溶けすぎないようにします。</li>
+      <li><code>Dual Contouring</code> に切り替えて、角や平面の残り方を確認します。</li>
+      <li>必要に応じて <code>Weld (Merge)</code> と <code>Scale</code> を調整します。</li>
+    </ol>
+    <div class="warn">
+      <strong>注意:</strong> DCは硬いエッジに向きますが、複雑な交差や高密度パターンではMCのほうが安定して見えることもあります。最終的な見た目でMC/DCを選ぶのが実用的です。
+    </div>
+  </div>
+
+  <h2>4. Math Fieldを使ったパターン入り形状</h2>
+  <div class="recipe">
+    <h3><span class="tag field">Math Field</span> BoxやSphereの中にGyroid/Schwarzを詰める</h3>
+    <p>V16系の中心機能です。ラティス、穴あき構造、TPMS系の装飾、内部構造の試作に向きます。</p>
+    <ol class="steps">
+      <li><code>Box</code> または <code>Sphere</code> を追加し、外形マスクにしたい大きさへ調整します。</li>
+      <li><code>Math Field</code> を追加します。</li>
+      <li>Math Fieldを選択した状態で <code>Use Previous as Mask</code> を押します。</li>
+      <li><code>Formula</code> で <code>Gyroid</code>, <code>Schwarz P</code>, <code>Schwarz D</code> を切り替え、セル構造を比較します。</li>
+      <li><code>Scale</code> でセル密度、<code>Thickness</code> で壁厚、<code>Bias</code> で面の出方を調整します。</li>
+      <li><code>Phase</code> を動かし、穴やリッジが見せたい場所へ来るように調整します。</li>
+      <li>非均一スケールした場合は <code>Auto Match Scale</code> を押して、Axis X/Y/ZをObject Scaleに合わせます。</li>
+    </ol>
+    <div class="good">
+      <strong>おすすめ:</strong> Formulaは作品の印象が大きく変わります。Gyroidは流れがあり、Schwarz Pは規則的で構造的、Schwarz Dは斜め方向のリズムが強めです。
+    </div>
+  </div>
+
+  <h2>5. Layer Boundaryで「切り抜き範囲」を限定する</h2>
+  <div class="recipe">
+    <h3><span class="tag layer">Layer Boundary</span> 既存の形を壊さず、装飾レイヤーだけIntersectする</h3>
+    <p>V16.0.7らしいワークフローです。通常のIntersectは過去プリミティブ全体へ効きますが、Layer Boundaryを使うと「このレイヤー内だけでIntersectして、最後に全体へ合算」できます。</p>
+    <ol class="steps">
+      <li>まず <code>Sphere</code> や <code>Box</code> でベース形状を作ります。ここは通常の <code>Union/Subtract</code> で構いません。</li>
+      <li><code>Add Collection Divider</code> を押してDividerを追加します。</li>
+      <li>追加したDividerを選択し、<code>Layer Boundary</code> をONにします。</li>
+      <li>Dividerより下に <code>Math Field</code> を追加します。</li>
+      <li>さらに下に <code>Cylinder</code> や <code>Box</code> を追加し、<code>Intersect</code> にします。</li>
+      <li>結果は <code>ベース形状 ∪ (Math Field ∩ Cylinder)</code> のように考えます。</li>
+      <li>Cylinderを動かすと、ベース形状を問答無用で切らず、Math Fieldレイヤーの見える範囲だけを調整できます。</li>
+    </ol>
+    <table>
+      <tr><th>Stack例</th><th>意味</th></tr>
+      <tr><td>01 Box / Union</td><td>ベース形状</td></tr>
+      <tr><td>02 Sphere / Subtract</td><td>ベースへの通常カット</td></tr>
+      <tr><td>== Collection 1 == / Layer Boundary ON</td><td>ここから下をローカルLayer化</td></tr>
+      <tr><td>03 Math Field / Union</td><td>装飾パターン</td></tr>
+      <tr><td>04 Cylinder / Intersect</td><td>装飾パターンだけの表示範囲</td></tr>
+    </table>
+    <div class="note">
+      <strong>使いどころ:</strong> 「本体には穴を開けたくないが、模様だけを丸く切り抜きたい」「表面装飾をレイヤー的に重ねたい」という場面で強いです。
+    </div>
+  </div>
+
+  <h2>6. Collection Dividerをグループ配置として使う</h2>
+  <div class="recipe">
+    <h3><span class="tag layer">Grouping</span> 複数プリミティブをひとまとまりでRadial/Grid展開する</h3>
+    <p>個別プリミティブにLayoutをかけるだけでなく、Dividerを選択してGroup Layoutを使うと、複数形状をセットとして展開できます。</p>
+    <ol class="steps">
+      <li>複数プリミティブで小さな部品を作ります。例: Capsule + Sphere + Cylinder。</li>
+      <li>Stack上でそのまとまりの位置に <code>Add Collection Divider</code> を追加します。</li>
+      <li>Dividerを選択し、<code>Group Layout</code> の <code>Radial</code> をONにします。</li>
+      <li><code>Count</code> と <code>Radius</code> を調整して円周配置します。</li>
+      <li><code>Rotation (Indiv &amp; Accum)</code> で向きや回転の蓄積を調整します。</li>
+      <li>さらに <code>Jitter</code> を少し足すと、均一すぎない配置になります。</li>
+    </ol>
+    <div class="good">
+      <strong>ポイント:</strong> Group Layoutは「装飾パーツを一個ずつ作る」よりも速く、後からCountやRadiusを変えられるため、パターンデザインの試行錯誤に向きます。
+    </div>
+  </div>
+
+  <h2>7. Snapshot Meshで案を残しながら進める</h2>
+  <div class="recipe">
+    <h3><span class="tag finish">Iteration</span> この状態どうかな、を残す</h3>
+    <p>FinalizeはライブSDFワークスペースを確定方向へ進める操作ですが、Snapshot Meshはライブ編集を残したまま結果だけをメッシュコピーできます。</p>
+    <ol class="steps">
+      <li>ある程度形がまとまったら <code>Snapshot Mesh</code> を押します。</li>
+      <li><code>SDF_Snapshots</code> に静的メッシュが作られ、そのSnapshotだけが選択状態になります。</li>
+      <li>Snapshotへ別マテリアルを当てたり、横に移動して比較します。</li>
+      <li>元のSDFワークスペースはそのままなので、さらにStackやパラメータを変えて別案を作れます。</li>
+      <li>複数案を並べて比較し、最後に採用案を <code>Finalize (Bake)</code> します。</li>
+    </ol>
+    <div class="note">
+      <strong>おすすめ場面:</strong> 色やMaterialをいじり始めた時、Math Fieldの密度違いを比べたい時、Layer Boundaryの範囲違いを比較したい時に有効です。
+    </div>
+  </div>
+
+  <h2>8. Materialをまとめて仕上げる</h2>
+  <div class="recipe">
+    <h3><span class="tag finish">Finishing</span> 色・Metallic・Roughnessで作品感を整える</h3>
+    <p>V16.0.6以降の仕上げ系機能を使う流れです。形が見えてきたら、全体のMaterial感を早めに確認すると判断しやすくなります。</p>
+    <ol class="steps">
+      <li><code>Setup Nodes</code> を押して、Color/Metallic/Roughness属性を読む標準マテリアルを作ります。</li>
+      <li>制作中はプリミティブごとの色で構造を見分けます。</li>
+      <li>仕上げ確認に入ったら、Material欄のBase Colorを選び <code>Apply Color All</code> を押します。</li>
+      <li><code>Metallic</code> と <code>Roughness</code> を調整し、<code>Apply Material All</code> を押します。</li>
+      <li><code>High</code> と <code>Live Normals</code> で見え方を確認します。</li>
+      <li>迷ったら <code>Snapshot Mesh</code> でMaterial案を残します。</li>
+    </ol>
+    <table>
+      <tr><th>操作</th><th>再計算</th><th>理由</th></tr>
+      <tr><td><code>Apply Color All</code></td><td>軽量更新</td><td>全体を一色にするだけなので既存Color属性更新で足りる。</td></tr>
+      <tr><td>個別 <code>Color</code></td><td>Mesh再計算</td><td>ブレンド境界の色をSDF距離評価から再計算する必要がある。</td></tr>
+      <tr><td><code>Apply Material All</code></td><td>軽量更新</td><td>Metallic/Roughnessを全体属性として置き換えられる。</td></tr>
+      <tr><td>個別Metallic/Roughness</td><td>Mesh再計算</td><td>個別属性としてSDF評価結果へ反映する。</td></tr>
+    </table>
+  </div>
+
+  <h2>9. Ghost Preview中心の軽量編集</h2>
+  <div class="recipe">
+    <h3><span class="tag perf">Performance</span> 重いシーンを軽く動かす</h3>
+    <p>プリミティブ数が増えたり、Math Fieldが重くなった時の逃げ方です。</p>
+    <ol class="steps">
+      <li><code>Mesh icon</code> をOFFにして、結果メッシュ表示を隠します。</li>
+      <li><code>Ghost icon</code> はONにして、Previewだけで形を確認します。</li>
+      <li><code>Preview Quality</code> をLowまたはMidにします。</li>
+      <li>移動・回転・Scale・Stack調整を行います。</li>
+      <li>形が決まったら <code>Mesh icon</code> をONに戻し、<code>Force Update</code> を押します。</li>
+      <li>最終確認で <code>High</code> と <code>Live Normals</code> を使います。</li>
+    </ol>
+    <div class="good">
+      <strong>考え方:</strong> 編集中は軽く、確認時だけ重く、が基本です。毎回高品質メッシュを待つより、Ghost Previewで構図を決めてからMesh生成するほうが制作テンポを保ちやすいです。
+    </div>
+  </div>
+
+  <h2>10. 高解像度・大規模メッシュの安定化</h2>
+  <div class="recipe">
+    <h3><span class="tag perf">Large Scene</span> Chunked / Protect系を使う</h3>
+    <p>高Res、広Domain、多数プリミティブ、Math Fieldを組み合わせると、GPU容量や生成上限に当たることがあります。その場合の見方です。</p>
+    <ol class="steps">
+      <li><code>Engine Diagnostics</code> を開き、<code>Last Mesh</code> のHealthを確認します。</li>
+      <li><code>EMPTY_RESULT</code> や <code>CAPACITY_LIMITED</code> が出る場合、まずResを下げます。</li>
+      <li><code>Protect Partial Mesh</code> をONにし、破損結果が適用されないようにします。</li>
+      <li><code>Auto Safe Retry</code> をONにして、低解像度再試行を有効にします。</li>
+      <li>必要に応じて <code>Chunked GPU Fallback</code> または <code>Chunked CPU Fallback</code> をONにします。</li>
+      <li><code>Chunk Cells</code> と <code>Seam</code> を調整し、継ぎ目と安定性のバランスを取ります。</li>
+    </ol>
+    <div class="warn">
+      <strong>注意:</strong> 高解像度は品質だけでなく、処理時間・VRAM・ドライバ安定性に効きます。最初から最大品質で詰めず、Lowで形を決め、最後にHighへ上げる流れが安全です。
+    </div>
+  </div>
+
+  <h2>11. Post-Processで尖りや乱れを整える</h2>
+  <div class="recipe">
+    <h3><span class="tag finish">Post Process</span> 後段GNで美観を整える</h3>
+    <p>MC/DCのどちらでも、急な曲率やIntersect境界では少しエッジが乱れることがあります。これはSDFをポリゴン化する以上、完全には避けにくい部分です。後段で整える発想が有効です。</p>
+    <ol class="steps">
+      <li>通常通りSDF形状を作ります。</li>
+      <li><code>Setup Post Process</code> を押して <code>GeoRemesh_R</code> を追加します。</li>
+      <li>Post-Process欄に展開されるGNパラメータを調整します。</li>
+      <li>尖りすぎた箇所、段差、細かな乱れを見ながらスムージング量を決めます。</li>
+      <li><code>Snapshot Mesh</code> で後段あり/なしを比較します。</li>
+      <li>採用する見た目が決まったら <code>Finalize (Bake)</code> で確定します。</li>
+    </ol>
+    <div class="note">
+      <strong>方針:</strong> Weldを美観万能ツールにするより、Weldは頂点整理、GNは見た目調整、と役割を分けたほうが制御しやすいです。
+    </div>
+  </div>
+
+  <h2>12. Layer Boundary + Group Layoutで装飾帯を作る</h2>
+  <div class="recipe">
+    <h3><span class="tag layer">Pattern Band</span> 本体に装飾帯を巻く</h3>
+    <p>リング状の装飾、プロダクト外装のライン、穴あき帯などを作るイメージです。</p>
+    <ol class="steps">
+      <li><code>Cylinder</code> や <code>Rounded Box</code> で本体を作ります。</li>
+      <li><code>Add Collection Divider</code> を追加し、<code>Layer Boundary</code> をONにします。</li>
+      <li>Divider以下に小さな <code>Box</code> や <code>Capsule</code> を追加します。</li>
+      <li>それらを <code>Radial</code> やGroup Layoutで円周上に複製します。</li>
+      <li>必要なら装飾側に <code>Subtract</code> や <code>Intersect</code> を入れて、装飾レイヤー内だけで形を整えます。</li>
+      <li>本体とは別レイヤーとして合算されるので、装飾帯の調整がしやすくなります。</li>
+    </ol>
+    <div class="good">
+      <strong>向いている用途:</strong> SFパーツ、アクセサリー、器、ケース、パネルライン、リブ、放射状の穴パターン。
+    </div>
+  </div>
+
+  <h2>13. Finalizeする前のチェックリスト</h2>
+  <div class="recipe">
+    <h3><span class="tag finish">Checklist</span> 確定前に見るところ</h3>
+    <div class="cols">
+      <div class="card">
+        <strong>形状</strong>
+        <ul class="compact">
+          <li>Resは十分か</li>
+          <li>Domainで欠けていないか</li>
+          <li>MC/DCのどちらが作品に合うか</li>
+          <li>Weldで潰れすぎていないか</li>
+        </ul>
+      </div>
+      <div class="card">
+        <strong>表面</strong>
+        <ul class="compact">
+          <li>Live Normalsあり/なしを比較したか</li>
+          <li>Post-Processの有無を比較したか</li>
+          <li>尖りや面の乱れが許容範囲か</li>
+        </ul>
+      </div>
+      <div class="card">
+        <strong>色・質感</strong>
+        <ul class="compact">
+          <li>Setup Nodes済みか</li>
+          <li>Color属性が意図通りか</li>
+          <li>Metallic/Roughnessを全体で揃えるか個別にするか</li>
+        </ul>
+      </div>
+      <div class="card">
+        <strong>保険</strong>
+        <ul class="compact">
+          <li>Snapshot Meshを残したか</li>
+          <li>Layer Boundaryの意図がStack上で分かる名前か</li>
+          <li>Finalize後に戻りたい場合の履歴があるか</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2>14. よくある判断の分岐</h2>
+  <table>
+    <tr><th>状況</th><th>まず試すこと</th><th>次に試すこと</th></tr>
+    <tr>
+      <td>形が重い</td>
+      <td>Mesh icon OFF、Preview Quality Low</td>
+      <td>Resを下げる、Chunked Fallbackを使う</td>
+    </tr>
+    <tr>
+      <td>エッジが少し乱れる</td>
+      <td>Resを上げる、Live Normals</td>
+      <td>Post-Process GNでスムーズ調整</td>
+    </tr>
+    <tr>
+      <td>Intersectが過去形状まで切る</td>
+      <td>Layer Boundaryを追加</td>
+      <td>切りたい装飾だけDivider以下へ置く</td>
+    </tr>
+    <tr>
+      <td>Math Fieldが伸びて見える</td>
+      <td>Auto Match Scale</td>
+      <td>Axis X/Y/Zを手動微調整</td>
+    </tr>
+    <tr>
+      <td>色変更が重い</td>
+      <td>Apply Color Allで全体色を試す</td>
+      <td>個別色はブレンド維持のため再計算を許容する</td>
+    </tr>
+    <tr>
+      <td>案を残したい</td>
+      <td>Snapshot Mesh</td>
+      <td>確定時のみFinalize</td>
+    </tr>
+  </table>
+
+  <p class="small">Source basis: SDF.R V16.0.7 UI behavior and current implementation notes. Companion document: <code>SDF_R_V16_0_7_UI_Command_Inventory.html</code>.</p>
+</body>
+</html>
