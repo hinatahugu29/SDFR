@@ -36,3 +36,20 @@ Other_OS/_Archive/
 Rust-GPU-SDF-V*/
 !Rust-GPU-SDF-V*_MAC/
 !Rust-GPU-SDF-V*_LINUX/
+
+# --- 作業用の使い捨てスクリプト ---
+# その場限りの生成・修正スクリプト。残しても再利用しない。
+**/scratch/
+**/patch*.py
+**/update_log*.py
+**/agent-work-log.json
+
+# --- Artifacts を展開したフォルダ ---
+# 配布 zip さえあれば再現できる中間物。ルート直下に散らばりやすい。
+/SDF_R_*_MAC*/
+/SDF_R_*_LINUX*/
+
+# --- 障害調査で受け取った資料 ---
+# クラッシュレポートには報告者のユーザー名・デバイス識別子・ローカルパスが
+# 含まれる。公開リポジトリに載せるものではないので手元保管に留める。
+debug-*/

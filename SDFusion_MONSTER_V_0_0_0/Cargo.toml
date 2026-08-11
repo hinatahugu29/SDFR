@@ -1,0 +1,21 @@
+[package]
+name = "sdfusion_monster"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+name = "sdfusion_monster"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py311"] }
+wgpu = "23.0"
+pollster = "0.3"
+bytemuck = { version = "1.2.0", features = ["derive"] }
+nalgebra = "0.33"
+futures-intrusive = "0.5"
+futures = "0.3"
+once_cell = "1.18"
+rayon = "1.8"
+log = "0.4"
+env_logger = "0.10"
