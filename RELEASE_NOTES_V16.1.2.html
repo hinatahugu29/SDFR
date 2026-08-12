@@ -1,0 +1,168 @@
+<div style="font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:#333; line-height:1.7; max-width:820px; margin:auto; padding:10px;">
+
+  <h1 style="color:#222; font-weight:bold; font-size:2em; margin-bottom:4px;">SDF.R V16.1.2 Release Notes</h1>
+  <p style="font-size:1.2em; color:#555; margin-top:0; font-style:italic;">macOS Crash Fix</p>
+  <p style="font-size:0.9em; color:#888; margin-top:0;">Released 2026-08-12</p>
+
+  <p style="font-size:1.05em; margin:24px 0 30px 0;">
+    V16.1.2 fixes a crash on macOS, and changes how I talk about the macOS and Linux builds.
+    Nothing about mesh generation or the preview changes — <strong>the geometry SDF.R produces is
+    identical to V16.1.1.</strong>
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🐛 The macOS crash — found and fixed</h2>
+
+  <p style="font-size:0.97em; color:#444;">
+    One user reported Blender crashing the moment they added a primitive, every time, on macOS with
+    Blender 5.2. It took several rounds to track down, and the answer is worth stating plainly:
+    <strong>the fault was mine, not their setup.</strong>
+  </p>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">What was happening</h3>
+    <p style="font-size:0.97em; color:#444;">
+      While SDF.R waits for the mesh calculation to finish, it runs a repeating timer. That timer was
+      asking Blender for the scene's dependency graph — and in Blender, that request does not merely
+      hand one over. If Blender decides an update is due, <strong>it re-evaluates the entire scene
+      right there.</strong>
+    </p>
+    <p style="font-size:0.97em; color:#444;">
+      Inside an operator, that is the flow Blender expects and it is safe. From a timer callback it
+      begins evaluating at a moment Blender never scheduled, and if the scene's composition shifted
+      just beforehand, the evaluator reads past the end of its own object list. The result is an
+      immediate segmentation fault, in a place with no visible connection to the add-on.
+    </p>
+    <p style="font-size:0.97em; color:#444; margin-bottom:0;">
+      The timer no longer forces an evaluation. It takes the dependency graph only if one already
+      exists, and skips the cycle otherwise.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Why it looked like an add-on conflict</h3>
+    <p style="font-size:0.97em; color:#444;">
+      With <strong>Factory Settings and only SDF.R enabled, the crash never happened.</strong> That
+      result was misleading, and it nearly sent the investigation in the wrong direction. With a quiet
+      scene the forced evaluation happens to survive; with other add-ons touching the scene it becomes
+      fatal. The dangerous call was ours the whole time — other add-ons only widened the window.
+    </p>
+    <p style="font-size:0.97em; color:#444; margin-bottom:0;">
+      If you hit this and concluded something in your setup was to blame, it was not.
+    </p>
+  </div>
+
+  <div style="background:#eaf2f8; padding:15px; border-radius:6px; font-size:0.94em; color:#2c3e50; border-left:4px solid #3498db;">
+    <strong>Was I affected?</strong> Only if this specific timing lined up on your machine. It never
+    once occurred on my own Windows system across both Blender 5.1 and 5.2, which is exactly why this
+    took an outside report to find. If SDF.R has been stable for you, nothing changes — but the
+    fragile call was present in every earlier version, so this fix is worth taking regardless of
+    platform.
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🔧 Also in this release</h2>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:0;"><strong>A safety limit on the mesh timer.</strong> If the dependency graph stays unavailable, the timer now gives up on the queued update after about two seconds instead of polling indefinitely. It counts only that specific situation — waiting while you drag an object, or while the engine is still calculating, is normal and is not affected.</li>
+  </ul>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🖥️ Where the macOS and Linux builds stand</h2>
+
+  <p style="font-size:0.97em; color:#444;">
+    I am retiring the "experimental test build" label, and I want to explain why rather than just
+    quietly change the wording.
+  </p>
+  <p style="font-size:0.97em; color:#444;">
+    SDF.R ships for <strong>Windows</strong>, <strong>macOS (Apple Silicon)</strong> and
+    <strong>Linux (x86-64)</strong>. All three are built from the same source, by the same automated
+    pipeline, in every release. They are not side projects and they are not afterthoughts.
+  </p>
+  <p style="font-size:0.97em; color:#444;">
+    I want to be straightforward about one thing: <strong>I develop on Windows, and I do not own a Mac
+    or a Linux machine.</strong> I cannot sit down and reproduce a problem on those platforms myself.
+    What I can do is read a crash report and fix what it points to — and that works. The crash fixed in
+    this release was found entirely from one user's crash log, and the cause turned out to be my own
+    code, not their environment.
+  </p>
+  <p style="font-size:0.97em; color:#444;">
+    So these platforms improve exactly as fast as people tell me things.
+  </p>
+
+  <div style="background:#e2f0d9; padding:18px; border-radius:6px; font-size:0.95em; color:#385723; border-left:4px solid #385723; margin:16px 0;">
+    <strong>That includes telling me when things work.</strong> A crash report tells me something is
+    broken. A message saying "runs fine on macOS 26.6, M3 Max, Blender 5.2" tells me where the line is,
+    and that is just as valuable — I currently have very few of those. If SDF.R is working for you on
+    macOS or Linux, one sentence would genuinely help.
+  </div>
+
+  <h3 style="color:#222; font-size:1.15em; font-weight:bold;">If something breaks</h3>
+  <p style="font-size:0.97em; color:#444;">The fastest route to a fix:</p>
+  <ol style="padding-left:20px; font-size:0.95em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:8px;">Launch Blender from Terminal — on macOS, <code>/Applications/Blender.app/Contents/MacOS/Blender</code> — reproduce the problem, and copy whatever the Terminal printed.</li>
+    <li style="margin-bottom:0;">Send <code>blender.crash.txt</code> from your temporary folder. On macOS, <code>open $TMPDIR</code> in Terminal opens it. That file contains the add-on's own line numbers, which is usually all I need.</li>
+  </ol>
+  <p style="font-size:0.95em; color:#666; font-style:italic;">That is exactly what solved this release's crash.</p>
+
+  <div style="background:#fff8e1; padding:14px 16px; border-radius:6px; font-size:0.94em; color:#6d4c00; border-left:4px solid #ffb300; margin-top:16px;">
+    <strong>Code signing:</strong> the macOS build is not notarized, so Gatekeeper blocks it on first
+    use. Open <strong>System Settings → Privacy &amp; Security</strong>, find the message about
+    <code>rust_gpu_sdf.so</code>, and click <strong>Open Anyway</strong>, then re-enable the add-on in
+    Blender.
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <div style="background-color:#e2f0d9; padding:20px; border-radius:8px; border-left:6px solid #385723; color:#385723; margin-bottom:20px;">
+    <h3 style="margin-top:0; font-size:1.2em; font-weight:bold;">✅ Upgrading from V16.1.0 or V16.1.1</h3>
+    <p style="font-size:0.97em; margin-bottom:0;">
+      No special steps. The GPU shader code is unchanged across these releases, so
+      <strong>clearing the shader cache is not required.</strong>
+    </p>
+  </div>
+
+  <div style="background-color:#f8d7da; padding:20px; border-radius:8px; border-left:6px solid #dc3545; color:#721c24; margin-bottom:30px;">
+    <h3 style="margin-top:0; font-size:1.2em; font-weight:bold;">⚠️ Upgrading from V16.0.x or earlier</h3>
+    <p style="font-size:0.97em; margin-bottom:8px;">
+      Please clear the shader cache before launching Blender, since V16.1.0 did change the GPU shader code:
+    </p>
+    <ol style="padding-left:20px; font-size:0.95em; line-height:1.65; margin-bottom:0;">
+      <li style="margin-bottom:6px;">Close Blender completely.</li>
+      <li style="margin-bottom:6px;">Delete <code>%APPDATA%\Blender Foundation\Blender\&lt;your version&gt;\datafiles\rust_gpu_sdf\shader_cache.bin</code></li>
+      <li style="margin-bottom:0;">Restart Blender. The first startup after clearing takes the full warm-up time again.</li>
+    </ol>
+  </div>
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">📦 Downloads</h2>
+  <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin-top:10px;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Platform</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">File</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Architecture</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Windows</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_2.zip</code> (standard package)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">x86-64</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>macOS</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_2_MAC.zip</code></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Apple Silicon (arm64)</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Linux</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_2_LINUX.zip</code></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">x86-64</td></tr>
+    </tbody>
+  </table>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">Previously in V16.1.1</h2>
+  <p style="font-size:0.97em; color:#444;">V16.1.1 was a viewport performance release, plus a set of fixes:</p>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:8px;"><strong>Adaptive preview resolution</strong> — the Ghost Preview renders at reduced resolution while the camera moves or an object is transformed, then returns to full resolution the instant you stop.</li>
+    <li style="margin-bottom:8px;"><strong>Faster normals during interaction</strong> — a 3-tap estimate while moving, full 6-tap quality when still.</li>
+    <li style="margin-bottom:8px;"><strong>Blender 5.2 support for the Post-Process panel</strong> — 5.2 changed where Geometry Nodes modifier inputs are stored, leaving the panel empty. This affected every earlier version of SDF.R on 5.2.</li>
+    <li style="margin-bottom:8px;"><strong>Ghost Preview with split viewports</strong> — the preview could fail to appear once the camera came to rest when more than one 3D Viewport was open.</li>
+    <li style="margin-bottom:0;"><strong>Mesh data safety check</strong> — vertex indices from the engine are range-checked before being handed to Blender.</li>
+  </ul>
+  <p style="font-size:0.95em; color:#666; font-style:italic;">See the V16.1.1 release notes for full details.</p>
+
+</div>
