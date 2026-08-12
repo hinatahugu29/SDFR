@@ -70,6 +70,11 @@ Windows 通常版 `Rust-GPU-SDF-VX.Y.Z` を Mac/Linux 用に移植するとき�
         `GLIBC_2.xx not found` になる
       → ⚠️ 廃止済みの `ubuntu-20.04` を指定すると**割り当て待ちのままフリーズする**
 - [ ] yml 内に旧バージョン番号が1つも残っていない（`grep` で確認）
+- [ ] **不要になった古いワークフローを削除した**（最新2つだけ残す）
+      → 古い yml を残すと、その版のフォルダ内のファイルを1つ触っただけで
+        何ヶ月も前のバージョンがビルドされる。CI 時間が無駄になるうえ、
+        Artifacts に古い成果物が並んで取り違えの原因になる
+      → 削除しても yml の内容は git 履歴に、実行記録は Actions に残る
 
 ### E. 検証（push 前）
 
@@ -80,6 +85,11 @@ Windows 通常版 `Rust-GPU-SDF-VX.Y.Z` を Mac/Linux 用に移植するとき�
 
 - [ ] commit & push
       → `paths` トリガーに該当するので**自動でビルドが走る**。手動実行は不要
+- [ ] **Actions の一覧ではなく、目的のワークフローのページを開いた**
+      `https://github.com/<user>/SDFR/actions/workflows/build-sdf-r-vX-Y-Z-cross-platform.yml`
+      → 1回の push で複数のワークフローが同時に走ることがある。「All workflows」の
+        一覧は新しい順に並ぶとは限らず、**別バージョンの実行を掴んでしまう**
+      → 実際 V16.1.2 の push では、V16.1.2・V16.1.1・V15.9.8.1 の3つが同時に起動した
 - [ ] Actions が両ジョブとも成功した
       → 失敗しても `build-*.log` は `if: always()` で artifact 化されるので、まずログを見る
 
@@ -394,9 +404,11 @@ CI が緑でも、取り出し方を間違えれば配布物は壊れます。**
 # verify_artifacts.py
 import os, zipfile
 
-BASE = r"E:\blender_addon\外部テスト\Other_OS"
-WIN  = r"E:\blender_addon\外部テスト\Rust-GPU-SDF-V16.1.1\rust_gpu_sdf_addon"  # 通常版のアドオン
-UND  = "16_1_1"
+ROOT = r"E:\blender_addon\外部テスト"
+VER  = "16.1.2"                      # ここだけ書き換える
+UND  = VER.replace(".", "_")
+BASE = os.path.join(ROOT, "Other_OS")
+WIN  = os.path.join(ROOT, "Rust-GPU-SDF-V%s" % VER, "rust_gpu_sdf_addon")  # 通常版のアドオン
 P    = "rust_gpu_sdf_addon/"
 PY   = ["__init__.py","constants.py","engine.py","handlers.py",
         "operators.py","properties.py","shader.py","ui.py"]
@@ -493,6 +505,7 @@ GitHub ActionsなどのCI環境でビルドされたmacOS用のバイナリ（`r
 | — | Artifacts の zip をそのまま配布すると構造エラー | GitHub Actions の仕様で二重ZIPになる | セクション4の手順。**必ず一度解凍する** |
 | — | `ubuntu-20.04` 指定で CI がフリーズ | ランナーが廃止済み | `ubuntu-22.04` を明示。`latest` も使わない（glibc） |
 | Blender 4.2+ 対応時 | `attempted relative import with no known parent package` | `__package__` が `None` になる一時ロード | `_native.py` のフォールバック（セクション2）。**必ず前バージョンからコピー** |
+| V16.1.2 push 時 | 8ヶ月前の V15.9.8.1 のビルドが勝手に走り、Actions の先頭に出て「版数が古い成果物ができた」と誤認 | リポジトリ整理でドキュメントを追跡対象に加えた際、`Rust-GPU-SDF-V15.9.8.1_MAC/implementation_plan.md` も一緒に追加された。これが古い yml の `paths` に一致 | 古いワークフローは削除する（最新2つだけ残す）。確認は「All workflows」ではなく**目的の yml のページ**で行う |
 
 ### 特に気をつけるべき「成功するのに間違っている」パターン
 
