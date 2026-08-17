@@ -1,0 +1,1571 @@
+import bpy
+import os
+import colorsys
+from mathutils import Vector
+from .engine import update_sdf_mesh, trigger_normal_update
+from .constants import _PRIM_COLORS, PRIMITIVE_UI_DEFS
+
+_prim_color_idx = 0
+
+
+def _get_next_primitive_color(context):
+    global _prim_color_idx
+
+    scene_props = getattr(context.scene, "sdf_scene_props", None)
+    mode = getattr(scene_props, "color_mode", "FIXED")
+
+    if mode == 'AUTO_HUE':
+        sat = scene_props.auto_hue_saturation
+        val = scene_props.auto_hue_value
+        step = scene_props.auto_hue_step_deg / 360.0
+        offset = scene_props.auto_hue_offset / 360.0
+        hue = (offset + (_prim_color_idx * step)) % 1.0
+        r, g, b = colorsys.hsv_to_rgb(hue, sat, val)
+        c = (r, g, b, 1.0)
+    elif mode == 'SINGLE':
+        base = scene_props.single_color
+        c = (base[0], base[1], base[2], 1.0)
+    else:
+        c = _PRIM_COLORS[_prim_color_idx % len(_PRIM_COLORS)]
+
+    _prim_color_idx += 1
+    return c
+
+def get_or_create_collection(name, parent_col=None):
+    """指定した名前のコレクションを取得または作成し、親にリンクする"""
+    col = bpy.data.collections.get(name)
+    if not col:
+        col = bpy.data.collections.new(name)
+    
+    if parent_col:
+        if name not in parent_col.children:
+            parent_col.children.link(col)
+    else:
+        # 親が指定されない場合はScene Collectionにリンク
+        if name not in bpy.context.scene.collection.children:
+            bpy.context.scene.collection.children.link(col)
+    return col
+
+def get_sdf_output_obj(context):
+    """アクティブオブジェクトまたはシーン内の最初の出力オブジェクトを返す"""
+    active = context.active_object
+    if active and getattr(active, "sdf_props", None) and active.sdf_props.is_output:
+        return active
+    for obj in context.scene.objects:
+        p = getattr(obj, "sdf_props", None)
+        if p and p.is_output:
+            return obj
+    return None
+
+def _set_result_float_attribute(obj, name, value):
+    mesh = getattr(obj, "data", None)
+    if not mesh or len(mesh.vertices) == 0:
+        return False
+
+    attr = mesh.attributes.get(name)
+    if not attr:
+        attr = mesh.attributes.new(name=name, type='FLOAT', domain='POINT')
+    if attr.domain != 'POINT' or attr.data_type != 'FLOAT':
+        return False
+
+    attr.data.foreach_set("value", [float(value)] * len(attr.data))
+    mesh.update()
+    return True
+
+def _find_bsdf_input(node, names):
+    """Principled BSDF の入力ソケットを名前候補から探す。
+    Blender 4.0 でソケット名が変わっている（Transmission -> Transmission Weight）ため、
+    バージョン差を吸収する。見つからなければ None。"""
+    for name in names:
+        socket = node.inputs.get(name)
+        if socket is not None:
+            return socket
+    return None
+
+
+def _set_material_transmission(obj, transmission, ior):
+    """SDFマテリアルの Principled BSDF に Transmission / IOR を設定する。
+    Transmission は頂点属性ではなくマテリアル全体の値（個別指定はできない）。
+    戻り値: (適用できたか, 見つからなかったソケット名のリスト)"""
+    missing = []
+    applied = False
+    mat_name = f"SDF_Material_{obj.name}"
+    mat = bpy.data.materials.get(mat_name)
+    if not mat or not mat.use_nodes:
+        return False, missing
+
+    for node in mat.node_tree.nodes:
+        if node.type != 'BSDF_PRINCIPLED':
+            continue
+        t_socket = _find_bsdf_input(node, ("Transmission Weight", "Transmission"))
+        if t_socket is not None:
+            t_socket.default_value = float(transmission)
+            applied = True
+        else:
+            missing.append("Transmission")
+        i_socket = _find_bsdf_input(node, ("IOR",))
+        if i_socket is not None:
+            i_socket.default_value = float(ior)
+        else:
+            missing.append("IOR")
+    return applied, missing
+
+
+def _set_result_color_attribute(obj, rgb):
+    mesh = getattr(obj, "data", None)
+    if not mesh or len(mesh.vertices) == 0:
+        return False
+
+    attr = mesh.attributes.get("Color")
+    if not attr:
+        attr = mesh.attributes.new(name="Color", type='FLOAT_COLOR', domain='POINT')
+    if attr.domain != 'POINT' or attr.data_type != 'FLOAT_COLOR':
+        return False
+
+    r, g, b = float(rgb[0]), float(rgb[1]), float(rgb[2])
+    attr.data.foreach_set("color", [r, g, b, 1.0] * len(attr.data))
+    mesh.update()
+    return True
+
+def _begin_appearance_update_cooldown(duration=0.35):
+    try:
+        from . import engine
+        token = getattr(engine, "_appearance_update_token", 0) + 1
+        engine._appearance_update_token = token
+        engine._appearance_update_cooldown = True
+
+        def clear_cooldown():
+            if getattr(engine, "_appearance_update_token", None) == token:
+                engine._appearance_update_cooldown = False
+            return None
+
+        bpy.app.timers.register(clear_cooldown, first_interval=duration)
+    except Exception as exc:
+        print(f"SDF.R appearance cooldown skipped: {exc}")
+
+def _refresh_output_state_cache(obj, context):
+    try:
+        from . import engine
+        depsgraph = context.evaluated_depsgraph_get()
+        engine._last_state_hashes[obj.name] = engine.get_sdf_state_fingerprint(obj, depsgraph)
+    except Exception as exc:
+        print(f"SDF.R state cache refresh skipped: {exc}")
+
+def _find_smoothness_source(context):
+    active = context.active_object
+    active_props = getattr(active, "sdf_props", None) if active else None
+    if active_props and active_props.is_primitive and not active_props.is_output:
+        return active_props.smoothness
+
+    master = get_sdf_output_obj(context)
+    if not master:
+        return None
+
+    stack = master.sdf_props.sdf_stack
+    if len(stack) == 0:
+        return None
+
+    seen = set()
+    idx = min(max(master.sdf_props.sdf_stack_index, 0), len(stack) - 1)
+    search_order = list(range(idx, -1, -1)) + list(range(len(stack) - 1, -1, -1))
+    for i in search_order:
+        if i in seen:
+            continue
+        seen.add(i)
+        item = stack[i]
+        obj = item.object_ptr
+        props = getattr(obj, "sdf_props", None) if obj else None
+        if item.item_type == 'PRIMITIVE' and props and props.is_primitive:
+            return props.smoothness
+    return None
+
+class SDF_OT_add_primitive(bpy.types.Operator):
+    bl_idname = "sdf.add_primitive"
+    bl_label = "Add SDF Primitive"
+    bl_description = "Adds an SDF primitive (automatically creates a workspace if none exists)"
+    shape: bpy.props.StringProperty()
+
+    def execute(self, context):
+        global _prim_color_idx
+        col_name = "SDF_Collection"
+        col = get_or_create_collection(col_name)
+        inherited_smoothness = _find_smoothness_source(context)
+
+        has_output = any(
+            getattr(o, 'sdf_props', None) and o.sdf_props.is_output
+            for o in context.scene.objects
+        )
+        if not has_output:
+            mesh = bpy.data.meshes.new("SDF_Result_Mesh")
+            out_obj = bpy.data.objects.new("SDF_Result", mesh)
+            context.scene.collection.objects.link(out_obj)
+            out_obj.sdf_props.is_output = True
+            out_obj.sdf_props.target_collection = col
+
+        if self.shape == 'sphere':
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=1.0)
+        elif self.shape == 'box' or self.shape == 'rounded_box':
+            bpy.ops.mesh.primitive_cube_add(size=2.0)
+        elif self.shape == 'torus':
+            bpy.ops.mesh.primitive_torus_add(major_radius=0.65, minor_radius=0.35)
+        elif self.shape == 'cylinder' or self.shape == 'capsule':
+            bpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=2.0)
+        elif self.shape == 'hex_prism':
+            bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1.0, depth=2.0)
+        elif self.shape == 'pyramid':
+            bpy.ops.mesh.primitive_cone_add(vertices=4, radius1=1.0, depth=2.0)
+        elif self.shape in ('math_field', 'extrude', 'lathe'):
+            bpy.ops.mesh.primitive_cube_add(size=2.0)
+        else:
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=1.0)
+
+        obj = context.active_object
+        obj.sdf_props.is_primitive = True
+        obj.sdf_props.shape_type = self.shape
+        if inherited_smoothness is not None:
+            obj.sdf_props.smoothness = inherited_smoothness
+        obj.display_type = 'WIRE' if context.scene.sdf_show_primitives else 'BOUNDS'
+
+        # V13: 初期値の適用
+        # prop_name はタプルの実プロパティ名を使う（p1/p2/p3/p4 とは限らない。
+        # 例: sphere は "radius"、extrude/lathe は "extrude_depth" 等の専用プロパティを使う）
+        if self.shape in PRIMITIVE_UI_DEFS:
+            ui_def = PRIMITIVE_UI_DEFS[self.shape]
+            for prop_name, _, default_val in ui_def['params']:
+                if hasattr(obj.sdf_props, prop_name):
+                    setattr(obj.sdf_props, prop_name, default_val)
+
+        c = _get_next_primitive_color(context)
+        obj.color = c
+        obj.sdf_props.color = c[:3]
+
+        if obj.name not in col.objects:
+            col.objects.link(obj)
+        # users_collection は unlink するたびに中身が変わるので、
+        # 走査対象をリストに退避してから外す（途中の要素を取りこぼさないため）
+        for c_col in list(obj.users_collection):
+            if c_col != col:
+                c_col.objects.unlink(obj)
+
+        for o in context.scene.objects:
+            if getattr(o, 'sdf_props', None) and o.sdf_props.is_output:
+                update_sdf_mesh(o)
+        return {'FINISHED'}
+
+class SDF_OT_toggle_display(bpy.types.Operator):
+    bl_idname = "sdf.toggle_display"
+    bl_label = "Toggle Wire/Solid"
+    bl_description = "Toggle display mode of selected objects"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        for obj in context.selected_objects:
+            if obj.display_type == 'WIRE':
+                obj.display_type = 'TEXTURED'
+            else:
+                obj.display_type = 'WIRE'
+        return {'FINISHED'}
+
+class SDF_OT_move_to_sdf_collection(bpy.types.Operator):
+    bl_idname = "sdf.move_to_sdf_collection"
+    bl_label = "Move to SDF Collection"
+    bl_description = "Move selected objects to the SDF collection"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        target_col = None
+        for o in context.scene.objects:
+            p = getattr(o, "sdf_props", None)
+            if p and p.is_output and p.target_collection:
+                target_col = p.target_collection
+                break
+        
+        if not target_col:
+            target_col = bpy.data.collections.get("SDF_Collection")
+            
+        if not target_col:
+            self.report({'WARNING'}, "SDF Collection not found")
+            return {'CANCELLED'}
+            
+        for obj in context.selected_objects:
+            if obj.name not in target_col.objects:
+                for col in obj.users_collection:
+                    col.objects.unlink(obj)
+                target_col.objects.link(obj)
+
+            if obj.type == 'CURVE':
+                # Curve Sync: sync_sdf_stack() が obj.type だけで CURVE_SYNC 判定するので
+                # is_primitive やダミーの shape_type は付けない
+                continue
+
+            obj.sdf_props.is_primitive = True
+            obj.display_type = 'WIRE'
+
+            name_lower = obj.name.lower()
+            if 'box' in name_lower or 'cube' in name_lower: obj.sdf_props.shape_type = 'box'
+            elif 'torus' in name_lower: obj.sdf_props.shape_type = 'torus'
+            elif 'cylinder' in name_lower: obj.sdf_props.shape_type = 'cylinder'
+            else: obj.sdf_props.shape_type = 'sphere'
+
+        return {'FINISHED'}
+
+class SDF_OT_duplicate_collection(bpy.types.Operator):
+    bl_idname = "sdf.duplicate_collection"
+    bl_label = "Duplicate Collection"
+    bl_description = "Duplicate this collection and its contained primitives"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    index: bpy.props.IntProperty()
+
+    @classmethod
+    def poll(cls, context):
+        return get_sdf_output_obj(context) is not None
+
+    def execute(self, context):
+        from .engine import update_sdf_mesh, sync_sdf_stack
+        from . import engine
+        
+        # 複製処理中は一切の自動同期・Depsgraph評価を遮断する
+        engine._duplicate_cooldown = True
+        
+        out_obj = get_sdf_output_obj(context)
+        if not out_obj:
+            engine._duplicate_cooldown = False
+            return {'CANCELLED'}
+            
+        stack = out_obj.sdf_props.sdf_stack
+        if self.index < 0 or self.index >= len(stack):
+            engine._duplicate_cooldown = False
+            return {'CANCELLED'}
+            
+        target_item = stack[self.index]
+        if target_item.item_type != 'COLLECTION':
+            engine._duplicate_cooldown = False
+            return {'CANCELLED'}
+            
+        target_col = out_obj.sdf_props.target_collection
+        if not target_col:
+            engine._duplicate_cooldown = False
+            return {'CANCELLED'}
+            
+        # 複製対象の収集（下から上へ）
+        # ターゲットのEmpty（フォルダ）
+        objs_to_duplicate = []
+        target_empty = target_item.empty_ptr
+        if not target_empty and target_item.obj_name:
+            target_empty = target_col.objects.get(target_item.obj_name)
+        if target_empty:
+            objs_to_duplicate.append(target_empty)
+            
+        # 上にあるプリミティブを次のコレクション区切りまで収集
+        for i in range(self.index - 1, -1, -1):
+            item = stack[i]
+            
+            # アイテムが指すオブジェクトを確実に取得
+            o = item.object_ptr
+            if not o and item.obj_name:
+                o = target_col.objects.get(item.obj_name)
+                
+            # 万が一item_typeがプリミティブになっていても実体がEMPTYならコレクション区切りとして扱う
+            # （Curve Sync プロキシEmptyは区切りではないので対象外）
+            is_curve_sync_proxy = bool(o and getattr(o.sdf_props, "is_curve_sync_proxy", False))
+            if o and o.type == 'EMPTY' and not is_curve_sync_proxy:
+                break
+            elif item.item_type == 'COLLECTION':
+                break
+                
+            if o:
+                objs_to_duplicate.append(o)
+            elif item.empty_ptr:
+                objs_to_duplicate.append(item.empty_ptr)
+                
+        if not objs_to_duplicate:
+            engine._duplicate_cooldown = False
+            return {'CANCELLED'}
+            
+        bpy.ops.object.select_all(action='DESELECT')
+        
+        # 逆順にして上からの順番に戻す
+        objs_to_duplicate.reverse()
+        seen = set()
+        unique_objs = []
+        for obj in objs_to_duplicate:
+            if obj not in seen:
+                seen.add(obj)
+                unique_objs.append(obj)
+        
+        # 複製とリンク、およびスタックへの直接追加
+        new_active_obj = None
+        for idx, obj in enumerate(unique_objs):
+            new_obj = obj.copy()
+            if obj.data:
+                new_obj.data = obj.data.copy()
+            target_col.objects.link(new_obj)
+            
+            # APIベースで直接スタックに追加（sync_sdf_stackのポインタ喪失や並び替えバグを排除）
+            new_item = stack.add()
+            new_item.object_ptr = new_obj
+            new_item.obj_name = new_obj.name
+            
+            # カスタムプロパティ（レイアウト設定等）はobj.copy()でコピー済み
+            if new_obj.type == 'EMPTY' and getattr(new_obj.sdf_props, "is_curve_sync_proxy", False):
+                new_item.item_type = 'CURVE_SYNC'
+                new_obj.select_set(False)
+            elif new_obj.type == 'EMPTY':
+                new_item.item_type = 'COLLECTION'
+                new_item.empty_ptr = new_obj
+                new_item.name_override = new_obj.name
+                new_item.start_new_group = target_item.start_new_group
+                new_item.is_layer_boundary = target_item.is_layer_boundary
+                new_active_obj = new_obj
+                # エンプティのみ選択状態にする
+                new_obj.select_set(True)
+            elif new_obj.type == 'CURVE':
+                new_item.item_type = 'CURVE_SYNC'
+                new_obj.select_set(False)
+            else:
+                new_item.item_type = 'PRIMITIVE'
+                # プリミティブは選択状態にしない
+                new_obj.select_set(False)
+                
+        # フォルダがあればアクティブにする（すぐにGキーで移動できるようにするため）
+        if new_active_obj:
+            context.view_layer.objects.active = new_active_obj
+            
+        # 複製完了後、1フレーム遅延してメッシュ更新と親子関係の再構築を行う
+        def delayed_sync():
+            if out_obj:
+                # 親子関係の再同期（これをしないとGキーで移動した時にプリミティブがついてこない）
+                engine.sync_sdf_parents(out_obj)
+                
+                # 既にスタックに直接追加したので、sync_sdf_stackは不要だが、念のため呼び出す
+                engine.sync_sdf_stack(out_obj)
+                engine.update_sdf_mesh(out_obj)
+            engine._duplicate_cooldown = False
+            return None
+            
+        bpy.app.timers.register(delayed_sync, first_interval=0.05)
+        
+        return {'FINISHED'}
+
+
+class SDF_OT_bake_mesh(bpy.types.Operator):
+    bl_idname = "sdf.bake_mesh"
+    bl_label = "Snapshot Mesh"
+    bl_description = "Create a static mesh copy while keeping the live SDF workspace editable"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        return get_sdf_output_obj(context) is not None
+
+    def execute(self, context):
+        source_obj = get_sdf_output_obj(context)
+        if not source_obj: return {'CANCELLED'}
+
+        history_root = get_or_create_collection("SDF_History")
+        snapshots_col = get_or_create_collection("SDF_Snapshots", history_root)
+        history_root.hide_viewport = history_root.hide_render = False
+        snapshots_col.hide_viewport = snapshots_col.hide_render = False
+
+        count = 1
+        while bpy.data.objects.get(f"SDF_Snapshot_{count:03}"):
+            count += 1
+        snap_name = f"SDF_Snapshot_{count:03}"
+
+        try:
+            depsgraph = context.evaluated_depsgraph_get()
+            source_eval = source_obj.evaluated_get(depsgraph)
+            try:
+                new_mesh = bpy.data.meshes.new_from_object(source_eval, depsgraph=depsgraph, preserve_all_data_layers=True)
+            except TypeError:
+                new_mesh = bpy.data.meshes.new_from_object(source_eval, depsgraph=depsgraph)
+        except Exception as exc:
+            print(f"SDF.R Snapshot evaluated mesh skipped: {exc}")
+            new_mesh = source_obj.data.copy()
+
+        new_mesh.name = f"{snap_name}_Mesh"
+        if not new_mesh.materials and source_obj.data.materials:
+            for mat in source_obj.data.materials:
+                new_mesh.materials.append(mat)
+
+        new_obj = bpy.data.objects.new(name=snap_name, object_data=new_mesh)
+        new_obj.matrix_world = source_obj.matrix_world
+        new_obj.sdf_props.is_output = False
+        new_obj.sdf_props.is_primitive = False
+        snapshots_col.objects.link(new_obj)
+        bpy.ops.object.select_all(action='DESELECT')
+        new_obj.select_set(True)
+        context.view_layer.objects.active = new_obj
+        self.report({'INFO'}, f"Snapshot mesh created: {new_obj.name}")
+        return {'FINISHED'}
+
+def setup_material_nodes(mat):
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+    
+    node_output = nodes.new(type='ShaderNodeOutputMaterial')
+    node_output.location = (400, 0)
+    
+    node_principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    node_principled.location = (0, 0)
+    
+    node_attr_col = nodes.new(type='ShaderNodeAttribute')
+    node_attr_col.attribute_name = "Color"
+    node_attr_col.location = (-300, 100)
+    links.new(node_attr_col.outputs['Color'], node_principled.inputs['Base Color'])
+    
+    node_attr_met = nodes.new(type='ShaderNodeAttribute')
+    node_attr_met.attribute_name = "Metallic"
+    node_attr_met.location = (-300, -100)
+    links.new(node_attr_met.outputs['Fac'], node_principled.inputs['Metallic'])
+    
+    node_attr_rou = nodes.new(type='ShaderNodeAttribute')
+    node_attr_rou.attribute_name = "Roughness"
+    node_attr_rou.location = (-300, -300)
+    links.new(node_attr_rou.outputs['Fac'], node_principled.inputs['Roughness'])
+    
+    links.new(node_principled.outputs['BSDF'], node_output.inputs['Surface'])
+
+class SDF_OT_setup_material(bpy.types.Operator):
+    bl_idname = "sdf.setup_material"
+    bl_label = "Setup Color Material"
+    bl_description = "Generate and apply material for vertex colors"
+    
+    def execute(self, context):
+        obj = get_sdf_output_obj(context)
+        if not obj:
+            self.report({'WARNING'}, "Output object not found")
+            return {'CANCELLED'}
+        
+        mat_name = f"SDF_Material_{obj.name}"
+        mat = bpy.data.materials.get(mat_name)
+        if not mat:
+            mat = bpy.data.materials.new(name=mat_name)
+            mat.use_nodes = True
+            setup_material_nodes(mat)
+            
+        if not any(slot.material == mat for slot in obj.material_slots):
+            obj.data.materials.append(mat)
+        return {'FINISHED'}
+
+class SDF_OT_reset_material(bpy.types.Operator):
+    bl_idname = "sdf.reset_material"
+    bl_label = "Reset Shader Nodes"
+    bl_description = "Reset shader nodes to default vertex color setup"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = get_sdf_output_obj(context)
+        if not obj:
+            self.report({'WARNING'}, "Output object not found")
+            return {'CANCELLED'}
+            
+        mat_name = f"SDF_Material_{obj.name}"
+        mat = bpy.data.materials.get(mat_name)
+        if not mat:
+            bpy.ops.sdf.setup_material()
+            return {'FINISHED'}
+        
+        # Clear existing nodes and rebuild
+        setup_material_nodes(mat)
+
+        scene_props = getattr(context.scene, "sdf_scene_props", None)
+        if scene_props:
+            scene_props.material_all_metallic = 0.0
+            scene_props.material_all_roughness = 0.5
+            scene_props.material_all_transmission = 0.0
+            scene_props.material_all_ior = 1.45
+
+        self.report({'INFO'}, "Shader nodes and material controls reset to default.")
+        return {'FINISHED'}
+
+class SDF_OT_apply_color_all(bpy.types.Operator):
+    bl_idname = "sdf.apply_color_all"
+    bl_label = "Apply Color To All"
+    bl_description = "Apply one shared base color to all SDF primitives"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = get_sdf_output_obj(context)
+        if not obj:
+            self.report({'WARNING'}, "Output object not found")
+            return {'CANCELLED'}
+
+        try:
+            from .engine import sync_sdf_stack
+            sync_sdf_stack(obj)
+        except Exception as exc:
+            print(f"SDF.R Color All stack sync skipped: {exc}")
+
+        scene_props = context.scene.sdf_scene_props
+        color = scene_props.material_all_color
+        old_live = context.scene.sdf_live_update
+        count = 0
+
+        _begin_appearance_update_cooldown()
+        context.scene.sdf_live_update = False
+        try:
+            for item in obj.sdf_props.sdf_stack:
+                prim = item.object_ptr
+                props = getattr(prim, "sdf_props", None) if prim else None
+                if item.item_type == 'PRIMITIVE' and props and props.is_primitive:
+                    rgb = (color[0], color[1], color[2])
+                    props.color = rgb
+                    prim.color = (rgb[0], rgb[1], rgb[2], 1.0)
+                    count += 1
+        finally:
+            context.scene.sdf_live_update = old_live
+
+        _set_result_color_attribute(obj, (color[0], color[1], color[2]))
+        _refresh_output_state_cache(obj, context)
+        try:
+            from . import handlers
+            handlers.mark_preview_dirty()
+        except Exception:
+            pass
+        self.report({'INFO'}, f"Applied color to {count} primitives.")
+        return {'FINISHED'}
+
+class SDF_OT_apply_material_all(bpy.types.Operator):
+    bl_idname = "sdf.apply_material_all"
+    bl_label = "Apply Material To All"
+    bl_description = "Apply shared Metallic, Roughness and Transmission values to the SDF material"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = get_sdf_output_obj(context)
+        if not obj:
+            self.report({'WARNING'}, "Output object not found")
+            return {'CANCELLED'}
+
+        try:
+            from .engine import sync_sdf_stack
+            sync_sdf_stack(obj)
+        except Exception as exc:
+            print(f"SDF.R Material All stack sync skipped: {exc}")
+
+        scene_props = context.scene.sdf_scene_props
+        metallic = scene_props.material_all_metallic
+        roughness = scene_props.material_all_roughness
+        transmission = scene_props.material_all_transmission
+        ior = scene_props.material_all_ior
+        old_live = context.scene.sdf_live_update
+        count = 0
+
+        _begin_appearance_update_cooldown()
+        context.scene.sdf_live_update = False
+        try:
+            for item in obj.sdf_props.sdf_stack:
+                prim = item.object_ptr
+                props = getattr(prim, "sdf_props", None) if prim else None
+                if item.item_type == 'PRIMITIVE' and props and props.is_primitive:
+                    props.metallic = metallic
+                    props.roughness = roughness
+                    count += 1
+        finally:
+            context.scene.sdf_live_update = old_live
+
+        _set_result_float_attribute(obj, "Metallic", metallic)
+        _set_result_float_attribute(obj, "Roughness", roughness)
+
+        # Transmission はマテリアル全体の値としてノードへ直接反映する
+        applied, missing = _set_material_transmission(obj, transmission, ior)
+        _refresh_output_state_cache(obj, context)
+        try:
+            from . import handlers
+            handlers.mark_preview_dirty()
+        except Exception:
+            pass
+
+        msg = f"Applied material values to {count} primitives."
+        if transmission > 0.0 and not applied:
+            msg += " Transmission needs the SDF material - press 'Setup Nodes' first."
+        elif missing:
+            msg += f" (socket not found: {', '.join(sorted(set(missing)))})"
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+class SDF_OT_update_normals(bpy.types.Operator):
+    bl_idname = "sdf.update_normals"
+    bl_label = "Update Normals"
+    bl_description = "Calculate and apply high-quality normals"
+    
+    def execute(self, context):
+        obj = get_sdf_output_obj(context)
+        if obj:
+            trigger_normal_update(obj)
+            self.report({'INFO'}, "Normals update triggered")
+        return {'FINISHED'}
+
+class SDF_OT_generate_mesh(bpy.types.Operator):
+    bl_idname = "sdf.generate_mesh"
+    bl_label = "Generate SDF Mesh"
+    def execute(self, context):
+        for obj in context.scene.objects:
+            if obj.sdf_props.is_output:
+                if obj.mode != 'OBJECT': bpy.ops.object.mode_set(mode='OBJECT')
+                update_sdf_mesh(obj)
+        return {'FINISHED'}
+
+class SDF_OT_add_selected(bpy.types.Operator):
+    bl_idname = "sdf.add_selected"
+    bl_label = "Add Selected to SDF"
+    bl_description = "Add the active object to the SDF calculation stack"
+    @classmethod
+    def poll(cls, context):
+        return context.active_object and not context.active_object.sdf_props.is_output
+    def execute(self, context):
+        obj = context.active_object
+        col_name = "SDF_Collection"
+        col = bpy.data.collections.get(col_name) or bpy.data.collections.new(col_name)
+        if col_name not in context.scene.collection.children:
+            context.scene.collection.children.link(col)
+        if obj.name not in col.objects:
+            col.objects.link(obj)
+        if obj.type != 'CURVE':
+            obj.sdf_props.is_primitive = True
+            obj.display_type = 'WIRE'
+        for o in context.scene.objects:
+            if o.sdf_props.is_output:
+                update_sdf_mesh(o)
+        return {'FINISHED'}
+
+class SDF_OT_make_output(bpy.types.Operator):
+    bl_idname = "sdf.make_output"
+    bl_label = "New SDF Workspace"
+    
+    def execute(self, context):
+        scene = context.scene
+        
+        # 1. Check existing work (check if archiving is needed)
+        active_col = bpy.data.collections.get("SDF_Collection")
+        current_result = get_sdf_output_obj(context)
+        
+        # Archive if parts exist (and not baked)
+        if (active_col and active_col.objects) or current_result:
+            history_root = get_or_create_collection("SDF_History")
+            count = 1
+            while bpy.data.collections.get(f"Iteration_{count:03}"):
+                count += 1
+            iter_col = get_or_create_collection(f"Iteration_{count:03}", history_root)
+            
+            # Archive primitives
+            if active_col and active_col.objects:
+                used_col = get_or_create_collection(f"SDF_Used_{count:03}", iter_col)
+                for obj in list(active_col.objects):
+                    active_col.objects.unlink(obj)
+                    used_col.objects.link(obj)
+                    obj.hide_viewport = obj.hide_render = True
+            
+            # Archive result objects
+            if current_result:
+                res_col = get_or_create_collection("SDF_Results", history_root)
+                if current_result.name in scene.collection.objects:
+                    scene.collection.objects.unlink(current_result)
+                if current_result.name not in res_col.objects:
+                    res_col.objects.link(current_result)
+                current_result.name = f"SDF_Result_{count:03}_Unbaked"
+                current_result.sdf_props.is_output = False
+            
+            iter_col.hide_viewport = iter_col.hide_render = True
+
+        # 2. Create fresh workspace
+        col_name = "SDF_Collection"
+        col = get_or_create_collection(col_name)
+        
+        mesh = bpy.data.meshes.new("SDF_Result_Mesh")
+        out_obj = bpy.data.objects.new("SDF_Result", mesh)
+        scene.collection.objects.link(out_obj)
+        
+        out_obj.sdf_props.is_output = True
+        out_obj.sdf_props.target_collection = col
+        context.view_layer.objects.active = out_obj
+        
+        # Resume live update
+        scene.sdf_live_update = True
+        
+        update_sdf_mesh(out_obj)
+        self.report({'INFO'}, "New Workspace created. Past work archived to SDF_History.")
+        return {'FINISHED'}
+
+# --- V7: Stack manipulation operators ---
+class SDF_OT_stack_move(bpy.types.Operator):
+    bl_idname = "sdf.stack_move"
+    bl_label = "Move Stack Item"
+    direction: bpy.props.EnumProperty(items=[('UP', "Up", ""), ('DOWN', "Down", "")])
+
+    def execute(self, context):
+        master = None
+        for o in context.scene.objects:
+            if o.sdf_props.is_output:
+                master = o
+                break
+        if not master: return {'CANCELLED'}
+        
+        props = master.sdf_props
+        idx = props.sdf_stack_index
+        size = len(props.sdf_stack)
+        
+        new_idx = idx - 1 if self.direction == 'UP' else idx + 1
+        if 0 <= new_idx < size:
+            props.sdf_stack.move(idx, new_idx)
+            props.sdf_stack_index = new_idx
+            update_sdf_mesh(master)
+        return {'FINISHED'}
+
+class SDF_OT_stack_remove(bpy.types.Operator):
+    bl_idname = "sdf.stack_remove"
+    bl_label = "Remove Stack Item"
+    def execute(self, context):
+        master = None
+        for o in context.scene.objects:
+            if o.sdf_props.is_output:
+                master = o
+                break
+        if not master: return {'CANCELLED'}
+        
+        props = master.sdf_props
+        if len(props.sdf_stack) > 0:
+            item = props.sdf_stack[props.sdf_stack_index]
+            if item.object_ptr:
+                if item.item_type == 'COLLECTION':
+                    empty_obj = item.empty_ptr
+                    if empty_obj:
+                        # 解除
+                        for child in list(empty_obj.children):
+                            child.parent = None
+                        # オブジェクト削除
+                        bpy.data.objects.remove(empty_obj, do_unlink=True)
+                elif (item.item_type == 'CURVE_SYNC' and item.object_ptr.type == 'EMPTY'
+                      and getattr(item.object_ptr.sdf_props, "is_curve_sync_proxy", False)):
+                    # Curve Sync プロキシは参照専用の内部オブジェクトなので、
+                    # 参照先カーブは残したままプロキシ自体を削除する
+                    bpy.data.objects.remove(item.object_ptr, do_unlink=True)
+                else:
+                    col = props.target_collection
+                    if col and item.object_ptr.name in col.objects:
+                        col.objects.unlink(item.object_ptr)
+            
+            props.sdf_stack.remove(props.sdf_stack_index)
+            props.sdf_stack_index = max(0, props.sdf_stack_index - 1)
+            
+            # 再同期
+            try:
+                from .engine import sync_sdf_parents
+                sync_sdf_parents(master)
+            except Exception as e:
+                print(f"Parent sync failed on remove: {e}")
+                
+            update_sdf_mesh(master)
+        return {'FINISHED'}
+
+
+class SDF_OT_select_stack_obj(bpy.types.Operator):
+    bl_idname = "sdf.select_stack_obj"
+    bl_label = "Select SDF Object"
+    obj_name: bpy.props.StringProperty()
+    index: bpy.props.IntProperty()
+
+    def execute(self, context):
+        # Update master object index
+        master = get_sdf_output_obj(context)
+        if master:
+            master.sdf_props.sdf_stack_index = self.index
+
+        obj = bpy.data.objects.get(self.obj_name)
+        if obj:
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            context.view_layer.objects.active = obj
+        return {'FINISHED'}
+
+class SDF_OT_use_previous_as_mask(bpy.types.Operator):
+    bl_idname = "sdf.use_previous_as_mask"
+    bl_label = "Use Previous as Mask"
+    bl_description = "Set the selected Gyroid to intersect with the previous stack primitive"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        master = get_sdf_output_obj(context)
+        return master is not None and len(master.sdf_props.sdf_stack) > 1
+
+    def execute(self, context):
+        master = get_sdf_output_obj(context)
+        if not master:
+            self.report({'WARNING'}, "SDF output not found")
+            return {'CANCELLED'}
+
+        props = master.sdf_props
+        idx = props.sdf_stack_index
+        if idx <= 0 or idx >= len(props.sdf_stack):
+            self.report({'WARNING'}, "Select a Gyroid with a primitive before it in the stack")
+            return {'CANCELLED'}
+
+        item = props.sdf_stack[idx]
+        gyroid = item.object_ptr
+        gyroid_props = getattr(gyroid, "sdf_props", None) if gyroid else None
+        if not gyroid_props or gyroid_props.shape_type != 'math_field':
+            self.report({'WARNING'}, "Selected stack item is not a Math Field")
+            return {'CANCELLED'}
+
+        prev_item = None
+        for i in range(idx - 1, -1, -1):
+            candidate = props.sdf_stack[i]
+            obj = candidate.object_ptr
+            obj_props = getattr(obj, "sdf_props", None) if obj else None
+            if candidate.item_type == 'PRIMITIVE' and obj_props and obj_props.is_primitive:
+                prev_item = candidate
+                break
+
+        if not prev_item or not prev_item.object_ptr:
+            self.report({'WARNING'}, "No previous primitive found to use as mask")
+            return {'CANCELLED'}
+
+        mask_obj = prev_item.object_ptr
+        mask_props = mask_obj.sdf_props
+
+        # Existing SDF stack semantics: previous shape is accumulated, Gyroid intersects it.
+        mask_props.operation = '0'
+        gyroid_props.operation = '2'
+        gyroid_props.gyroid_mask_shape = '0'
+        gyroid_props.gyroid_boundary_mode = '1'
+
+        try:
+            inv_gyroid = gyroid.matrix_world.inverted()
+            max_extent = 0.0
+            for corner in mask_obj.bound_box:
+                p = inv_gyroid @ (mask_obj.matrix_world @ Vector(corner))
+                max_extent = max(max_extent, abs(p.x), abs(p.y), abs(p.z))
+            if max_extent > 0.0:
+                gyroid_props.p4 = max(gyroid_props.p4, max_extent * 1.15)
+        except Exception as exc:
+            print(f"SDF.R Field Blend extent fit skipped: {exc}")
+
+        try:
+            from .engine import sync_sdf_parents
+            sync_sdf_parents(master)
+        except Exception as exc:
+            print(f"SDF.R Field Blend parent sync skipped: {exc}")
+
+        update_sdf_mesh(master)
+        self.report({'INFO'}, f"Gyroid is now intersecting previous mask: {mask_obj.name}")
+        return {'FINISHED'}
+
+class SDF_OT_match_math_field_axis_to_scale(bpy.types.Operator):
+    bl_idname = "sdf.match_math_field_axis_to_scale"
+    bl_label = "Auto Match Scale"
+    bl_description = "Match Math Field Axis XYZ to the object's scale so the pattern keeps its world density"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        props = getattr(obj, "sdf_props", None) if obj else None
+        return bool(props and props.is_primitive and props.shape_type == 'math_field')
+
+    def execute(self, context):
+        obj = context.active_object
+        props = obj.sdf_props
+
+        sx = max(min(abs(obj.scale.x), 8.0), 0.05)
+        sy = max(min(abs(obj.scale.y), 8.0), 0.05)
+        sz = max(min(abs(obj.scale.z), 8.0), 0.05)
+
+        props.gyroid_axis_x = sx
+        props.gyroid_axis_y = sy
+        props.gyroid_axis_z = sz
+
+        master = get_sdf_output_obj(context)
+        if master:
+            update_sdf_mesh(master)
+
+        self.report({'INFO'}, f"Math Field Axis matched to scale: X {sx:.3g}, Y {sy:.3g}, Z {sz:.3g}")
+        return {'FINISHED'}
+
+def _ensure_gn_modifier_inputs(mod, node_group):
+    """ノードグループの入力に対応するIDプロパティが無ければ、既定値から作る。
+
+    Geometry Nodes モディファイアは入力値を `["Socket_3"]` のようなIDプロパティとして
+    持つ。UIからノードグループを選んだ場合は Blender が用意するが、Python から
+    `mod.node_group = ...` と代入した場合に作られるかはバージョン依存なので、
+    足りないものをここで補う。既にあるものは触らないので、調整済みの値は保持される。
+    戻り値は新しく作った識別子のリスト。
+    """
+    created = []
+    if not node_group or not getattr(node_group, "interface", None):
+        return created
+
+    # 入力値の持ち方はバージョンで変わる（ui._gn_input_binding を参照）。
+    # 判定ロジックを二重に持つと片方だけ直して食い違うので、UI 側と同じ関数を使う。
+    from .ui import _gn_input_binding
+
+    # IDプロパティを置ける先を探す。5.2 のように通常のRNAプロパティとして
+    # 生えている版では、こちらから作る必要も余地も無いので何もしない。
+    owner = None
+    for candidate in (getattr(mod, "properties", None), mod):
+        if candidate is None:
+            continue
+        try:
+            "Socket_0" in candidate
+            owner = candidate
+            break
+        except TypeError:
+            continue
+    if owner is None:
+        return created
+
+    for item in node_group.interface.items_tree:
+        if getattr(item, "in_out", None) != 'INPUT':
+            continue
+        if item.socket_type == 'NodeSocketGeometry':
+            continue
+        if _gn_input_binding(mod, item.identifier) is not None:
+            continue
+        default = getattr(item, "default_value", None)
+        if default is None:
+            continue
+        try:
+            # ベクトルやカラーは bpy_prop_array なので list 化してから渡す
+            if hasattr(default, "__len__") and not isinstance(default, str):
+                owner[item.identifier] = list(default)
+            else:
+                owner[item.identifier] = default
+            created.append(item.identifier)
+        except Exception as exc:
+            print(f"SDF.R: could not initialize modifier input "
+                  f"{item.identifier} ({item.name}): {exc}")
+    return created
+
+
+class SDF_OT_setup_post_process(bpy.types.Operator):
+    bl_idname = "sdf.setup_post_process"
+    bl_label = "Setup Post Process (GN)"
+    bl_description = "Append GeoRemesh node group and apply to output object"
+
+    def execute(self, context):
+        obj = get_sdf_output_obj(context)
+        if not obj:
+            self.report({'WARNING'}, "Output object not found")
+            return {'CANCELLED'}
+
+        # Get asset path
+        addon_dir = os.path.dirname(os.path.realpath(__file__))
+        blend_path = os.path.join(addon_dir, "assets", "nodes.blend")
+
+        if not os.path.exists(blend_path):
+            self.report({'ERROR'}, f"Asset file not found: {blend_path}")
+            return {'CANCELLED'}
+
+        # Append NodeGroup
+        node_group_name = "GeoRemesh_R"
+        if node_group_name not in bpy.data.node_groups:
+            with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
+                if node_group_name in data_from.node_groups:
+                    data_to.node_groups.append(node_group_name)
+                else:
+                    self.report({'ERROR'}, f"Node group {node_group_name} not found")
+                    return {'CANCELLED'}
+
+        # Add modifier
+        mod_name = "GeoRemesh_R"
+        mod = obj.modifiers.get(mod_name)
+        if not mod:
+            mod = obj.modifiers.new(name=mod_name, type='NODES')
+        
+        node_group = bpy.data.node_groups.get(node_group_name)
+        mod.node_group = node_group
+
+        # V16.1.1: 入力のIDプロパティが用意されなかった場合に備えて補う。
+        # 既に存在するものは触らないので、ユーザーが調整済みの値は保持される。
+        created = _ensure_gn_modifier_inputs(mod, node_group)
+        if created:
+            print(f"SDF.R: initialized {len(created)} GeoRemesh modifier input(s): "
+                  f"{', '.join(created)}")
+
+        return {'FINISHED'}
+
+class SDF_OT_finalize(bpy.types.Operator):
+    bl_idname = "sdf.finalize"
+    bl_label = "Finalize (Bake All)"
+    bl_description = "Applies all SDF operations and modifiers, converting them to a standard mesh"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = get_sdf_output_obj(context)
+        if not obj:
+            self.report({'WARNING'}, "Output object not found")
+            return {'CANCELLED'}
+
+        # 1. 歴史フォルダの確保
+        history_root = get_or_create_collection("SDF_History")
+        results_col = get_or_create_collection("SDF_Results", history_root)
+        
+        # 2. 原型の複製（バックアップ）
+        count = 1
+        while bpy.data.objects.get(f"SDF_Result_{count:03}_Backup"):
+            count += 1
+        
+        backup_obj = obj.copy()
+        backup_obj.data = obj.data.copy()
+        backup_obj.name = f"SDF_Result_{count:03}_Backup"
+        
+        backup_sub = get_or_create_collection("SDF_Backups", history_root)
+        backup_sub.objects.link(backup_obj)
+        backup_obj.sdf_props.is_output = False
+        backup_obj.hide_viewport = backup_obj.hide_render = True
+        
+        # 3. ライブ更新を一時停止
+        context.scene.sdf_live_update = False
+        
+        # 4. 全モディファイアーを適用して確定
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        
+        for mod in list(obj.modifiers):
+            try:
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+            except Exception as e:
+                self.report({'WARNING'}, f"Failed to apply modifier {mod.name}: {e}")
+
+        # 5. SDFプロパティのクリーンアップ（通常のメッシュ化）
+        obj.sdf_props.is_output = False
+        obj.sdf_props.sdf_stack.clear()
+        
+        # 成果物のリネームと移動
+        obj.name = f"SDF_Result_{count:03}"
+        if obj.name in context.scene.collection.objects:
+            context.scene.collection.objects.unlink(obj)
+        if obj.name not in results_col.objects:
+            results_col.objects.link(obj)
+
+        # 6. 【整理整頓】使用したプリミティブを履歴に退避し、作業場を空にする
+        prim_col = obj.sdf_props.target_collection
+        if prim_col:
+            used_col = get_or_create_collection(f"SDF_Used_{count:03}", history_root)
+            for p_obj in list(prim_col.objects):
+                prim_col.objects.unlink(p_obj)
+                used_col.objects.link(p_obj)
+                p_obj.hide_viewport = p_obj.hide_render = True
+            
+            # 使用済みコレクションも一応隠しておく
+            used_col.hide_viewport = used_col.hide_render = True
+            
+            # メインの SDF_Collection は可視のまま空っぽにする
+            prim_col.hide_viewport = False 
+        
+        self.report({'INFO'}, f"Mesh finalized and moved to {results_col.name}.")
+        return {'FINISHED'}
+
+class SDF_OT_set_resolution_preset(bpy.types.Operator):
+    bl_idname = "sdf.set_resolution_preset"
+    bl_label = "Set Resolution Preset"
+    bl_description = "Switches the resolution to the specified preset value"
+    
+    mode: bpy.props.EnumProperty(items=[('LOW', "Low", ""), ('HIGH', "High", "")])
+
+    def execute(self, context):
+        obj = get_sdf_output_obj(context)
+        if not obj: return {'CANCELLED'}
+        
+        props = obj.sdf_props
+        if self.mode == 'LOW':
+            props.resolution = props.res_preset_low
+            props.use_live_normals = False
+        else:
+            props.resolution = props.res_preset_high
+            if props.res_mode_auto_normals:
+                props.use_live_normals = True
+        
+        update_sdf_mesh(obj)
+        return {'FINISHED'}
+
+class SDF_OT_all_clear(bpy.types.Operator):
+    bl_idname = "sdf.all_clear"
+    bl_label = "All Clear"
+    bl_description = "Delete all SDF-related objects and collections"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        props = scene.sdf_scene_props
+        include_results = props.all_clear_include_history
+        
+        to_delete = []
+        for obj in list(scene.objects):
+            p = getattr(obj, "sdf_props", None)
+            if p and (p.is_output or p.is_primitive):
+                to_delete.append(obj)
+                continue
+            
+            is_sdf_history_obj = any(x in obj.name for x in ["SDF_Result_", "SDF_Backup"])
+            if is_sdf_history_obj:
+                is_baked_result = "SDF_Result_" in obj.name and "_Backup" not in obj.name and "_Unbaked" not in obj.name
+                if include_results or not is_baked_result:
+                    to_delete.append(obj)
+
+        if to_delete:
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in to_delete:
+                try: obj.select_set(True)
+                except: pass
+            bpy.ops.object.delete()
+
+        if include_results:
+            cols_to_remove = ["SDF_Collection", "SDF_History"]
+            for name in cols_to_remove:
+                col = bpy.data.collections.get(name)
+                if col: self._recursive_delete_col(col)
+        else:
+            active_col = bpy.data.collections.get("SDF_Collection")
+            if active_col:
+                for obj in list(active_col.objects): bpy.data.objects.remove(obj, do_unlink=True)
+            
+            history_root = bpy.data.collections.get("SDF_History")
+            if history_root:
+                for sub in list(history_root.children):
+                    if "SDF_Results" not in sub.name: self._recursive_delete_col(sub)
+                
+                results_col = bpy.data.collections.get("SDF_Results")
+                if results_col:
+                    for obj in list(results_col.objects):
+                        if "_Unbaked" in obj.name: bpy.data.objects.remove(obj, do_unlink=True)
+
+        self.report({'INFO'}, "SDF Workspace cleaned up.")
+        return {'FINISHED'}
+
+    def _recursive_delete_col(self, col):
+        for child in list(col.children): self._recursive_delete_col(child)
+        for obj in list(col.objects): bpy.data.objects.remove(obj, do_unlink=True)
+        bpy.data.collections.remove(col)
+
+# --- V15: Deform Stack Operators ---
+class SDF_OT_deform_add(bpy.types.Operator):
+    bl_idname = "sdf.deform_add"
+    bl_label = "Add Deform"
+    bl_description = "Add a new item to the deform stack (max 2)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or not getattr(obj, "sdf_props", None):
+            return {'CANCELLED'}
+        props = obj.sdf_props
+        if len(props.deform_stack) >= 2:
+            self.report({'WARNING'}, "Up to 2 deforms are allowed (lightweight version)")
+            return {'CANCELLED'}
+        item = props.deform_stack.add()
+        props.deform_stack_index = len(props.deform_stack) - 1
+        update_sdf_mesh(get_sdf_output_obj(context))
+        return {'FINISHED'}
+
+class SDF_OT_deform_remove(bpy.types.Operator):
+    bl_idname = "sdf.deform_remove"
+    bl_label = "Remove Deform"
+    bl_description = "Remove the selected deform from the stack"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or not getattr(obj, "sdf_props", None):
+            return {'CANCELLED'}
+        props = obj.sdf_props
+        if len(props.deform_stack) > 0:
+            props.deform_stack.remove(props.deform_stack_index)
+            props.deform_stack_index = max(0, props.deform_stack_index - 1)
+            update_sdf_mesh(get_sdf_output_obj(context))
+        return {'FINISHED'}
+
+class SDF_OT_deform_move(bpy.types.Operator):
+    bl_idname = "sdf.deform_move"
+    bl_label = "Move Deform"
+    bl_description = "Reorder the deforms in the stack"
+    bl_options = {'REGISTER', 'UNDO'}
+    direction: bpy.props.EnumProperty(items=[('UP', "Up", ""), ('DOWN', "Down", "")])
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or not getattr(obj, "sdf_props", None):
+            return {'CANCELLED'}
+        props = obj.sdf_props
+        idx = props.deform_stack_index
+        size = len(props.deform_stack)
+        new_idx = idx - 1 if self.direction == 'UP' else idx + 1
+        if 0 <= new_idx < size:
+            props.deform_stack.move(idx, new_idx)
+            props.deform_stack_index = new_idx
+            update_sdf_mesh(get_sdf_output_obj(context))
+        return {'FINISHED'}
+
+
+class SDF_OT_switch_algo(bpy.types.Operator):
+    bl_idname = "sdf.switch_algo"
+    bl_label = "Switch Algorithm"
+    bl_description = "Switch between Marching Cubes and Dual Contouring"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    target_type: bpy.props.EnumProperty(
+        items=[('MC', "Marching Cubes", ""), ('DC', "Dual Contouring", "")],
+        name="Target Algorithm"
+    )
+
+    def execute(self, context):
+        scene = context.scene
+        s_props = scene.sdf_scene_props
+        output_obj = get_sdf_output_obj(context)
+        if not output_obj:
+            return {'CANCELLED'}
+        
+        m_props = output_obj.sdf_props
+        
+        if self.target_type == 'DC':
+            # DC未コンパイルの場合はRust側を叩いてコンパイルを強制
+            if not s_props.is_dc_compiled:
+                self.report({'INFO'}, "Dual Contouring Pipelines are compiling... please wait.")
+                # generate_mesh_gpu(または内部のensure_ready)でDCフラグを立てて実行するとコンパイルが走る
+                # ここでは単にフラグを切り替えるだけで、次の描画時に Rust 側で ensure_dc_ready() が呼ばれる
+                s_props.is_dc_compiled = True
+            
+        m_props.algo_type = self.target_type
+        update_sdf_mesh(output_obj)
+        
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        scene = context.scene
+        s_props = scene.sdf_scene_props
+        
+        if self.target_type == 'DC' and not s_props.is_dc_compiled:
+            return context.window_manager.invoke_props_dialog(self, width=400)
+        
+        return self.execute(context)
+
+    def draw(self, context):
+        layout = self.layout
+        box = layout.box()
+        col = box.column(align=True)
+        col.label(text="[Experimental] Switch to Dual Contouring", icon='ERROR')
+        col.separator()
+        col.label(text="- Compilation takes approx. 65 seconds only on the first run")
+        col.label(text="- Blender will temporarily become unresponsive during this time")
+        col.label(text="- Once complete, it is cached and can be switched instantly")
+        col.separator()
+        col.label(text="Are you sure you want to proceed?")
+
+class SDF_OT_add_collection_divider(bpy.types.Operator):
+    bl_idname = "sdf.add_collection_divider"
+    bl_label = "Add Collection Divider"
+    bl_description = "Add a collection divider item to group objects"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        master = get_sdf_output_obj(context)
+        if not master:
+            self.report({'WARNING'}, "Workspace output object not found")
+            return {'CANCELLED'}
+            
+        props = master.sdf_props
+        
+        # 1. 新しいEmptyオブジェクトを作成
+        existing_group_numbers = []
+        for item in props.sdf_stack:
+            if item.item_type == 'COLLECTION' and item.name_override.startswith("Collection "):
+                try:
+                    existing_group_numbers.append(int(item.name_override.split(" ", 1)[1]))
+                except Exception:
+                    pass
+        group_number = max(existing_group_numbers, default=0) + 1
+        empty_obj = bpy.data.objects.new(f"SDF_Group_{group_number:03}", None)
+        empty_obj.empty_display_size = 1.0
+        empty_obj.empty_display_type = 'PLAIN_AXES'
+        
+        col = props.target_collection
+        if not col:
+            col = bpy.data.collections.get("SDF_Collection")
+        if col:
+            col.objects.link(empty_obj)
+            
+        # 親Emptyのプロパティ設定
+        empty_obj.sdf_props.is_primitive = False
+        empty_obj.sdf_props.is_output = False
+        
+        # 2. スタックに仕切りアイテムを追加
+        idx = props.sdf_stack_index
+        item = None
+        item_index = -1
+        for i, existing in enumerate(props.sdf_stack):
+            existing_obj = existing.empty_ptr or existing.object_ptr
+            if existing.item_type == 'COLLECTION' and existing_obj and existing_obj.name == empty_obj.name:
+                item = existing
+                item_index = i
+                break
+        if item is None:
+            item = props.sdf_stack.add()
+            item_index = len(props.sdf_stack) - 1
+        item.item_type = 'COLLECTION'
+        item.object_ptr = empty_obj
+        item.empty_ptr = empty_obj
+        item.obj_name = empty_obj.name
+        item.name_override = f"Collection {group_number}"
+        
+        # 選択位置(idx + 1)に移動
+        stack_size = len(props.sdf_stack)
+        if stack_size > 1:
+            target_idx = min(idx + 1, stack_size - 1)
+            props.sdf_stack.move(item_index, target_idx)
+            props.sdf_stack_index = target_idx
+        else:
+            props.sdf_stack_index = 0
+            
+        # 親子関係の再同期
+        try:
+            from .engine import sync_sdf_parents
+            sync_sdf_parents(master)
+        except Exception as e:
+            print(f"Parent sync failed on add: {e}")
+        
+        update_sdf_mesh(master)
+        
+        # ビューポート上でEmptyを選択
+        bpy.ops.object.select_all(action='DESELECT')
+        empty_obj.select_set(True)
+        context.view_layer.objects.active = empty_obj
+
+        return {'FINISHED'}
+
+
+class SDF_OT_edit_curve_sync_target(bpy.types.Operator):
+    bl_idname = "sdf.edit_curve_sync_target"
+    bl_label = "Edit Target Curve"
+    bl_description = "Select the referenced curve and enter Edit Mode on it"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    proxy_name: bpy.props.StringProperty()
+
+    def execute(self, context):
+        proxy = bpy.data.objects.get(self.proxy_name)
+        if not proxy:
+            self.report({'WARNING'}, "Proxy object not found")
+            return {'CANCELLED'}
+
+        cp = getattr(proxy, "sdf_props", None)
+        target = cp.curve_target_obj if cp else None
+        if not target or target.type != 'CURVE':
+            self.report({'WARNING'}, "No target curve set")
+            return {'CANCELLED'}
+        if target.name not in context.view_layer.objects:
+            self.report({'WARNING'}, f"'{target.name}' is not in the current view layer")
+            return {'CANCELLED'}
+        if target.hide_get():
+            target.hide_set(False)
+        if target.hide_select:
+            self.report({'WARNING'}, f"'{target.name}' is set to not be selectable (Disable Selection)")
+            return {'CANCELLED'}
+
+        # 別オブジェクトの編集モード中だった場合は先に抜ける
+        if context.object and context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        bpy.ops.object.select_all(action='DESELECT')
+        target.select_set(True)
+        context.view_layer.objects.active = target
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        return {'FINISHED'}
+
+
+class SDF_OT_add_curve_sync(bpy.types.Operator):
+    bl_idname = "sdf.add_curve_sync"
+    bl_label = "Add Curve Sync Reference"
+    bl_description = (
+        "Add a proxy that references a Blender Curve elsewhere in the scene "
+        "as a pipe mesh, without moving the curve itself into the SDF Collection"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        master = get_sdf_output_obj(context)
+        if not master:
+            self.report({'WARNING'}, "Workspace output object not found")
+            return {'CANCELLED'}
+
+        props = master.sdf_props
+        col = props.target_collection
+        if not col:
+            col = bpy.data.collections.get("SDF_Collection")
+        if not col:
+            self.report({'WARNING'}, "SDF Collection not found")
+            return {'CANCELLED'}
+
+        # 1. プロキシEmptyを作成
+        existing_numbers = []
+        for obj in col.objects:
+            if obj.name.startswith("SDF_CurveSync_"):
+                try:
+                    existing_numbers.append(int(obj.name.split("_")[-1]))
+                except Exception:
+                    pass
+        number = max(existing_numbers, default=0) + 1
+        empty_obj = bpy.data.objects.new(f"SDF_CurveSync_{number:03}", None)
+        empty_obj.empty_display_size = 0.3
+        empty_obj.empty_display_type = 'PLAIN_AXES'
+
+        # is_curve_sync_proxy はコレクションにリンクする前に立てる。リンク後だと、
+        # 間に sync_sdf_stack() が走った場合にフラグの立っていないただのEmptyとして
+        # 検出され、通常の Collection 仕切りとして先に登録されてしまう
+        # （その後このオペレーターが追加する CURVE_SYNC アイテムと二重に残る不具合の原因だった）
+        empty_obj.sdf_props.is_primitive = False
+        empty_obj.sdf_props.is_output = False
+        empty_obj.sdf_props.is_curve_sync_proxy = True
+
+        col.objects.link(empty_obj)
+
+        # アクティブオブジェクトが既にCurveなら初期値として自動セット
+        # （update_sdf_callback 経由で sync_sdf_stack が走ることがあるため、
+        # 必ずリンク後・スタック追加前のこのタイミングで行う）
+        active_obj = context.active_object
+        if active_obj and active_obj.type == 'CURVE':
+            empty_obj.sdf_props.curve_target_obj = active_obj
+
+        # 2. スタックに追加（sync_sdf_stack が上記のいずれかのタイミングで既に
+        # 追加している可能性があるため、まず既存アイテムを探して再利用する）
+        item = None
+        item_index = None
+        for i, existing in enumerate(props.sdf_stack):
+            if existing.object_ptr and existing.object_ptr.name == empty_obj.name:
+                item = existing
+                item_index = i
+                break
+        if item is None:
+            item = props.sdf_stack.add()
+            item_index = len(props.sdf_stack) - 1
+        item.item_type = 'CURVE_SYNC'
+        item.object_ptr = empty_obj
+        item.obj_name = empty_obj.name
+
+        idx = props.sdf_stack_index
+        stack_size = len(props.sdf_stack)
+        if stack_size > 1:
+            target_idx = min(idx + 1, stack_size - 1)
+            props.sdf_stack.move(item_index, target_idx)
+            props.sdf_stack_index = target_idx
+        else:
+            props.sdf_stack_index = 0
+
+        try:
+            from .engine import sync_sdf_parents
+            sync_sdf_parents(master)
+        except Exception as e:
+            print(f"Parent sync failed on add: {e}")
+
+        update_sdf_mesh(master)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        empty_obj.select_set(True)
+        context.view_layer.objects.active = empty_obj
+
+        return {'FINISHED'}
+
