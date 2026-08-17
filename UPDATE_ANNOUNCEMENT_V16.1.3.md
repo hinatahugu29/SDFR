@@ -32,6 +32,13 @@ mirrored result exactly as expected — and then generating a mesh dropped any p
 the negative side of that plane, or quietly shrank one that straddled it. Marching Cubes and Dual
 Contouring both.
 
+**If you hit this with Booleans, that was the same bug.** It is worth calling out, because it looks
+nothing like the single-shape case. With one shape on the negative side you get an empty mesh, and
+something is obviously wrong. With a Boolean, the base shape still meshes perfectly and **only the
+cut disappears** — a Subtract placed on the negative side was dropped entirely, so what came out
+was the uncut solid, while the preview kept showing the cut you expected. Intersect collapsed to
+almost nothing. Both are fixed: a cut at X = −2 and one at X = +2 now produce identical meshes.
+
 **Were you affected?** Only if a primitive's centre sat on the negative side of an enabled symmetry
 plane. Shapes on the positive side, or exactly on the plane, meshed correctly. And if you had a
 matching shape on the positive side, the result could look completely right — so the problem could
@@ -123,6 +130,14 @@ Mesh Settings パネルの **X / Y / Z** をオンにすると、ゴーストプ
 された形状が表示されるにもかかわらず、メッシュを生成すると**対称面の負側に置いたプリミティブ
 が消える**、あるいは**面をまたいでいる場合は黙って形が縮む**、という不具合がありました。
 Marching Cubes / Dual Contouring のどちらでも発生していました。
+
+**ブーリアン（Subtract / Intersect）でこの症状に当たられた方へ。同じ不具合です。** 単体の
+プリミティブとは現れ方がまったく違うため、個別に説明させてください。単体形状が負側にある場合は
+メッシュが空になり、異常だとすぐ分かります。しかしブーリアンの場合、**土台の形状は正常に
+メッシュ化され、切り欠きだけが消えます。** 負側に置いた Subtract が丸ごと無視されるため、
+出力されるのは「切り欠きのない元の形状」です。エラーも出ず、プレビューには切り欠きが
+表示され続けます。Intersect の場合はほぼ何も残りませんでした。いずれも修正済みで、切り欠きを
+X = −2 に置いても X = +2 に置いても同一のメッシュが生成されるようになりました。
 
 **自分は影響を受けていたのか？** プリミティブの**中心が対称軸の負側にあった場合のみ**です。
 正側や対称面上にあるものは正しくメッシュ化されていました。さらに、正側に対になる形状があると

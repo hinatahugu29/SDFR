@@ -17,6 +17,39 @@
   <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🐛 Global Symmetry dropped negative-side primitives — fixed</h2>
 
   <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">If you hit this with Booleans, that was the same bug</h3>
+    <p style="font-size:0.97em; color:#444;">
+      This was reported to me as Symmetry not working with Booleans — the cut showing in the preview
+      but not in the final mesh. That is the same fault, and it deserves describing separately
+      because it looks nothing like the single-shape case.
+    </p>
+    <p style="font-size:0.97em; color:#444;">
+      With one shape on the negative side you get an empty mesh, and something is obviously wrong.
+      With a Boolean, the base shape still meshes perfectly — <strong>only the cut disappears.</strong>
+      A Subtract sphere placed on the negative side of the symmetry plane was dropped entirely, so
+      what came out was the uncut solid. Nothing errored, nothing looked broken, and the preview kept
+      showing the cut you expected.
+    </p>
+    <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin:10px 0;">
+      <thead>
+        <tr style="background:#f0f0f0;">
+          <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Subtract sphere cutting a box, Symmetry X</th>
+          <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">V16.1.2</th>
+          <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">V16.1.3</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;">Sphere at X = +2</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">109,503 verts (cut correctly)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">109,503 verts</td></tr>
+        <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;">Sphere at X = −2</td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>77,748 verts — exactly the uncut box</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">109,503 verts</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.97em; color:#444; margin-bottom:0;">
+      Intersect behaved the same way, collapsing to almost nothing on the negative side. Both
+      placements now produce identical meshes, which is what symmetry requires.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
     <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Were you affected?</h3>
     <p style="font-size:0.97em; color:#444;">
       Worth stating precisely, because Symmetry did <strong>not</strong> fail across the board. What

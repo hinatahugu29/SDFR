@@ -13,6 +13,28 @@ with Symmetry off are identical to V16.1.2.
 
 ## 🐛 Global Symmetry dropped negative-side primitives — fixed
 
+### If you hit this with Booleans, that was the same bug
+
+This was reported to me as Symmetry not working with Booleans — the cut showing in the preview but
+not in the final mesh. That is the same fault, and it is worth describing separately because it
+looks nothing like the single-shape case.
+
+With one shape on the negative side, you get an empty mesh, and something is obviously wrong. With
+a Boolean, the base shape still meshes perfectly — **only the cut disappears.** A Subtract sphere
+placed on the negative side of the symmetry plane was dropped entirely, so what came out was the
+uncut solid. Nothing errored, nothing looked broken, and the preview kept showing the cut you
+expected.
+
+Measured before and after, with a Subtract sphere cutting a box under Symmetry X:
+
+| Subtract sphere at | V16.1.2 | V16.1.3 |
+|---|---|---|
+| X = +2 | 109,503 verts (cut correctly) | 109,503 verts |
+| X = −2 | **77,748 verts — exactly the uncut box** | 109,503 verts |
+
+Intersect behaved the same way, collapsing to almost nothing on the negative side. Both placements
+now produce identical meshes, which is what symmetry requires.
+
 ### Were you affected?
 
 This is worth stating precisely, because Symmetry did **not** fail across the board. What mattered
