@@ -1,0 +1,167 @@
+<div style="font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:#333; line-height:1.7; max-width:820px; margin:auto; padding:10px;">
+
+  <h1 style="color:#222; font-weight:bold; font-size:2em; margin-bottom:4px;">SDF.R V16.1.3 Release Notes</h1>
+  <p style="font-size:1.2em; color:#555; margin-top:0; font-style:italic;">Global Symmetry Mesh Fix</p>
+  <p style="font-size:0.9em; color:#888; margin-top:0;">Released 2026-08-17</p>
+
+  <p style="font-size:1.05em; margin:24px 0 30px 0;">
+    V16.1.3 fixes Global Symmetry. If you turned on <strong>X</strong>, <strong>Y</strong> or
+    <strong>Z</strong> in the Mesh Settings panel, the Ghost Preview showed the mirrored result
+    correctly — and then generating a mesh gave you nothing, or only part of the shape. That is
+    fixed. <strong>If you never used Global Symmetry, your output is unchanged from V16.1.2.</strong>
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🐛 Global Symmetry produced no mesh — fixed</h2>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">What you saw</h3>
+    <p style="font-size:0.97em; color:#444;">
+      Enable <strong>Symmetry: X / Y / Z</strong> in Mesh Settings, and the viewport does exactly
+      what you expect — the shape appears mirrored across the plane. Then press generate, with
+      either <strong>Marching Cubes</strong> or <strong>Dual Contouring</strong>, and the result is
+      an empty mesh, or a mesh missing everything on one side.
+    </p>
+    <p style="font-size:0.97em; color:#444; margin-bottom:0;">
+      The preview being right is what made this confusing. It looked like the meshing step was
+      refusing to run. It was running — it was simply looking in the wrong place.
+    </p>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">Why it happened</h3>
+    <p style="font-size:0.97em; color:#444;">
+      The Ghost Preview and the mesh generator are two separate implementations of the same scene.
+      The preview raymarches the SDF directly. The mesh generator first works out <strong>where in
+      space it needs to look</strong>, then samples only that volume on the GPU. Global Symmetry was
+      handled correctly in the preview and incorrectly in the second path — in two independent ways
+      that reinforced each other.
+    </p>
+    <p style="font-size:0.97em; color:#444; margin-bottom:6px;">
+      <strong>1. The search volume was clamped to one side of the plane.</strong>
+    </p>
+    <p style="font-size:0.97em; color:#444;">
+      Before sampling, the generator computes a bounding box around every primitive. For a symmetry
+      axis it was setting that box to span from <strong>0 to +max</strong> — the positive half only.
+      The mirrored half of your model, and any primitive placed on the negative side, sat outside
+      the volume the generator ever looked at. Geometry there was discarded before meshing began.
+      The box now spans <strong>−max to +max</strong>, covering both halves.
+    </p>
+    <p style="font-size:0.97em; color:#444; margin-bottom:6px;">
+      <strong>2. Primitive centres were not folded onto the mirrored side.</strong>
+    </p>
+    <p style="font-size:0.97em; color:#444; margin-bottom:0;">
+      Global Symmetry works by folding the sampled point onto one side of the plane, and the preview
+      shader folds each primitive's centre to match. The meshing shaders — both the detection pass
+      that finds occupied cells and the layout evaluation that positions each primitive — did not.
+      A primitive sitting at X = −2 with Symmetry X on was therefore evaluated as if it were
+      somewhere else entirely. Both now fold primitive centres the same way the preview does.
+    </p>
+  </div>
+
+  <div style="background:#eaf2f8; padding:15px; border-radius:6px; font-size:0.94em; color:#2c3e50; border-left:4px solid #3498db;">
+    <strong>When the two faults lined up</strong> — which happened as soon as a primitive sat on the
+    negative side of the plane — the search volume was empty and the output was an empty mesh.
+  </div>
+
+  <h3 style="color:#222; font-size:1.15em; font-weight:bold; margin-top:28px;">What is affected</h3>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:8px;"><strong>Global Symmetry only</strong> — the X / Y / Z toggles in the Mesh Settings panel.</li>
+    <li style="margin-bottom:8px;"><strong>Per-primitive Mirror</strong> in the Layout section was never affected and is unchanged.</li>
+    <li style="margin-bottom:8px;"><strong>Both meshing algorithms</strong> are fixed — Marching Cubes and Dual Contouring alike.</li>
+    <li style="margin-bottom:0;"><strong>Output with Symmetry off is unchanged</strong> from V16.1.2.</li>
+  </ul>
+
+  <h3 style="color:#222; font-size:1.15em; font-weight:bold; margin-top:28px;">Verified</h3>
+  <p style="font-size:0.97em; color:#444;">Checked on Blender 5.1.2 in headless mode, with the shipped binary:</p>
+  <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin-top:10px;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Case</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;">Primitive at X = +2.0, Symmetry X</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Mesh spans X −3.0 → +3.0</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;">Primitive at X = −2.0, Symmetry X</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Mesh spans X −3.0 → +3.0</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;">Symmetry X + Y + Z together</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Full eight-way symmetric mesh, 37,056 vertices</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:0.95em; color:#666; font-style:italic;">The negative-side case is the one that used to return nothing at all.</p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <div style="background-color:#f8d7da; padding:20px; border-radius:8px; border-left:6px solid #dc3545; color:#721c24; margin-bottom:30px;">
+    <h3 style="margin-top:0; font-size:1.2em; font-weight:bold;">⚠️ Upgrade Note — clear the shader cache</h3>
+    <p style="font-size:0.97em; margin-bottom:8px;">
+      <strong>The GPU shader code changed in this release.</strong> Please clear the shader cache
+      before launching Blender. This applies whichever version you are coming from.
+    </p>
+    <ol style="padding-left:20px; font-size:0.95em; line-height:1.65; margin-bottom:0;">
+      <li style="margin-bottom:6px;">Close Blender completely.</li>
+      <li style="margin-bottom:6px;">
+        Delete the shader cache:<br>
+        Windows: <code>%APPDATA%\Blender Foundation\Blender\&lt;your version&gt;\datafiles\rust_gpu_sdf\shader_cache.bin</code><br>
+        macOS: <code>~/Library/Application Support/Blender/&lt;your version&gt;/datafiles/rust_gpu_sdf/shader_cache.bin</code><br>
+        Linux: <code>~/.config/blender/&lt;your version&gt;/datafiles/rust_gpu_sdf/shader_cache.bin</code>
+      </li>
+      <li style="margin-bottom:0;">Restart Blender. The first startup after clearing takes the full warm-up time again.</li>
+    </ol>
+  </div>
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🖥️ macOS and Linux</h2>
+  <p style="font-size:0.97em; color:#444;">
+    Unchanged from V16.1.2: all three platforms are built from the same source, by the same automated
+    pipeline, in every release. The symmetry fix is in the Windows, macOS and Linux builds alike.
+  </p>
+
+  <div style="background:#fff8e1; padding:14px 16px; border-radius:6px; font-size:0.94em; color:#6d4c00; border-left:4px solid #ffb300; margin:16px 0;">
+    <strong>Code signing:</strong> the macOS build is not notarized, so Gatekeeper blocks it on first
+    use. Open <strong>System Settings → Privacy &amp; Security</strong>, find the message about
+    <code>rust_gpu_sdf.so</code>, and click <strong>Open Anyway</strong>, then re-enable the add-on in
+    Blender.
+  </div>
+
+  <div style="background:#e2f0d9; padding:18px; border-radius:6px; font-size:0.95em; color:#385723; border-left:4px solid #385723; margin:16px 0;">
+    I develop on Windows and do not own a Mac or a Linux machine, so those platforms improve exactly
+    as fast as people tell me things — <strong>including telling me when things work.</strong> If
+    SDF.R runs fine for you on macOS or Linux, one sentence genuinely helps.
+  </div>
+
+  <p style="font-size:0.97em; color:#444;">
+    <strong>If something breaks:</strong> launch Blender from Terminal — on macOS,
+    <code>/Applications/Blender.app/Contents/MacOS/Blender</code> — reproduce it, and send me what
+    the terminal printed, plus <code>blender.crash.txt</code> from your temporary folder if Blender
+    went down.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">📦 Downloads</h2>
+  <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin-top:10px;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Platform</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">File</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Architecture</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Windows</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_3.zip</code> (standard package)</td><td style="padding:8px 10px; border:1px solid #e0e0e0;">x86-64</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>macOS</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_3_MAC.zip</code></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">Apple Silicon (arm64)</td></tr>
+      <tr><td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Linux</strong></td><td style="padding:8px 10px; border:1px solid #e0e0e0;"><code>SDF_R_16_1_3_LINUX.zip</code></td><td style="padding:8px 10px; border:1px solid #e0e0e0;">x86-64</td></tr>
+    </tbody>
+  </table>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">Previously in V16.1.2</h2>
+  <p style="font-size:0.97em; color:#444;">V16.1.2 fixed a crash on macOS:</p>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:8px;"><strong>Blender crashed the moment a primitive was added</strong>, on some macOS setups. While waiting for the mesh calculation, SDF.R ran a timer that asked Blender for the scene's dependency graph — a request that makes Blender re-evaluate the entire scene if it decides one is due. From a timer, that happens at a moment Blender never scheduled, and the evaluator can read past the end of its own object list. The timer no longer forces an evaluation.</li>
+    <li style="margin-bottom:0;"><strong>A safety limit on the mesh timer</strong> — if the dependency graph stays unavailable, the timer gives up on the queued update after about two seconds instead of polling indefinitely.</li>
+  </ul>
+  <p style="font-size:0.95em; color:#666; font-style:italic;">See the V16.1.2 release notes for full details.</p>
+
+</div>

@@ -178,8 +178,8 @@ def register():
     import os
     import threading
     import time
-    from . import rust_gpu_sdf
-    print("SDF.R: --- Initializing GPU Engine (V16.1.2) ---")
+    from ._native import rust_gpu_sdf
+    print("SDF.R: --- Initializing GPU Engine (V16.1.3) ---")
     
     cache_dir = os.path.join(bpy.utils.user_resource('DATAFILES'), "rust_gpu_sdf")
     os.makedirs(cache_dir, exist_ok=True)
@@ -201,7 +201,7 @@ def register():
     def background_init():
         global _gpu_init_finished, _gpu_init_error
         start_time = time.time()
-        print(f"SDF.R: --- Starting GPU Warming-up (V16.1.2) ---")
+        print(f"SDF.R: --- Starting GPU Warming-up (V16.1.3) ---")
         try:
             # Initialize GPU engine in Rust.
             success = rust_gpu_sdf.init_gpu(cache_path)

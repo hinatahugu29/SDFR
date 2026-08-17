@@ -1,0 +1,392 @@
+<h1>SDF-R (Rust-GPU-SDF) Documentation &amp; User Guide</h1>
+<p><em>For V16.1.3</em></p>
+
+<p>Welcome to the official documentation for <strong>SDF-R (Rust-GPU-SDF)</strong>, a next-generation Signed Distance Field (SDF) modeling engine built using Rust and GPU (wgpu/WGSL) acceleration for Blender.</p>
+<p>SDF-R is designed for a direct, non-destructive modeling workflow: add primitive SDF shapes, blend or cut them with boolean operations, preview the result in real time, then generate or bake a standard Blender mesh when you are ready.</p>
+
+<hr />
+
+<h2>What's New in V16.1.3</h2>
+<ul>
+  <li><strong>Global Symmetry now generates a mesh — fixed:</strong> With <strong>Symmetry X / Y / Z</strong> enabled in Mesh Settings, the Ghost Preview showed the mirrored result correctly, but generating a mesh returned nothing, or a mesh missing everything on one side. Both Marching Cubes and Dual Contouring were affected. Two separate faults caused it: the bounding box the generator searches was clamped to the positive half of each symmetry axis (0 to +max instead of −max to +max), so anything on the negative side was discarded before meshing began; and the two meshing shaders did not fold primitive centres onto the mirrored side the way the preview shader does, so a primitive placed on the negative side was evaluated at the wrong position. As soon as a primitive sat on the negative side, both lined up and the result was an empty mesh.</li>
+  <li><strong>Scope of the fix:</strong> Only the Global Symmetry toggles in Mesh Settings were affected. Per-primitive <strong>Mirror</strong> in the Layout section was never affected. Meshes generated with Symmetry off are identical to V16.1.2.</li>
+  <li><strong>Verified on Blender 5.1:</strong> a primitive at X = +2.0 and one at X = −2.0 both produce a mesh spanning −3.0 to +3.0 with Symmetry X on, and all three axes together produce a full eight-way symmetric mesh.</li>
+  <li><strong>Please clear the shader cache when updating to this version</strong> — the GPU shader code changed. See <em>Before Updating to a New Version</em> below.</li>
+</ul>
+
+<h2>What's New in V16.1.2</h2>
+<ul>
+  <li><strong>macOS crash on adding a primitive — fixed:</strong> On some macOS setups Blender crashed the moment a primitive was added. While waiting for the mesh calculation, SDF.R ran a timer that asked Blender for the scene's dependency graph — a request that makes Blender re-evaluate the whole scene if it decides one is due. From a timer that happens at a moment Blender never scheduled, and the evaluator can read past the end of its own object list. The timer no longer forces an evaluation. The fault was in SDF.R, not in any other add-on: with Factory Settings the crash did not appear, which made it look like a conflict, but other add-ons only widened the window.</li>
+  <li><strong>Safety limit on the mesh timer:</strong> If the dependency graph stays unavailable, the timer gives up on the queued update after about two seconds instead of polling indefinitely. Normal waiting — while you drag an object, or while the engine is still calculating — is unaffected.</li>
+  <li><strong>Mesh output is unchanged:</strong> V16.1.2 changes neither mesh generation nor the preview. The geometry SDF.R produces is identical to V16.1.1.</li>
+</ul>
+
+<h2>What's New in V16.1.1</h2>
+<ul>
+  <li><strong>Smoother viewport while navigating:</strong> The Ghost Preview now renders at a reduced resolution while the camera is moving or an object is being transformed, then snaps back to full resolution the instant you stop. Because this scales down pixel count, it helps regardless of how complex the scene is.</li>
+  <li><strong>Faster shading normals during interaction:</strong> Surface normals use a cheaper 3-tap estimate while you are moving, halving that part of the cost. Full quality returns as soon as you stop.</li>
+  <li><strong>Blender 5.2 support for the Post-Process panel:</strong> On Blender 5.2 the Post-Process (Smoothing) section appeared empty. Blender 5.2 changed how Geometry Nodes modifier inputs are stored, and SDF.R now reads them either way, so one build works on both 5.1 and 5.2. This affected every earlier version of SDF.R on Blender 5.2 as well.</li>
+  <li><strong>Ghost Preview now works correctly with split viewports:</strong> With two or more 3D Viewports open, the preview could fail to appear once the camera came to rest, and stayed locked in its reduced-quality state. Motion is now detected per viewport instead of through a single shared value.</li>
+  <li><strong>Reduced-resolution buffers are reused across viewports:</strong> With split viewports of differing sizes the drawing buffer was recreated every frame, cancelling out the speed-up above. Buffers are now kept per size.</li>
+  <li><strong>Mesh data safety check:</strong> Vertex indices coming back from the engine are range-checked before being handed to Blender. Out-of-range data is now rejected with a message in the system console instead of being written into the mesh, where it could corrupt memory and crash Blender later. Valid data is unaffected.</li>
+  <li><strong>Collection cleanup when adding a primitive:</strong> An object belonging to three or more collections could be left linked to some of them after being moved into <code>SDF_Collection</code>.</li>
+  <li><strong>Mesh output is unchanged:</strong> V16.1.1 only affects how the preview is drawn. The geometry SDF.R generates is identical to V16.1.0.</li>
+</ul>
+
+<h2>What's New in V16.1.0</h2>
+<ul>
+  <li><strong>Curve Sync — use native Blender Curves as SDF geometry:</strong> Any Blender Curve object can now drive an SDF pipe that blends with the rest of your stack. Add as many curves as you like, each with its own Pipe Radius, boolean Operation, Smoothness, and material values.</li>
+  <li><strong>Two ways to attach a curve:</strong> Move the curve into the SDF Collection to register it directly, or add a <strong>Curve Ref</strong> proxy that points at a curve living anywhere else in your scene, leaving the original curve untouched and reusable.</li>
+  <li><strong>Edit the referenced curve in one click:</strong> The Curve Sync panel has an Edit button that selects the target curve and enters Edit Mode, so you can reshape the path without hunting through the Outliner.</li>
+  <li><strong>Bezier Curve primitive:</strong> A new 3D quadratic Bezier primitive with independent Start and End radius, for tapered horns, claws, tentacles, and swept accents that are defined entirely by numeric control points.</li>
+  <li><strong>Transmission &amp; IOR in the Material section:</strong> Add glass-like transmission to the generated SDF material, with a paired IOR control.</li>
+  <li><strong>Lightweight Curve Sync preview:</strong> Curve Sync draws a fast guide line in the viewport instead of a full raymarched pipe, so adding many curves does not slow the Ghost Preview down. Guide thickness is adjustable, and the exact result is always shown in the generated mesh.</li>
+  <li><strong>Instancing accuracy fix:</strong> Fixed missing geometry that could appear when Radial or Spiral layouts were combined with Individual/Step Rotation, and when the Radial Axis was set to X or Y. This affects any elongated or asymmetric primitive, not just the new curve shapes.</li>
+</ul>
+
+<hr />
+
+<h2>1. Quick Start &amp; Installation</h2>
+
+<h3>System Requirements</h3>
+<p>Before installing, please ensure your system matches the requirements:</p>
+<ul>
+  <li><strong>Supported OS:</strong> Windows 10/11 (64-bit), macOS (Apple Silicon) and Linux (x86-64). All three are built from the same source in every release — see <em>Platform support</em> below.</li>
+  <li><strong>Platform build architectures:</strong> The macOS build is compiled for <strong>Apple Silicon (arm64)</strong> and does not run on Intel Macs. The Linux build is compiled for <strong>x86-64</strong>.</li>
+  <li><strong>GPU:</strong> A dedicated graphics card (NVIDIA / AMD) supporting DirectX 12 or Vulkan is highly recommended. Integrated GPUs such as Intel Iris Xe are supported with automated memory optimization, but may have lower performance at very high resolutions.</li>
+  <li><strong>Blender Version:</strong> Blender 3.6 LTS, 4.x, or 5.x.</li>
+</ul>
+
+<h3>Installation Steps</h3>
+<ol>
+  <li>Download the addon zip file for your OS. Windows users should use the standard package, <code>SDF_R_16_1_3.zip</code>. On macOS or Linux, use the matching platform zip instead: <code>SDF_R_16_1_3_MAC.zip</code> or <code>SDF_R_16_1_3_LINUX.zip</code>.</li>
+  <li>In Blender, go to <strong>Edit</strong> &gt; <strong>Preferences</strong> &gt; <strong>Add-ons</strong>.</li>
+  <li>Click <strong>Install...</strong> and select the downloaded zip file.</li>
+  <li>Check the box to enable <strong>SDF-R (Rust-GPU-SDF)</strong>.</li>
+  <li>Save your preferences.</li>
+</ol>
+
+<h3>Platform support</h3>
+<p>SDF.R ships for <strong>Windows</strong>, <strong>macOS (Apple Silicon)</strong> and <strong>Linux (x86-64)</strong>. All three are built from the same source, by the same automated pipeline, in every release. They are not side projects and they are not afterthoughts.</p>
+<p>I want to be straightforward about one thing: <strong>I develop on Windows, and I do not own a Mac or a Linux machine.</strong> I cannot sit down and reproduce a problem on those platforms myself. What I can do is read a crash report and fix what it points to — and that works. The macOS crash fixed in V16.1.2 was found entirely from one user's crash log, and the cause turned out to be my own code, not their environment.</p>
+<p>So these platforms improve exactly as fast as people tell me things.</p>
+<div style="background-color:#e2f0d9;border-left:6px solid #385723;padding:15px;margin-bottom:20px;border-radius:4px;color:#385723;font-family:sans-serif;">
+  <strong>That includes telling me when things work.</strong> A crash report tells me something is broken. A message saying "runs fine on macOS 26.6, M3 Max, Blender 5.2" tells me where the line is, and that is just as valuable — I currently have very few of those. If SDF.R is working for you on macOS or Linux, one sentence would genuinely help.
+</div>
+<p><strong>If something breaks</strong>, the fastest route to a fix is:</p>
+<ol>
+  <li>Launch Blender from Terminal — on macOS, <code>/Applications/Blender.app/Contents/MacOS/Blender</code> — reproduce the problem, and copy whatever the Terminal printed.</li>
+  <li>Send <code>blender.crash.txt</code> from your temporary folder. On macOS, <code>open $TMPDIR</code> in Terminal opens it. That file contains the add-on's own line numbers, which is usually all I need.</li>
+</ol>
+<p>That is exactly what solved the crash fixed in V16.1.2.</p>
+
+<div style="background-color:#f8d7da;border-left:6px solid #dc3545;padding:15px;margin-bottom:20px;border-radius:4px;color:#721c24;font-family:sans-serif;">
+  <strong>Important: Before Updating to a New Version</strong><br />
+  If you are <strong>updating from a previous version</strong> of SDF-R, or if you have recently <strong>changed your GPU or updated your graphics driver</strong>, please clear the shader cache before launching Blender with the new version installed. Old cache data can occasionally be incompatible with a new build or a different GPU/driver, which may cause the initialization panel to appear stuck on "Initializing..." indefinitely.
+  <p style="margin-bottom:0;"><strong>How to clear the cache:</strong></p>
+  <ol style="margin-top:5px;">
+    <li>Close Blender completely.</li>
+    <li>Delete the following file. It will be safely rebuilt automatically on next startup:
+      <br /><code>%APPDATA%\Blender Foundation\Blender\&lt;your version&gt;\datafiles\rust_gpu_sdf\shader_cache.bin</code>
+    </li>
+    <li>Restart Blender and enable SDF-R. The first startup after clearing the cache will take the full warm-up time again.</li>
+  </ol>
+  <p style="margin-bottom:0;"><strong>V16.1.3 note:</strong> Updating to V16.1.3 <em>does</em> require this, from any earlier version — the GPU shader code changed in order to fix Global Symmetry.</p>
+</div>
+
+<div style="background-color:#fff3cd;border-left:6px solid #ffc107;padding:15px;margin-bottom:20px;border-radius:4px;color:#856404;font-family:sans-serif;">
+  <strong>Important: The First Startup (Warm-up Delay)</strong><br />
+  When you first toggle <strong>Live Update</strong> in the SDF-R panel, you may experience a compilation delay of about <strong>15 to 45 seconds</strong> depending on your GPU.
+  <ul>
+    <li><strong>What is happening?</strong> The engine is compiling the high-performance GPU shaders (WGSL) and running a mandatory driver warm-up to optimize the rendering pipeline.</li>
+    <li><strong>Do not panic:</strong> Blender might seem temporarily unresponsive during this period. Do not close Blender.</li>
+    <li><strong>Disk caching:</strong> This optimization is cached to your local disk. Subsequent starts are much faster.</li>
+    <li><strong>Panel not updating?</strong> On rare occasions the sidebar panel does not visually refresh once warm-up finishes. Clicking another sidebar tab and switching back to the SDF-R tab will force it to refresh.</li>
+  </ul>
+</div>
+
+<hr />
+
+<h2>2. Interface Overview</h2>
+<p>Once enabled, you will find the <strong>SDF-R</strong> tab in the Sidebar of the 3D Viewport. Press <code>N</code> to open the sidebar.</p>
+<p>The main panel is organized into these areas:</p>
+<ol>
+  <li><strong>Engine and Output controls:</strong> Live Update, GPU status, resolution, domain, preview quality, Curve Sync guide width, algorithm selection, Weld, and Live Normals.</li>
+  <li><strong>Post-Process:</strong> Optional Geometry Nodes smoothing/remesh setup for the generated output mesh.</li>
+  <li><strong>The Stack:</strong> Manage primitive order, collection dividers, Curve Sync items, solo mode, visibility, grouping, and layer boundaries.</li>
+  <li><strong>Material:</strong> Set up shader nodes, reset material attributes, and apply color / metallic / roughness / transmission globally.</li>
+  <li><strong>Finalize:</strong> Fix normals, force a mesh update, create a snapshot mesh, or finalize the live SDF workspace into a baked mesh.</li>
+  <li><strong>Primitive Settings:</strong> Shape type, boolean operation, smoothness, edge profile, noise, color, material values, Math Field controls, layout instancing, and deform stack.</li>
+  <li><strong>Curve Sync Settings:</strong> Appears when a synced Curve or a Curve Ref proxy is selected. Pipe Radius, Subdiv Samples, Operation, Smoothness, Color, Metallic, Roughness, and the Edit button.</li>
+</ol>
+
+<hr />
+
+<h2>3. Core Concept: Dual Contouring vs. Marching Cubes</h2>
+<p>SDF-R features two mesh generation algorithms which you can choose depending on your model:</p>
+
+<h3>Marching Cubes (MC)</h3>
+<ul>
+  <li><strong>Best for:</strong> Smooth, organic, fluid, and clay-like shapes.</li>
+  <li><strong>Characteristics:</strong> Very stable topology and predictable output, ideal for soft round surfaces and general production modeling.</li>
+</ul>
+
+<h3>Dual Contouring (DC)</h3>
+<ul>
+  <li><strong>Best for:</strong> Hard-surface modeling, mechanical parts, and sharp boxy corners.</li>
+  <li><strong>Characteristics:</strong> Uses a GPU-accelerated Quadratic Error Function (QEF) solver to reconstruct sharp edges and creases that are often rounded off in traditional SDF meshing.</li>
+  <li><em>Note: First-time activation of DC may trigger a brief lazy-compilation warm-up.</em></li>
+</ul>
+
+<hr />
+
+<h2>4. The Stack, Layers, and Boolean Workflow</h2>
+<p>SDF-R evaluates shapes through <strong>The Stack</strong>. The stack order defines how each primitive contributes to the final SDF result.</p>
+
+<h3>Boolean Operations</h3>
+<ul>
+  <li><strong>Union:</strong> Adds the selected primitive to the existing shape.</li>
+  <li><strong>Subtract:</strong> Cuts the selected primitive out of the existing shape.</li>
+  <li><strong>Intersect:</strong> Keeps only the region shared by the existing shape and the selected primitive.</li>
+  <li><strong>Smoothness:</strong> Controls the softness of blend or transition areas. Smoothness is especially important for visual unity across a finished piece.</li>
+</ul>
+<p><em>Order matters: Subtract and Intersect act on whatever is already above them in The Stack. If a Subtract item is the very first thing evaluated, there is nothing to cut from, so it has no visible effect. Place a Union base form above your cutters.</em></p>
+
+<h3>Collection Divider</h3>
+<p>Use <strong>Add Collection Divider</strong> to add an empty divider item inside The Stack. Divider items can organize primitives into groups, duplicate group structures, and carry group layout settings such as Mirror, Radial, Spiral, Grid, and Jitter.</p>
+
+<h3>Layer Boundary</h3>
+<p>A collection divider can also be marked as <strong>Layer Boundary</strong>.</p>
+<ul>
+  <li>Items above the boundary are evaluated normally.</li>
+  <li>Items below the boundary are evaluated as a separate layer.</li>
+  <li>The completed layer is then merged back into the global model.</li>
+  <li>This lets you use Subtract or Intersect inside a local layer without cutting every earlier primitive in the stack.</li>
+</ul>
+<p>A common pattern is:</p>
+<ol>
+  <li>Create the base form with normal Union/Subtract operations.</li>
+  <li>Add a Collection Divider and enable <strong>Layer Boundary</strong>.</li>
+  <li>Add a Math Field or decorative pattern below the boundary.</li>
+  <li>Add a cylinder, box, or sphere below it as an Intersect mask to trim only that layer.</li>
+</ol>
+
+<hr />
+
+<h2>5. Curve Sync: Native Blender Curves as SDF Geometry</h2>
+<p><strong>New in V16.1.0.</strong> Curve Sync lets you draw a path with Blender's own Curve tools and have SDF-R turn it into a solid pipe that participates in the SDF stack like any other primitive. Because it is a real SDF contributor, it blends smoothly with neighbouring shapes and supports Union, Subtract, and Intersect.</p>
+
+<h3>Method A: Move the Curve into the SDF Collection</h3>
+<ol>
+  <li>Create a curve with <code>Shift+A</code> &gt; <strong>Curve</strong>.</li>
+  <li>With the curve selected, press <strong>Move to SDF</strong> in the Object Utilities row (or drag it into the SDF Collection in the Outliner).</li>
+  <li>The curve appears in The Stack as a <strong>Curve Sync</strong> item.</li>
+</ol>
+<p>Use this when the curve exists purely to build the SDF shape.</p>
+
+<h3>Method B: Curve Ref proxy (keeps the curve where it is)</h3>
+<ol>
+  <li>Press <strong>Curve Ref</strong> in the Add New Primitives grid. This creates a small proxy item in The Stack.</li>
+  <li>Select the proxy and pick any curve in your scene under <strong>Target Curve</strong>. (If a curve was already selected when you pressed the button, it is assigned automatically.)</li>
+</ol>
+<p>Use this when the curve is shared with other parts of your scene — for example a curve that also drives an animation or a Geometry Nodes setup — because the original object never moves and is never modified.</p>
+<p>A helpful side effect: because the settings live on the proxy rather than the curve, you can point <em>several</em> Curve Ref proxies at the <em>same</em> curve and give each one a different Pipe Radius, colour, or boolean operation.</p>
+
+<h3>Curve Sync Settings</h3>
+<ul>
+  <li><strong>Target Curve</strong> (proxy only): The curve object to follow.</li>
+  <li><strong>Edit '&lt;curve name&gt;'</strong>: Selects the target curve and enters Edit Mode immediately.</li>
+  <li><strong>Pipe Radius:</strong> Thickness of the generated tube.</li>
+  <li><strong>Subdiv Samples:</strong> How finely the path is sampled. Higher values follow tight curvature more accurately at the cost of evaluation time.</li>
+  <li><strong>Operation:</strong> Union, Subtract, or Intersect, exactly like a normal primitive.</li>
+  <li><strong>Smoothness:</strong> Blend softness where the pipe meets other shapes.</li>
+  <li><strong>Color / Metallic / Roughness:</strong> Per-curve material attributes, carried into the generated mesh.</li>
+</ul>
+
+<h3>Supported Curve Types</h3>
+<ul>
+  <li><strong>Bezier:</strong> Fully supported, including handles. Subdiv Samples controls the sampling density.</li>
+  <li><strong>Poly:</strong> Fully supported; the control points are used directly.</li>
+  <li><strong>NURBS:</strong> Supported through Blender's own curve evaluation. Note that Subdiv Samples does not apply here — the curve's own <strong>Resolution Preview U</strong> governs the density instead.</li>
+  <li><strong>Cyclic (closed) curves:</strong> Supported; the pipe closes back on itself.</li>
+  <li><em>Curves with Bevel or Extrude applied generate surfaces rather than a path, so Curve Sync falls back to a coarser approximation. Keep the curve as a plain path for best results.</em></li>
+</ul>
+
+<h3>Preview Behaviour (please read)</h3>
+<p>The real-time Ghost Preview draws Curve Sync as a <strong>coloured guide line along the curve</strong>, not as a fully raymarched pipe. This is deliberate: the preview evaluates every primitive for every ray step, so expanding each curve into a long chain of pipe segments would slow the whole viewport down as you add curves.</p>
+<ul>
+  <li>The <strong>generated mesh is always exact</strong> — thickness, blending, and boolean operations are fully applied there.</li>
+  <li>To see the true shape, enable <strong>Show Result Mesh</strong> or press <strong>Force Update</strong>.</li>
+  <li>The guide line uses each item's colour, and its thickness can be adjusted with <strong>Curve Sync Guide Width</strong> in the engine settings.</li>
+</ul>
+
+<hr />
+
+<h2>6. Bezier Curve Primitive</h2>
+<p>Separate from Curve Sync, V16.1.0 also adds a <strong>Bezier</strong> primitive to the Add New Primitives grid. This is a self-contained 3D quadratic Bezier defined by numeric values rather than by a Blender curve object.</p>
+<ul>
+  <li><strong>Point B (Mid) / Point C (End):</strong> The two control points. The start point is the primitive's own origin, so moving the object moves the whole curve.</li>
+  <li><strong>Start R / End R:</strong> Independent radii at each end, producing a smooth taper along the length.</li>
+</ul>
+<p>Use Curve Sync when you want to draw a path by hand; use the Bezier primitive when you want a compact, numerically-defined tapered arc that follows the object's transform and works with the Layout and Deform stacks.</p>
+
+<hr />
+
+<h2>7. Math Field Workflow</h2>
+<p><strong>Math Field</strong> is the V16 procedural field primitive with a formula-based design supporting multiple TPMS-style formulas.</p>
+<ul>
+  <li><strong>Formula:</strong> Choose from available field formulas such as Gyroid, Schwarz P, and Schwarz D.</li>
+  <li><strong>Preset:</strong> Quickly switch between common field thickness and scale setups.</li>
+  <li><strong>Mask:</strong> Limit the field with Box, Sphere, or Cylinder style bounds.</li>
+  <li><strong>Boundary:</strong> Control how the field behaves near the mask boundary.</li>
+  <li><strong>Phase:</strong> Shift the periodic field without moving the mask.</li>
+  <li><strong>Axis X/Y/Z:</strong> Adjust field density independently per axis.</li>
+  <li><strong>Auto Match Scale:</strong> Copy the object's scale into Axis X/Y/Z to help keep the pattern visually consistent after non-uniform scaling.</li>
+  <li><strong>Use Previous as Mask:</strong> Configure the selected Math Field to intersect with the previous stack primitive for quick filled-pattern workflows.</li>
+</ul>
+
+<hr />
+
+<h2>8. Deformers and Layout Stacking</h2>
+<p>SDF-R allows you to chain deformations and layout repetitions in real time.</p>
+
+<h3>Non-Destructive Deform Stack</h3>
+<p>Apply <strong>Twist</strong>, <strong>Bend</strong>, or <strong>Taper</strong> deformations by adding items to the Deform Stack.</p>
+<ul>
+  <li><strong>Dynamic ordering:</strong> You can reorder deformers in the list. Changing the order, such as tapering before twisting versus twisting before tapering, changes the final shape.</li>
+  <li><strong>Stacked control:</strong> Deformations remain editable while Live Update previews the result.</li>
+</ul>
+
+<h3>Layout Stacking</h3>
+<p>Duplicate your shapes or groups across space using:</p>
+<ul>
+  <li><strong>Mirror:</strong> Symmetry replication across selected axes.</li>
+  <li><strong>Grid:</strong> Compact repeat patterns.</li>
+  <li><strong>Radial / Spiral:</strong> Distribute duplicates in a circle or climbing spiral, around the X, Y, or Z axis.</li>
+  <li><strong>Jitter:</strong> Add randomized offsets for more natural variation.</li>
+  <li><strong>Rotation (Indiv &amp; Accum):</strong> Give each Radial/Spiral copy a fixed extra rotation, or an accumulating rotation that increases with each copy.</li>
+</ul>
+
+<div style="background-color:#fff3cd;border-left:6px solid #ffc107;padding:15px;margin:20px 0;border-radius:4px;color:#856404;font-family:sans-serif;">
+  <strong>Note on large accumulated rotations</strong><br />
+  Radial and Spiral layouts repeat the shape by folding space into equal angular slices. If a copy is rotated far enough that it reaches past its own slice, the part that crosses the boundary can be clipped. In practice this becomes visible when the accumulated rotation approaches roughly <code>180° ÷ Count</code>. If you see pieces disappearing at high rotation values, reduce the rotation, raise the Count, or use a Collection Divider group instead.
+</div>
+
+<hr />
+
+<h2>9. Attribute &amp; Material Workflow</h2>
+<p>SDF-R passes material attributes directly from primitives to the generated mesh. The default material node setup reads vertex attributes named <strong>Color</strong>, <strong>Metallic</strong>, and <strong>Roughness</strong>.</p>
+<ul>
+  <li><strong>Setup Nodes:</strong> Creates a material that reads SDF-R's generated mesh attributes.</li>
+  <li><strong>Reset:</strong> Rebuilds the default material node setup and resets the shared Metallic, Roughness, Transmission and IOR controls to default values.</li>
+  <li><strong>Apply Color All:</strong> Applies one shared base color to all SDF primitives.</li>
+  <li><strong>Apply Material All:</strong> Applies shared Metallic and Roughness values to all SDF primitives, and applies Transmission and IOR to the material.</li>
+  <li><strong>Per-primitive control:</strong> Individual primitives can still have their own color, metallic, and roughness settings when needed.</li>
+  <li><strong>Subtractive painting:</strong> When a subtractive operation exposes an inner cut surface, the exposed surface can inherit the color and material properties of the cutting object.</li>
+</ul>
+
+<h3>Transmission &amp; IOR (New in V16.1.0)</h3>
+<ul>
+  <li><strong>Transmission:</strong> Adds glass-like light transmission to the generated SDF material. The IOR field becomes available once Transmission is above zero (1.45 is typical for glass).</li>
+  <li><strong>Scope:</strong> Unlike Color, Metallic and Roughness — which are stored per vertex and can therefore differ per primitive — Transmission is a <strong>single value applied to the whole SDF material</strong>. You cannot currently make one primitive glass and another opaque within the same SDF object.</li>
+  <li><strong>Requires the SDF material:</strong> Press <strong>Setup Nodes</strong> first. Transmission is written into the generated Principled BSDF, so it has nothing to write to if the material has not been created yet.</li>
+  <li><strong>Rendering:</strong> Transmission is a render property. Use Material Preview or Rendered shading to see it; the Ghost Preview does not simulate refraction.</li>
+</ul>
+
+<hr />
+
+<h2>10. Mesh Output, Snapshot, and Finalize</h2>
+<ul>
+  <li><strong>Force Update:</strong> Manually regenerates the output mesh from the current stack.</li>
+  <li><strong>Fix Normals:</strong> Recalculates high-quality normals for smoother display and rendering.</li>
+  <li><strong>Snapshot Mesh:</strong> Creates a static mesh copy from the current SDF result while leaving the live SDF workspace intact. This is useful when you want to test a material, compare variations, or keep a milestone mesh without committing the whole workspace.</li>
+  <li><strong>Finalize (Bake):</strong> Converts the live SDF setup into a standard mesh workflow and archives the source primitives in the SDF history structure.</li>
+</ul>
+
+<hr />
+
+<h2>11. Performance Optimization &amp; Troubleshooting</h2>
+
+<h3>How the Ghost Preview adapts while you work</h3>
+<p>The Ghost Preview is raymarched, so its cost is roughly <code>viewport pixels &times; ray steps &times; primitive count</code>. To keep interaction responsive, SDF-R automatically reduces quality only while you are actively moving something, and restores it the moment you stop:</p>
+<ul>
+  <li><strong>Ray steps</strong> are capped during camera navigation and transforms.</li>
+  <li><strong>Render resolution</strong> is reduced (50% linear while orbiting, 65% while transforming) and upscaled to fill the viewport. This is why the preview may look slightly soft mid-motion.</li>
+  <li><strong>Shading normals</strong> switch to a cheaper 3-tap estimate during motion.</li>
+</ul>
+<p>All three revert to full quality as soon as you stop, so still frames are always full quality. None of this affects the generated mesh.</p>
+
+<h3>Finding your actual bottleneck</h3>
+<p>Enable <strong>Engine Diagnostics &gt; Perf</strong> and watch the system console. You will see lines like:</p>
+<pre><code>[SDF-PERF] Preview Draw: 75 FPS (avg duration: 0.095 ms), texture rebuilds: 0</code></pre>
+<ul>
+  <li><strong>Compare FPS,</strong> not <code>avg duration</code>. That duration measures CPU-side command submission only — the GPU works asynchronously, so it does not include raymarching cost.</li>
+  <li><strong>A high <code>texture rebuilds</code> count</strong> means the Python-side rebuild of the preview buffer is your bottleneck, not drawing. This happens when objects or properties are changing, and is not addressed by the resolution reduction above.</li>
+  <li>If FPS is high while still but drops only during object drags with many rebuilds, the scene is bound by update cost rather than draw cost.</li>
+</ul>
+
+<h3>Low VRAM / Integrated GPU Safeguard</h3>
+<p>If you are running on an integrated GPU like Intel Iris Xe or a low-end laptop GPU:</p>
+<ul>
+  <li>The addon dynamically queries hardware limits such as <code>max_storage_buffer_binding_size</code> on startup.</li>
+  <li>If memory is low, it scales down the maximum active blocks automatically to help prevent Blender from crashing.</li>
+  <li><strong>Tip:</strong> Keep the mesh generation resolution at a moderate level, such as 128 to 256, for optimal editing speed on integrated GPUs.</li>
+</ul>
+
+<h3>Common Troubleshooting</h3>
+
+<h4>Q: Blender freezes when I first click Live Update.</h4>
+<p><strong>A:</strong> This is normal. It is compiling shaders and caching them. Please wait up to 1 minute. Future activations should be much faster.</p>
+
+<h4>Q: The "Initializing..." panel never finishes, even after waiting several minutes.</h4>
+<p><strong>A:</strong> This is most commonly caused by a leftover shader cache file from a previous install, a previous GPU, or a previous driver version that is no longer compatible with your current setup. Close Blender, delete the cache file listed in the "Before Updating to a New Version" section above, and restart Blender.</p>
+
+<h4>Q: (macOS) Enabling the add-on is blocked with "cannot be opened because the developer cannot be verified".</h4>
+<p><strong>A:</strong> The macOS build is not notarized, so Gatekeeper blocks it on first use. Click <strong>Cancel</strong> on the dialog, then open <strong>System Settings</strong> &gt; <strong>Privacy &amp; Security</strong>. Near the bottom you will see a message about <code>rust_gpu_sdf.so</code> being blocked — click <strong>Open Anyway</strong>. Return to Blender and tick the add-on's enable checkbox again.</p>
+
+<h4>Q: (macOS) The add-on does not load on my Intel Mac.</h4>
+<p><strong>A:</strong> The macOS build is compiled for Apple Silicon (arm64) only. Intel Macs are not currently supported.</p>
+
+<h4>Q: (macOS) Blender crashes as soon as I add a primitive.</h4>
+<p><strong>A:</strong> This was reported on macOS 26.6 with Apple Silicon and Blender 5.2, and it is <strong>fixed in V16.1.2</strong>. If you are on an earlier version, please update.</p>
+<p>The cause was in SDF.R. While waiting for the mesh calculation to finish, a repeating timer asked Blender for the scene's dependency graph — a request that makes Blender re-evaluate the entire scene if it decides one is due. From a timer that happens at a moment Blender never scheduled, and the evaluator can read past the end of its own object list. The timer no longer forces an evaluation.</p>
+<p>Note that with <strong>Factory Settings</strong> and only SDF.R enabled the crash did not appear, which made it look like a conflict with another add-on. It was not. Other add-ons only made the unsafe moment more likely to be hit.</p>
+<p><strong>If you still see a crash on V16.1.2 or later</strong>, please send the Terminal output and <code>blender.crash.txt</code> as described in the <em>Platform support</em> section — that is what made the original fix possible.</p>
+
+<h4>Q: I enabled Symmetry X/Y/Z and the preview looks right, but generating a mesh gives me nothing.</h4>
+<p><strong>A:</strong> This is <strong>fixed in V16.1.3</strong>. If you are on an earlier version, please update — no setting on your side was wrong.</p>
+<p>The preview and the mesh generator are two separate implementations of the same scene, and Global Symmetry was handled correctly only in the preview. The generator's search volume was clamped to the positive half of each symmetry axis, so anything on the negative side was discarded before meshing began, and the meshing shaders did not fold primitive centres onto the mirrored side. With a primitive on the negative side of the plane, the volume being searched was empty — and so was the resulting mesh.</p>
+<p>Per-primitive <strong>Mirror</strong> in the Layout section was never affected by this.</p>
+
+<h4>Q: The preview looks slightly blurry or soft while I orbit the camera.</h4>
+<p><strong>A:</strong> That is intentional. Since V16.1.1 the preview renders at a reduced resolution while you are moving and returns to full resolution the instant you stop, which keeps navigation responsive in heavy scenes. If you never want this, the preview quality returns to normal simply by stopping the motion — still frames are always full quality.</p>
+
+<h4>Q: My Curve Sync pipe looks like a thin line in the viewport.</h4>
+<p><strong>A:</strong> That is the intended lightweight guide display. Enable <strong>Show Result Mesh</strong> or press <strong>Force Update</strong> to see the actual generated pipe. See section 5 for the reasoning.</p>
+
+<h4>Q: My Curve Sync item is set to Subtract but nothing is being cut.</h4>
+<p><strong>A:</strong> Subtract needs something to cut from. Make sure at least one Union primitive sits above the Curve Sync item in The Stack.</p>
+
+<h4>Q: Subdiv Samples does nothing on my curve.</h4>
+<p><strong>A:</strong> The curve is probably a NURBS spline, which is evaluated by Blender itself. Adjust the curve's own <strong>Resolution Preview U</strong> in the Curve data properties instead.</p>
+
+<h4>Q: I set Transmission but the object still looks solid.</h4>
+<p><strong>A:</strong> Check three things: press <strong>Setup Nodes</strong> if you have not created the SDF material yet, press <strong>Apply Material All</strong> to push the value into the material, and switch the viewport to Material Preview or Rendered shading. Transmission is not simulated in the Ghost Preview.</p>
+
+<h4>Q: The generated mesh has holes or missing faces under high deformation.</h4>
+<p><strong>A:</strong> Make sure the domain size is large enough to contain the deformed shape, and the mesh resolution is adequate. Also verify that the deform parameters are within reasonable limits.</p>
+
+<h4>Q: Copies disappear when I use Radial with a large accumulated rotation.</h4>
+<p><strong>A:</strong> See the note in section 8. Radial repeats space in angular slices, so a copy rotated beyond roughly <code>180° ÷ Count</code> can cross into the neighbouring slice and be clipped. Lower the rotation, increase the Count, or build the array with a Collection Divider group instead.</p>
+
+<h4>Q: MC and DC both show slightly uneven edges in certain areas.</h4>
+<p><strong>A:</strong> SDF meshing converts a continuous field into polygons, so small edge irregularities can appear around steep curvature, intersecting fields, or dense decorative patterns. Use higher resolution, Live Normals, Weld, and optional post-process smoothing when visual finish is more important than raw edit speed.</p>
+
+<h4>Q: A Math Field stretches when I scale the object on X/Y/Z.</h4>
+<p><strong>A:</strong> Select the Math Field and use <strong>Auto Match Scale</strong>. This matches the field's Axis X/Y/Z settings to the object's scale so the pattern density remains closer to the intended look.</p>
+
+<h4>Q: I get a shader validation error on startup.</h4>
+<p><strong>A:</strong> Ensure your graphics card drivers are updated to the latest version. Make sure your system defaults to using your dedicated graphics card (NVIDIA/AMD) rather than the motherboard's integrated chip when running Blender. If the error mentions the cache being created for a different device, follow the cache-clearing steps above.</p>
+
+<hr />
+<p><em>Documented on 2026-08-17 for SDF-R V16.1.3</em></p>

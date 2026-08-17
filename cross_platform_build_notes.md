@@ -2,7 +2,7 @@
 
 Windows版（通常版）と Mac/Linux 用テストビルドの差異、および GitHub Actions による自動ビルドの設定・注意点をまとめています。
 
-**最終更新: 2026-08-11 / 直近の実施バージョン: V16.1.1**
+**最終更新: 2026-08-17 / 直近の実施バージョン: V16.1.3**
 
 > このノートは「次に移植するときにミスを減らす」ことを目的としています。
 > **まず [セクション0のチェックリスト](#0-移植チェックリスト必ずここから) を上から順に潰してください。**
@@ -33,6 +33,12 @@ Windows 通常版 `Rust-GPU-SDF-VX.Y.Z` を Mac/Linux 用に移植するとき�
       `from . import rust_gpu_sdf` → `from ._native import rust_gpu_sdf` に書き換えた
       → ⚠️ **1つでも漏れると `partially initialized module ... (circular import)`**
       → 漏れがないかは `grep -rn "from . import rust_gpu_sdf"` が空になることで確認
+      → ⚠️ **V16.1.3 の準備では `__init__.py` だけが漏れていた。** 他はすべて正しく、
+        ファイル数も34で揃っていたため目視では気づけなかった。セクション6の検証で検出
+- [ ] `register()` 内の `print("... GPU Engine (VX.Y.Z)")` / `print("... Warming-up (VX.Y.Z)")`
+      の版数を更新した
+      → ⚠️ V16.1.3 で漏れた。`bl_info` と Loader Marker だけ直して満足しないこと。
+        `grep -rn "旧版数"` で残骸ゼロを確認する
 - [ ] Windows 専用の `rust_gpu_sdf.pyd` を含めていない
       → パッケージ肥大化と混同の元。`.gitignore` で無視されるので commit はされないが、
         手元の zip 作成時に混入しうる
@@ -259,7 +265,7 @@ V16.1.1 の作業では、`SDF_R_16_1_1_MAC.zip` という**配布名のファ�
 ## 5. 【AI・開発者向け】Windows通常版からMac/Linuxテスト版への移植・準備手順
 
 新しいWindows通常版をベースに、MacやLinux用のテストパッケージをゼロから準備・ビルドする際の手順です。
-**以下は V16.1.1 で実際に通した手順です。** チェックリストはセクション0を参照。
+**以下は V16.1.1 で確立し、V16.1.3 まで実際に通している手順です。** チェックリストはセクション0を参照。
 
 ### ステップ1: 移植用ディレクトリの作成
 通常版のフォルダ（例: `Rust-GPU-SDF-V16.1.1`）から、Mac用 `Rust-GPU-SDF-V16.1.1_MAC` および Linux用 `Rust-GPU-SDF-V16.1.1_LINUX` を作成します。
@@ -320,8 +326,8 @@ V16.1.1 の作業では、`SDF_R_16_1_1_MAC.zip` という**配布名のファ�
 import os, re, subprocess
 
 BASE = r"E:\blender_addon\外部テスト"
-VER  = "16.1.1"          # 今回のバージョン
-PREV = "16.1.0"          # 手本にした前バージョン
+VER  = "16.1.3"          # 今回のバージョン
+PREV = "16.1.2"          # 手本にした前バージョン
 NEW  = [f"Rust-GPU-SDF-V{VER}_MAC", f"Rust-GPU-SDF-V{VER}_LINUX"]
 REF  = os.path.join(BASE, f"Rust-GPU-SDF-V{PREV}_MAC")
 WIN  = os.path.join(BASE, f"Rust-GPU-SDF-V{VER}", "rust_gpu_sdf_addon")
@@ -405,7 +411,7 @@ CI が緑でも、取り出し方を間違えれば配布物は壊れます。**
 import os, zipfile
 
 ROOT = r"E:\blender_addon\外部テスト"
-VER  = "16.1.2"                      # ここだけ書き換える
+VER  = "16.1.3"                      # ここだけ書き換える
 UND  = VER.replace(".", "_")
 BASE = os.path.join(ROOT, "Other_OS")
 WIN  = os.path.join(ROOT, "Rust-GPU-SDF-V%s" % VER, "rust_gpu_sdf_addon")  # 通常版のアドオン
@@ -478,6 +484,27 @@ check("修正3: 頂点インデックス範囲ガード",      "vertex index out
 check("修正4: users_collection のスナップショット", "list(obj.users_collection)" in o)
 ```
 
+**V16.1.3 は Rust / WGSL 側の修正なので、Python を見ても入っているか分かりません。**
+このように修正がネイティブ側にある場合は、代わりに**ソースツリー側**を確認してください
+（配布 zip に入るのはコンパイル済みバイナリのみです）。
+
+```python
+# ソースツリー側で確認する（zip ではなく Rust-GPU-SDF-V16.1.3*/src）
+import os
+for tree in ["Rust-GPU-SDF-V16.1.3", "Rust-GPU-SDF-V16.1.3_MAC", "Rust-GPU-SDF-V16.1.3_LINUX"]:
+    src = os.path.join(ROOT, tree, "src")
+    lib = open(os.path.join(src, "lib.rs"), encoding="utf-8").read()
+    com = open(os.path.join(src, "common.wgsl"), encoding="utf-8").read()
+    det = open(os.path.join(src, "detect.wgsl"), encoding="utf-8").read()
+    check("%s: AABB の全象限展開（2箇所）" % tree, lib.count("aabb_min.x = -x_max") == 2)
+    check("%s: evaluate_layout の中心折り返し" % tree, "center.x = abs(center.x)" in com)
+    check("%s: Detect Pass の中心折り返し" % tree, "center.x = abs(center.x)" in det)
+```
+
+そのうえで、**成果物が本当にその修正を含むか**は Blender ヘッドレスで確認するのが確実です。
+V16.1.3 では Blender 5.1.2 で「X=+2 配置」「X=-2 配置」「XYZ 同時」の3ケースを流し、
+いずれも両側にメッシュが生成されることを確認しました（修正前は負側配置で頂点数 0）。
+
 ---
 
 ## 7. 【macOS特有の注意点】Gatekeeper（実行ブロック）の回避方法
@@ -505,6 +532,8 @@ GitHub ActionsなどのCI環境でビルドされたmacOS用のバイナリ（`r
 | — | Artifacts の zip をそのまま配布すると構造エラー | GitHub Actions の仕様で二重ZIPになる | セクション4の手順。**必ず一度解凍する** |
 | — | `ubuntu-20.04` 指定で CI がフリーズ | ランナーが廃止済み | `ubuntu-22.04` を明示。`latest` も使わない（glibc） |
 | Blender 4.2+ 対応時 | `attempted relative import with no known parent package` | `__package__` が `None` になる一時ロード | `_native.py` のフォールバック（セクション2）。**必ず前バージョンからコピー** |
+| V16.1.3 準備時 | `_MAC` / `_LINUX` の **`__init__.py` だけ `from . import rust_gpu_sdf` のまま**だった（`engine.py` / `ui.py` は書き換え済み） | 通常版ツリーからコピーした際、3ファイルのうち `__init__.py` の書き換えが漏れた。ファイル構成・ファイル数・yml・`.sh` はすべて正しく、**目視では気づけない状態**だった | セクション6の検証スクリプトが `[NG] __init__.py が ._native 経由` として検出。**push 前に必ず流す**。この1行が漏れると CI は緑のまま、ユーザーの有効化時に `partially initialized module ... (circular import)` で落ちる |
+| V16.1.3 準備時 | 起動時コンソールの `Initializing GPU Engine (V16.1.2)` / `Starting GPU Warming-up (V16.1.2)` が旧版数のままだった（3ツリーとも） | `bl_info` と Loader Marker だけを更新し、`register()` 内の print 文を見落とした | 版数更新後に `grep -rn "16[._]1[._]2"` で残骸を確認する。動作には影響しないが、**ユーザーがコンソールで版数を確認したときに誤認する** |
 | V16.1.2 push 時 | 8ヶ月前の V15.9.8.1 のビルドが勝手に走り、Actions の先頭に出て「版数が古い成果物ができた」と誤認 | リポジトリ整理でドキュメントを追跡対象に加えた際、`Rust-GPU-SDF-V15.9.8.1_MAC/implementation_plan.md` も一緒に追加された。これが古い yml の `paths` に一致 | 古いワークフローは削除する（最新2つだけ残す）。確認は「All workflows」ではなく**目的の yml のページ**で行う |
 
 ### 特に気をつけるべき「成功するのに間違っている」パターン
