@@ -26,6 +26,58 @@ class SDF_DeformItem(bpy.types.PropertyGroup):
     elongate_z: bpy.props.FloatProperty(name="Z", default=0.0, min=0.0, update=update_sdf_callback)
     enabled: bpy.props.BoolProperty(name="Enabled", default=True, update=update_sdf_callback)
 
+def update_sdf_stack_index(self, context):
+    """スタックの行を選んだら、その対象オブジェクトも選択状態にする。
+
+    従来は行内の「名前」ボタン（sdf.select_stack_obj オペレーター）を押したときだけ
+    選択が連動していた。UIList の行本体をクリックした場合はこのインデックスだけが
+    変わり、ビューポート側の選択は変わらないため、操作が一貫していなかった。
+
+    注意: 逆方向の同期が既に存在する。handlers.py の depsgraph ハンドラは、
+    ビューポートで SDF オブジェクトを選ぶとこのインデックスを追従させる。
+    そこで無条件に選択し直すと
+
+      * ビューポート選択 → インデックス変更 → 選択し直し、というループになる
+      * ビューポートで複数選択していると、それが1つに潰される
+
+    という害がある。そのため「対象が既にアクティブなら何もしない」ことで区別する。
+    ハンドラ由来の変更は、その対象が既にアクティブだからこそ起きているので必ず素通りし、
+    行クリック由来の変更（対象はまだアクティブでない）だけが選択を行う。
+    """
+    try:
+        if context.mode != 'OBJECT':
+            return
+
+        idx = self.sdf_stack_index
+        if idx < 0 or idx >= len(self.sdf_stack):
+            return
+
+        item = self.sdf_stack[idx]
+        target = item.object_ptr or getattr(item, "empty_ptr", None)
+        if target is None:
+            return
+
+        view_layer = context.view_layer
+        if target.name not in view_layer.objects:
+            return
+
+        # ビューポート側の選択が既にこの対象を指しているなら、ハンドラ由来の同期。
+        # ここで触ると複数選択を壊すので何もしない。
+        if view_layer.objects.active is target:
+            return
+
+        for obj in view_layer.objects:
+            if obj.select_get():
+                obj.select_set(False)
+        target.select_set(True)
+        view_layer.objects.active = target
+    except Exception as exc:
+        # 選択の連動は補助的な挙動。失敗してもメッシュ更新は止めない。
+        print(f"SDF.R: stack selection sync skipped: {exc}")
+
+    update_sdf_callback(self, context)
+
+
 def update_res_preset(self, context):
     """Updates the resolution immediately if the preset value is currently applied"""
     if self.resolution == self.res_preset_low or self.resolution == self.res_preset_high:
@@ -466,5 +518,5 @@ class SDF_ObjectProperties(bpy.types.PropertyGroup):
 
     # --- V7: スタック管理 ---
     sdf_stack: bpy.props.CollectionProperty(type=SDF_StackItem)
-    sdf_stack_index: bpy.props.IntProperty(name="Stack Index", default=0, update=update_sdf_callback)
+    sdf_stack_index: bpy.props.IntProperty(name="Stack Index", default=0, update=update_sdf_stack_index)
     use_solo: bpy.props.BoolProperty(name="Solo Mode", default=False, update=update_sdf_callback)
