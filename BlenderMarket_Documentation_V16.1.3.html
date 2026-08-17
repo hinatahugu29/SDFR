@@ -8,10 +8,10 @@
 
 <h2>What's New in V16.1.3</h2>
 <ul>
-  <li><strong>Global Symmetry now generates a mesh — fixed:</strong> With <strong>Symmetry X / Y / Z</strong> enabled in Mesh Settings, the Ghost Preview showed the mirrored result correctly, but generating a mesh returned nothing, or a mesh missing everything on one side. Both Marching Cubes and Dual Contouring were affected. Two separate faults caused it: the bounding box the generator searches was clamped to the positive half of each symmetry axis (0 to +max instead of −max to +max), so anything on the negative side was discarded before meshing began; and the two meshing shaders did not fold primitive centres onto the mirrored side the way the preview shader does, so a primitive placed on the negative side was evaluated at the wrong position. As soon as a primitive sat on the negative side, both lined up and the result was an empty mesh.</li>
-  <li><strong>Scope of the fix:</strong> Only the Global Symmetry toggles in Mesh Settings were affected. Per-primitive <strong>Mirror</strong> in the Layout section was never affected. Meshes generated with Symmetry off are identical to V16.1.2.</li>
-  <li><strong>Verified on Blender 5.1:</strong> a primitive at X = +2.0 and one at X = −2.0 both produce a mesh spanning −3.0 to +3.0 with Symmetry X on, and all three axes together produce a full eight-way symmetric mesh.</li>
-  <li><strong>Please clear the shader cache when updating to this version</strong> — the GPU shader code changed. See <em>Before Updating to a New Version</em> below.</li>
+  <li><strong>Global Symmetry dropped negative-side primitives — fixed:</strong> With <strong>Symmetry X / Y / Z</strong> enabled in Mesh Settings, the Ghost Preview showed the mirrored result correctly, but generating a mesh dropped any primitive whose centre sat on the negative side of that plane — or quietly shrank one that straddled it. Both Marching Cubes and Dual Contouring were affected. Two separate faults caused it: the bounding box the generator searches was clamped to the positive half of each symmetry axis (0 to +max instead of −max to +max), so anything on the negative side was discarded before meshing began; and the two meshing shaders did not fold primitive centres onto the mirrored side the way the preview shader does, so a primitive placed on the negative side was evaluated at the wrong position.</li>
+  <li><strong>Were you affected?</strong> Only if a primitive's centre sat on the negative side of an enabled symmetry plane. Shapes on the positive side, or exactly on the plane, meshed correctly. Note that a matching shape on the positive side could make the result look entirely correct, so the problem could stay hidden in exactly the symmetric scenes Symmetry is used for. Per-primitive <strong>Mirror</strong> in the Layout section was never affected, and meshes generated with Symmetry off are identical to V16.1.2.</li>
+  <li><strong>Verified on Blender 5.1:</strong> running the old and new engines side by side, a primitive at X = −2.0 with Symmetry X produced an empty mesh before and a correct −3.0 to +3.0 mesh now, under Marching Cubes and Dual Contouring alike. All three axes together produce a full eight-way symmetric mesh.</li>
+  <li><strong>Internal: one loader for all platforms.</strong> The Windows, macOS and Linux builds now load the native engine through the same code path and ship byte-for-byte identical Python. No visible change — but the macOS and Linux builds now run exactly the code tested on Windows, rather than a hand-adjusted variant.</li>
 </ul>
 
 <h2>What's New in V16.1.2</h2>
@@ -91,7 +91,7 @@
     </li>
     <li>Restart Blender and enable SDF-R. The first startup after clearing the cache will take the full warm-up time again.</li>
   </ol>
-  <p style="margin-bottom:0;"><strong>V16.1.3 note:</strong> Updating to V16.1.3 <em>does</em> require this, from any earlier version — the GPU shader code changed in order to fix Global Symmetry.</p>
+  <p style="margin-bottom:0;"><strong>V16.1.3 note:</strong> This is no longer a required step. SDF-R now detects a failed start, clears the cache itself and retries automatically. Clearing by hand remains harmless if you prefer to — it simply costs one slower startup.</p>
 </div>
 
 <div style="background-color:#fff3cd;border-left:6px solid #ffc107;padding:15px;margin-bottom:20px;border-radius:4px;color:#856404;font-family:sans-serif;">
@@ -353,9 +353,10 @@
 <p>Note that with <strong>Factory Settings</strong> and only SDF.R enabled the crash did not appear, which made it look like a conflict with another add-on. It was not. Other add-ons only made the unsafe moment more likely to be hit.</p>
 <p><strong>If you still see a crash on V16.1.2 or later</strong>, please send the Terminal output and <code>blender.crash.txt</code> as described in the <em>Platform support</em> section — that is what made the original fix possible.</p>
 
-<h4>Q: I enabled Symmetry X/Y/Z and the preview looks right, but generating a mesh gives me nothing.</h4>
+<h4>Q: I enabled Symmetry X/Y/Z and the preview looks right, but a shape is missing from the generated mesh.</h4>
 <p><strong>A:</strong> This is <strong>fixed in V16.1.3</strong>. If you are on an earlier version, please update — no setting on your side was wrong.</p>
-<p>The preview and the mesh generator are two separate implementations of the same scene, and Global Symmetry was handled correctly only in the preview. The generator's search volume was clamped to the positive half of each symmetry axis, so anything on the negative side was discarded before meshing began, and the meshing shaders did not fold primitive centres onto the mirrored side. With a primitive on the negative side of the plane, the volume being searched was empty — and so was the resulting mesh.</p>
+<p>The preview and the mesh generator are two separate implementations of the same scene, and Global Symmetry was handled correctly only in the preview. The generator's search volume was clamped to the positive half of each symmetry axis, so anything on the negative side was discarded before meshing began, and the meshing shaders did not fold primitive centres onto the mirrored side.</p>
+<p>The effect depended on where the primitive's centre sat: entirely on the negative side, it contributed nothing at all; straddling the plane with a negative centre, it came out smaller than it should; on the positive side or exactly on the plane, it was correct. A matching shape on the positive side could also mask the problem completely.</p>
 <p>Per-primitive <strong>Mirror</strong> in the Layout section was never affected by this.</p>
 
 <h4>Q: The preview looks slightly blurry or soft while I orbit the camera.</h4>

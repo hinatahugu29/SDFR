@@ -2,22 +2,38 @@
 
 *Released 2026-08-17*
 
-V16.1.3 fixes Global Symmetry. If you turned on **X**, **Y** or **Z** in the Mesh Settings panel,
-the Ghost Preview showed the mirrored result correctly — and then generating a mesh gave you
-nothing, or only part of the shape. That is fixed.
+V16.1.3 fixes Global Symmetry. With **X**, **Y** or **Z** enabled in the Mesh Settings panel, the
+Ghost Preview showed the mirrored result correctly — and then generating a mesh dropped or
+distorted any primitive sitting on the negative side of that plane. That is fixed.
 
 If you never used Global Symmetry, nothing in this release changes your output. Meshes generated
 with Symmetry off are identical to V16.1.2.
 
 ---
 
-## 🐛 Global Symmetry produced no mesh — fixed
+## 🐛 Global Symmetry dropped negative-side primitives — fixed
+
+### Were you affected?
+
+This is worth stating precisely, because Symmetry did **not** fail across the board. What mattered
+was where a primitive's centre sat relative to the symmetry plane:
+
+| Primitive centre | Before (V16.1.2) |
+|---|---|
+| On the positive side | Correct |
+| Exactly on the plane | Correct |
+| Negative side, crossing the plane | **Silently came out smaller than it should** |
+| Entirely on the negative side | **Contributed nothing — empty mesh if it was your only shape** |
+
+One more case worth knowing: if you had a matching primitive on the positive side, the result
+could look completely correct, because the positive one covered the same space after mirroring.
+**The problem could stay hidden in exactly the symmetric scenes Symmetry is used for.**
 
 ### What you saw
 
-Enable **Symmetry: X / Y / Z** in Mesh Settings, and the viewport does exactly what you expect —
-the shape appears mirrored across the plane. Then press generate, with either **Marching Cubes**
-or **Dual Contouring**, and the result is an empty mesh, or a mesh missing everything on one side.
+Enable **Symmetry: X / Y / Z** in Mesh Settings, and the viewport does exactly what you expect.
+Then press generate, with either **Marching Cubes** or **Dual Contouring**, and a shape you had
+placed on the negative side is missing entirely — or, if it straddled the plane, quietly shrunk.
 
 The preview being right is what made this confusing. It looked like the meshing step was refusing
 to run. It was running — it was simply looking in the wrong place.
@@ -56,35 +72,49 @@ the search volume was empty and the output was an empty mesh.
 
 - **Global Symmetry only** — the X / Y / Z toggles in the Mesh Settings panel.
 - **Per-primitive Mirror** in the Layout section was never affected and is unchanged.
-- **Both meshing algorithms** are fixed, Marching Cubes and Dual Contouring alike.
+- **Both meshing algorithms** are fixed, Marching Cubes and Dual Contouring alike — both verified.
 - **Output with Symmetry off is unchanged** from V16.1.2.
+
+---
+
+## 🔧 Also in this release
+
+**One internal change, with no visible effect:** all three platform builds now load their native
+engine through the same code path. Until now the Windows build loaded it one way and the macOS and
+Linux builds another, which meant the three packages carried slightly different Python and had to
+be reconciled by hand for every release. They are now byte-for-byte identical.
+
+This matters for you indirectly: the macOS and Linux builds now run exactly the code I can test on
+Windows, rather than a hand-adjusted variant of it.
 
 ### Verified
 
 Checked on Blender 5.1.2 in headless mode, with the shipped binary:
 
-| Case | Result |
-|---|---|
-| Primitive at X = +2.0, Symmetry X | Mesh spans X −3.0 → +3.0 |
-| Primitive at X = −2.0, Symmetry X | Mesh spans X −3.0 → +3.0 |
-| Symmetry X + Y + Z together | Full eight-way symmetric mesh, 37,056 vertices |
-
-The negative-side case is the one that used to return nothing at all.
+| Case | V16.1.2 | V16.1.3 |
+|---|---|---|
+| Marching Cubes, primitive at X = −2.0, Symmetry X | **empty** | 14,160 verts, spans −3.0 → +3.0 |
+| Dual Contouring, primitive at X = −2.0, Symmetry X | **empty** | 2,368 verts, spans −3.0 → +3.0 |
+| Primitive at X = −0.5, crossing the plane | spans −0.5 → +0.5 | spans −1.5 → +1.5 |
+| Symmetry X + Y + Z, corner at (−2, −2, −2) | **empty** | full eight-way symmetric mesh |
+| Primitive at X = +2.0 / on the plane / Symmetry off | correct | unchanged |
 
 ---
 
-## ⚠️ Upgrade Note
+## 🔄 Upgrade Note
 
-**The GPU shader code changed in this release.** Please clear the shader cache before launching
-Blender:
+No mandatory steps. If SDF.R ever fails to start after an update, it now clears its own shader
+cache and retries automatically, so the manual cleanup that older release notes asked for is no
+longer required.
+
+If you would still rather clear it by hand — it is harmless, and costs one slower startup:
 
 1. Close Blender completely.
-2. Delete `%APPDATA%\Blender Foundation\Blender\<your version>\datafiles\rust_gpu_sdf\shader_cache.bin`
-   On macOS: `~/Library/Application Support/Blender/<your version>/datafiles/rust_gpu_sdf/shader_cache.bin`
-   On Linux: `~/.config/blender/<your version>/datafiles/rust_gpu_sdf/shader_cache.bin`
+2. Delete the shader cache:
+   - Windows: `%APPDATA%\Blender Foundation\Blender\<your version>\datafiles\rust_gpu_sdf\shader_cache.bin`
+   - macOS: `~/Library/Application Support/Blender/<your version>/datafiles/rust_gpu_sdf/shader_cache.bin`
+   - Linux: `~/.config/blender/<your version>/datafiles/rust_gpu_sdf/shader_cache.bin`
 3. Restart Blender. The first startup after clearing takes the full warm-up time again.
-
-This applies whichever version you are coming from.
 
 ---
 

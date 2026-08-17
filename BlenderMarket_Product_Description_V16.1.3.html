@@ -135,15 +135,17 @@
     <h3 style="color:#222; border-bottom:2px solid #eee; padding-bottom:10px; font-weight:bold; font-size:1.5em;">✨ What's New in V16.1.3</h3>
         <ul style="list-style-type:none; padding-left:0; font-size:1.05em; line-height:1.7;">
         <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #d9534f;">
-            <strong>🐛 Global Symmetry Produced No Mesh — Fixed:</strong> With <strong>Symmetry X / Y / Z</strong> enabled in Mesh Settings, the Ghost Preview showed the mirrored result exactly as expected, but generating a mesh returned nothing — or a mesh missing everything on one side. Marching Cubes and Dual Contouring alike.
+            <strong>🐛 Global Symmetry Dropped Negative-Side Primitives — Fixed:</strong> With <strong>Symmetry X / Y / Z</strong> enabled in Mesh Settings, the Ghost Preview showed the mirrored result exactly as expected, but generating a mesh dropped any primitive whose centre sat on the negative side of that plane — or quietly shrank one that straddled it. Marching Cubes and Dual Contouring alike.
             <br><br>
-            The preview and the mesh generator are two separate implementations of the same scene, and symmetry was handled correctly only in the first. Two faults compounded: the bounding box the generator searches was clamped to the positive half of each symmetry axis (0 to +max instead of −max to +max), discarding everything on the negative side before meshing began; and the two meshing shaders did not fold primitive centres onto the mirrored side the way the preview shader does, so a primitive placed on the negative side was evaluated at the wrong position entirely. With a primitive on the negative side, the volume being searched was empty — and so was the mesh.
+            The preview and the mesh generator are two separate implementations of the same scene, and symmetry was handled correctly only in the first. Two faults compounded: the bounding box the generator searches was clamped to the positive half of each symmetry axis (0 to +max instead of −max to +max), discarding everything on the negative side before meshing began; and the two meshing shaders did not fold primitive centres onto the mirrored side the way the preview shader does, so a primitive placed on the negative side was evaluated at the wrong position entirely.
         </li>
         <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #1565c0;">
-            <strong>🎯 Scope:</strong> Only the Global Symmetry toggles in Mesh Settings were affected. Per-primitive <strong>Mirror</strong> in the Layout section was never affected, and meshes generated with Symmetry off are identical to V16.1.2. Verified on Blender 5.1: primitives at X = +2.0 and X = −2.0 both mesh across the full −3.0 to +3.0 span, and all three axes together produce a complete eight-way symmetric result.
+            <strong>🎯 Were You Affected?</strong> Only if a primitive's centre sat on the negative side of an enabled symmetry plane. Shapes on the positive side, or exactly on the plane, meshed correctly — and a matching shape on the positive side could make the result look entirely right, so the problem could stay hidden in exactly the symmetric scenes Symmetry is used for. Per-primitive <strong>Mirror</strong> in the Layout section was never affected, and meshes generated with Symmetry off are identical to V16.1.2.
+            <br><br>
+            Verified on Blender 5.1 by running the old and new engines side by side: a primitive at X = −2.0 with Symmetry X produced an empty mesh before and a correct −3.0 to +3.0 mesh now, under both algorithms. All three axes together produce a complete eight-way symmetric result.
         </li>
-        <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #f0ad4e;">
-            <strong>⚠️ Clear the Shader Cache When Updating:</strong> The GPU shader code changed in this release, so please delete <code>shader_cache.bin</code> once before launching Blender. It is rebuilt automatically on the next startup.
+        <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #1565c0;">
+            <strong>🔧 One Loader for All Platforms:</strong> The Windows, macOS and Linux builds now load the native engine through the same code path and ship byte-for-byte identical Python. No visible change — but the macOS and Linux builds now run exactly the code tested on Windows, rather than a hand-adjusted variant of it.
         </li>
     </ul>
 
@@ -337,9 +339,12 @@
             A single fix, and a significant one. If you never used Global Symmetry, your output is unchanged from V16.1.2.
         </p>
 
-        <strong style="color:#0066cc; font-size:1.05em;">Symmetry X / Y / Z produced no mesh</strong>
+        <strong style="color:#0066cc; font-size:1.05em;">Symmetry X / Y / Z dropped negative-side shapes</strong>
         <p style="font-size:0.95em; color:#444; line-height:1.7; margin-top:5px;">
-            Enable <strong>Symmetry: X / Y / Z</strong> in Mesh Settings and the Ghost Preview does exactly what you expect — the shape appears mirrored across the plane. Then generate a mesh, with either Marching Cubes or Dual Contouring, and the result is empty, or missing everything on one side. The preview being right is what made this confusing: it looked like the meshing step was refusing to run. It was running — it was simply looking in the wrong place.
+            Enable <strong>Symmetry: X / Y / Z</strong> in Mesh Settings and the Ghost Preview does exactly what you expect — the shape appears mirrored across the plane. Then generate a mesh, with either Marching Cubes or Dual Contouring, and a shape placed on the negative side of that plane is missing entirely; one that straddled the plane comes out quietly shrunk. The preview being right is what made this confusing: it looked like the meshing step was refusing to run. It was running — it was simply looking in the wrong place.
+        </p>
+        <p style="font-size:0.95em; color:#444; line-height:1.7;">
+            <strong>It did not fail across the board.</strong> Shapes on the positive side, or exactly on the symmetry plane, meshed correctly — and a matching shape on the positive side could make the whole result look right, so the problem could stay hidden in exactly the symmetric scenes Symmetry is used for.
         </p>
         <p style="font-size:0.95em; color:#444; line-height:1.7;">
             The preview and the mesh generator are two separate implementations of the same scene. The preview raymarches the SDF directly; the generator first works out <strong>where in space it needs to look</strong>, then samples only that volume on the GPU. Global Symmetry was handled correctly in the first path and incorrectly in the second, in two independent ways.
@@ -358,11 +363,16 @@
         <ul style="padding-left:20px; line-height:1.6; font-size:0.95em; color:#444; margin-top:5px;">
             <li style="margin-bottom:6px;"><strong>Global Symmetry only</strong> — the X / Y / Z toggles in Mesh Settings. Per-primitive <strong>Mirror</strong> in the Layout section was never affected.</li>
             <li style="margin-bottom:6px;"><strong>Output with Symmetry off is unchanged</strong> from V16.1.2.</li>
-            <li style="margin-bottom:0;"><strong>Verified on Blender 5.1</strong> — primitives at X = +2.0 and X = −2.0 both mesh across the full −3.0 to +3.0 span, and all three axes together produce a complete eight-way symmetric mesh.</li>
+            <li style="margin-bottom:0;"><strong>Verified on Blender 5.1</strong>, running the old and new engines side by side — a primitive at X = −2.0 with Symmetry X produced an empty mesh before and a correct −3.0 to +3.0 mesh now, under Marching Cubes and Dual Contouring alike. All three axes together produce a complete eight-way symmetric mesh.</li>
         </ul>
 
-        <div style="background:#f8d7da; padding:15px; border-radius:6px; font-size:0.95em; color:#721c24; border-left:4px solid #dc3545; margin-top:15px;">
-            <strong>⚠️ Clear the shader cache when updating.</strong> The GPU shader code changed in this release. Close Blender, delete <code>shader_cache.bin</code> from the SDF.R datafiles folder, and restart — the first startup afterwards takes the full warm-up time again. This applies whichever version you are coming from.
+        <strong style="color:#222; font-size:1.05em;">Also in this release</strong>
+        <p style="font-size:0.95em; color:#444; line-height:1.7; margin-top:5px;">
+            <strong>One internal change, with no visible effect:</strong> the Windows, macOS and Linux builds now load the native engine through the same code path and ship byte-for-byte identical Python. Previously each platform's package carried slightly different code that had to be reconciled by hand every release. The macOS and Linux builds now run exactly the code tested on Windows.
+        </p>
+
+        <div style="background:#e2f0d9; padding:15px; border-radius:6px; font-size:0.95em; color:#385723; border-left:4px solid #385723; margin-top:15px;">
+            <strong>🔄 Updating: nothing you must do.</strong> SDF.R now clears its own shader cache and retries if it ever fails to start after an update, so the manual cleanup older release notes asked for is no longer required. Clearing <code>shader_cache.bin</code> by hand remains harmless — it simply costs one slower startup.
         </div>
     </div>
 

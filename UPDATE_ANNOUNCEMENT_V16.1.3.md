@@ -25,11 +25,17 @@ Hi, and thank you for supporting SDF.R.
 This release fixes one thing, and it is a significant one: **Global Symmetry did not produce a
 mesh.**
 
-### 🐛 Symmetry X / Y / Z — the mesh is back
+### 🐛 Symmetry X / Y / Z — negative-side shapes are back
 
-If you turned on **X**, **Y** or **Z** in the Mesh Settings panel, the Ghost Preview showed the
-mirrored result exactly as expected — and then generating a mesh gave you nothing at all, or a
-mesh missing everything on one side. Marching Cubes and Dual Contouring both.
+With **X**, **Y** or **Z** enabled in the Mesh Settings panel, the Ghost Preview showed the
+mirrored result exactly as expected — and then generating a mesh dropped any primitive sitting on
+the negative side of that plane, or quietly shrank one that straddled it. Marching Cubes and Dual
+Contouring both.
+
+**Were you affected?** Only if a primitive's centre sat on the negative side of an enabled symmetry
+plane. Shapes on the positive side, or exactly on the plane, meshed correctly. And if you had a
+matching shape on the positive side, the result could look completely right — so the problem could
+stay hidden in exactly the symmetric scenes Symmetry is for.
 
 The preview being correct is what made this so confusing. It looked like the meshing step was
 refusing to run. It was running — it was simply looking in the wrong place.
@@ -50,21 +56,29 @@ incorrectly in the second, in two ways at once:
 As soon as a primitive was on the negative side, both faults lined up: the volume being searched
 was empty, and so was the mesh.
 
-Both are fixed, in the Windows, macOS and Linux builds alike. Verified on Blender 5.1: a primitive
-at X = +2 and one at X = −2 now both produce a mesh spanning −3.0 to +3.0, and all three axes
-together produce a full eight-way symmetric result.
+Both are fixed, in the Windows, macOS and Linux builds alike. Verified on Blender 5.1 by running
+the old and new engines side by side: a primitive at X = −2 with Symmetry X produced an empty mesh
+before and a correct −3.0 → +3.0 mesh now, under Marching Cubes and Dual Contouring alike.
 
-**Were you affected?** Only if you used the Symmetry X/Y/Z toggles in Mesh Settings. Per-primitive
-**Mirror** in the Layout section was never affected. Meshes generated with Symmetry off are
-identical to V16.1.2 — nothing else about the output changes in this release.
+Per-primitive **Mirror** in the Layout section was never affected. Meshes generated with Symmetry
+off are identical to V16.1.2 — nothing else about the output changes in this release.
 
 If you tried Global Symmetry, got an empty mesh and assumed you had set something up wrong: you
 had not.
 
-### ⚠️ Please clear the shader cache
+### 🔧 One internal change
 
-**The GPU shader code changed in this release**, so please clear the shader cache once before
-launching Blender. This applies whichever version you are coming from.
+All three platform builds now load their native engine through the same code path. Until now the
+Windows build loaded it one way and the macOS and Linux builds another, so the three packages
+carried slightly different Python that had to be reconciled by hand every release. They are now
+byte-for-byte identical — which means the macOS and Linux builds run exactly the code I can test on
+Windows, rather than a hand-adjusted variant of it. No visible change for you.
+
+### 🔄 Updating — nothing you must do
+
+SDF.R now clears its own shader cache and retries if it ever fails to start after an update, so the
+manual cleanup older announcements asked for is no longer required. If you would rather clear it by
+hand anyway, it is harmless and costs one slower startup:
 
 1. Close Blender completely.
 2. Delete the shader cache file:
@@ -103,12 +117,16 @@ Thank you,
 今回は修正が1点のみですが、重要なものです。**全体対称化（Global Symmetry）でメッシュが
 生成されない不具合**を修正しました。
 
-### 🐛 Symmetry X / Y / Z でメッシュが出るようになりました
+### 🐛 Symmetry X / Y / Z で負側の形状が出るようになりました
 
 Mesh Settings パネルの **X / Y / Z** をオンにすると、ゴーストプレビューでは期待どおり対称化
-された形状が表示されるにもかかわらず、メッシュを生成すると何も出てこない、あるいは片側が
-丸ごと欠けたメッシュになる、という不具合がありました。Marching Cubes / Dual Contouring の
-どちらでも発生していました。
+された形状が表示されるにもかかわらず、メッシュを生成すると**対称面の負側に置いたプリミティブ
+が消える**、あるいは**面をまたいでいる場合は黙って形が縮む**、という不具合がありました。
+Marching Cubes / Dual Contouring のどちらでも発生していました。
+
+**自分は影響を受けていたのか？** プリミティブの**中心が対称軸の負側にあった場合のみ**です。
+正側や対称面上にあるものは正しくメッシュ化されていました。さらに、正側に対になる形状があると
+結果が正しく見えてしまうため、**対称化を使う典型的なシーンほど不具合が隠れやすい**状態でした。
 
 **プレビューが正しく見えていたことが、この問題を分かりにくくしていました。** メッシュ生成が
 動いていないように見えますが、実際には動いており、単に「見る場所」が間違っていました。
@@ -130,21 +148,30 @@ Mesh Settings パネルの **X / Y / Z** をオンにすると、ゴーストプ
 プリミティブが負側にあると、この2つが噛み合って探索範囲の中身が空になり、結果として空の
 メッシュが出力されていました。
 
-いずれも修正済みで、Windows / macOS / Linux のすべてのビルドに入っています。Blender 5.1 で
-検証済みです。X = +2 に置いた場合も X = −2 に置いた場合も −3.0 〜 +3.0 に広がるメッシュが
-生成され、3軸すべてを有効にした場合も8分割の完全な対称メッシュが生成されることを確認して
-います。
+いずれも修正済みで、Windows / macOS / Linux のすべてのビルドに入っています。Blender 5.1 上で
+**修正前と修正後のエンジンを並べて実行し**、X = −2 に置いた場合に修正前は空のメッシュ、修正後は
+−3.0 〜 +3.0 の正しいメッシュが生成されることを、Marching Cubes / Dual Contouring の両方で
+確認しています。
 
-**自分は影響を受けていたのか？** Mesh Settings の Symmetry X/Y/Z を使われた場合のみです。
 Layout セクションのプリミティブ単位の **Mirror** は元から影響を受けていません。Symmetry を
 オフにして生成したメッシュは V16.1.2 と同一で、それ以外の出力は今回変わりません。
 
 全体対称化を試してメッシュが出ず、設定の誤りだと思われた方がいらしたら、**それは違います。**
 
-### ⚠️ シェーダーキャッシュの削除をお願いします
+### 🔧 内部的な変更が1点あります
 
-**今回は GPU シェーダーのコードを変更しています。** Blender を起動する前に、一度だけ
-シェーダーキャッシュを削除してください。どのバージョンからの更新でも必要です。
+Windows / macOS / Linux の3ビルドが、**同じ経路でネイティブエンジンを読み込むようになりました。**
+これまでは Windows だけ読み込み方が異なっており、3つのパッケージがわずかに違う Python を
+持っていて、リリースのたびに手作業で揃える必要がありました。今回からバイト単位で同一です。
+
+皆さんにとっての意味は間接的なものですが、**macOS / Linux 版が「Windows で私がテストできる
+コードそのもの」を動かすようになった**、ということです。表示や操作に変化はありません。
+
+### 🔄 アップデート前の作業は不要です
+
+SDF.R は、更新後に起動できなかった場合に**自身でシェーダーキャッシュを削除して再試行します。**
+そのため、以前の告知でお願いしていた手動削除はもう必要ありません。念のため手動で削除したい
+場合も、実害はありません（初回起動が1回遅くなるだけです）。
 
 1. Blender を完全に終了します。
 2. シェーダーキャッシュファイルを削除します。

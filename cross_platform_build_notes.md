@@ -27,18 +27,51 @@ Windows 通常版 `Rust-GPU-SDF-VX.Y.Z` を Mac/Linux 用に移植するとき�
 
 ### B. アドオンコードの改修
 
-- [ ] 前バージョンの `_MAC` から `_native.py` をコピーした
-      → 無いと `ImportError`。**新規に書き起こさないこと**（セクション2の修正が入っている）
-- [ ] `__init__.py` / `engine.py` / `ui.py` の3ファイルで
-      `from . import rust_gpu_sdf` → `from ._native import rust_gpu_sdf` に書き換えた
-      → ⚠️ **1つでも漏れると `partially initialized module ... (circular import)`**
-      → 漏れがないかは `grep -rn "from . import rust_gpu_sdf"` が空になることで確認
-      → ⚠️ **V16.1.3 の準備では `__init__.py` だけが漏れていた。** 他はすべて正しく、
-        ファイル数も34で揃っていたため目視では気づけなかった。セクション6の検証で検出
+> **V16.1.3 以降、この工程はほぼ無くなりました。**
+> 通常版・`_MAC`・`_LINUX` の Python は**バイト単位で完全に同一**です。
+> 以前あった「3ファイルの import 書き換え」は不要になりました（理由は下記）。
+
+- [ ] `rust_gpu_sdf_addon/*.py` を通常版から**そのままコピー**した（書き換え一切なし）
+      → 一致確認は `Get-FileHash` で3ツリー比較。セクション6の検証が自動で行う
+- [ ] Windows 専用の `rust_gpu_sdf.pyd` / `bin/win/` を含めていない
+      → パッケージ肥大化と混同の元
+- [ ] 改行コードが LF になっている
+      → **完全一致を要求するようになったので、これは必須になりました。**
+        通常版の `operators.py` / `ui.py` は CRLF になりがちなので注意
 - [ ] `register()` 内の `print("... GPU Engine (VX.Y.Z)")` / `print("... Warming-up (VX.Y.Z)")`
       の版数を更新した
       → ⚠️ V16.1.3 で漏れた。`bl_info` と Loader Marker だけ直して満足しないこと。
         `grep -rn "旧版数"` で残骸ゼロを確認する
+
+#### なぜ書き換えが不要になったのか（V16.1.3 での変更）
+
+V16.1.2 まで、ネイティブモジュールの読み込み方がプラットフォームで分かれていました。
+
+| | V16.1.2 まで | V16.1.3 以降 |
+|---|---|---|
+| Windows | `from . import rust_gpu_sdf` | `from ._native import rust_gpu_sdf` |
+| Mac/Linux | `from ._native import rust_gpu_sdf` | 同上 |
+
+この分岐こそが、移植のたびに手作業の書き換えを強い、**V16.1.1（RUSTFLAGS 欠落）と
+V16.1.3（`__init__.py` の書き換え漏れ）で2回続けて事故を起こした原因**でした。
+
+`_native.py` は Mac/Linux 移植のきっかけで生まれたファイルですが、中身は最初から
+プラットフォーム非依存に書かれており（`_PLATFORM_SUBDIRS` に `"Windows": "win"`、
+`legacy_filenames` に `.pyd`）、通常版パッケージも `bin/win/rust_gpu_sdf.pyd` を
+既に同梱していました。**両側が噛み合う状態で放置されていた**だけです。
+
+Blender 5.1 実機で確認済みです（`scratch/test_native_win.py` / `scratch/test_addon_enable.py`）。
+
+```
+EXTENSION_SUFFIXES = ['.cp313-win_amd64.pyd', '.pyd']
+bin\win\rust_gpu_sdf.pyd   exists=True   ← ここで解決
+__name__ : rust_gpu_sdf_addon.rust_gpu_sdf
+```
+
+**利点は書き換え工程が消えることだけではありません。** 3プラットフォームが同一コードに
+なったため、**Windows でのアドオン有効化テストが、そのまま Mac/Linux の検証になります。**
+それまで Mac/Linux の `register()` は誰も実行したことがありませんでした
+（CI がやっているのは `import rust_gpu_sdf` 単体で、`register()` は通りません）。
 - [ ] Windows 専用の `rust_gpu_sdf.pyd` を含めていない
       → パッケージ肥大化と混同の元。`.gitignore` で無視されるので commit はされないが、
         手元の zip 作成時に混入しうる
@@ -275,17 +308,13 @@ V16.1.1 の作業では、`SDF_R_16_1_1_MAC.zip` という**配布名のファ�
 完成後のファイル数が **34** になれば正解です（前バージョンの `_MAC` と同数）。
 
 ### ステップ2: アドオンコードの改修（共通）
-コピーした作業フォルダ内の `rust_gpu_sdf_addon` フォルダに対して、以下の改修を行います。
 
-1. **ローダーファイルの追加**: 前バージョンの `_MAC` から `_native.py` をコピーして直下に配置。
-   **新規に書き起こさないこと**（セクション2の修正が入っているため）。
-2. **インポート処理の書き換え**: 以下の3ファイルで
-   `from . import rust_gpu_sdf` → `from ._native import rust_gpu_sdf`
-   * `__init__.py`（`init_gpu_engine()` 内、180行目付近）
-   * `engine.py`（5行目付近）
-   * `ui.py`（2行目付近）
-   ※ **1つでも漏れると `partially initialized module ... (circular import)` が発生します。**
-3. **不要バイナリの除去**: Windows専用の `rust_gpu_sdf.pyd` を含めない。
+**V16.1.3 以降、改修はありません。** 通常版の `rust_gpu_sdf_addon/*.py` をそのままコピーします。
+`_native.py` も通常版に入っているので、まとめてコピーするだけです。
+
+1. **Python は無改造でコピー**: 書き換えは一切不要（セクション0のBを参照）。
+2. **不要バイナリの除去**: Windows専用の `rust_gpu_sdf.pyd` と `bin/win/` を含めない。
+3. **改行は LF**: 検証がバイト単位の完全一致を要求するため必須。
 
 ### ステップ3: ビルドスクリプトの調整
 1. **前バージョンの `_MAC` の `build_sdf_addon.sh` をベースにする。**
@@ -355,16 +384,17 @@ for name in NEW:
     got = tree(t)
     check("前バージョンとファイル構成が一致", got == ref_tree,
           "+%s -%s" % (sorted(got - ref_tree), sorted(ref_tree - got)))
-    for f in ("engine.py", "ui.py", "__init__.py"):
-        s = open(os.path.join(t, "rust_gpu_sdf_addon", f), encoding="utf-8").read()
-        check("%s が ._native 経由" % f,
-              "from ._native import rust_gpu_sdf" in s and "from . import rust_gpu_sdf" not in s)
-    for f in ("engine.py","ui.py","__init__.py","handlers.py","operators.py",
-              "shader.py","properties.py","constants.py"):
-        a = open(os.path.join(WIN, f), encoding="utf-8-sig").read()
-        a = a.replace("from . import rust_gpu_sdf", "from ._native import rust_gpu_sdf")
-        b = open(os.path.join(t, "rust_gpu_sdf_addon", f), encoding="utf-8-sig").read()
-        check("%s の中身が通常版と一致" % f, a.replace("\r\n","\n") == b.replace("\r\n","\n"))
+    # V16.1.3 以降: 3ツリーの Python は完全同一。置換してからの比較ではなく
+    # バイト単位の一致を要求する。改行コードの差も NG になる（意図的）。
+    for f in ("__init__.py","_native.py","engine.py","ui.py","handlers.py",
+              "operators.py","shader.py","properties.py","constants.py"):
+        a = open(os.path.join(WIN, f), "rb").read()
+        b = open(os.path.join(t, "rust_gpu_sdf_addon", f), "rb").read()
+        check("%s が通常版とバイト単位で一致" % f, a == b,
+              "" if a == b else "%d bytes vs %d bytes（改行コードの可能性）" % (len(a), len(b)))
+    src = " ".join(open(os.path.join(t, "rust_gpu_sdf_addon", f), encoding="utf-8").read()
+                   for f in ("__init__.py","engine.py","ui.py"))
+    check("直接インポートの残骸なし", "from . import rust_gpu_sdf" not in src)
     sh = open(os.path.join(t, "build_sdf_addon.sh"), encoding="utf-8", newline="").read()
     check("sh: macOS RUSTFLAGS あり", "dynamic_lookup" in sh)
     check("sh: ZIP名が今回の版数", 'ZIP_FILE="SDF_R_%s_$(uname).zip"' % UND in sh)
@@ -501,9 +531,40 @@ for tree in ["Rust-GPU-SDF-V16.1.3", "Rust-GPU-SDF-V16.1.3_MAC", "Rust-GPU-SDF-V
     check("%s: Detect Pass の中心折り返し" % tree, "center.x = abs(center.x)" in det)
 ```
 
-そのうえで、**成果物が本当にその修正を含むか**は Blender ヘッドレスで確認するのが確実です。
-V16.1.3 では Blender 5.1.2 で「X=+2 配置」「X=-2 配置」「XYZ 同時」の3ケースを流し、
-いずれも両側にメッシュが生成されることを確認しました（修正前は負側配置で頂点数 0）。
+そのうえで、**成果物が本当にその修正を含むか**は Blender ヘッドレスで確認します。
+`scratch/` に置いてある以下を使ってください。
+
+| スクリプト | 何を見るか |
+|---|---|
+| `test_addon_enable.py` | **zip をインストールして有効化**し、`register()` が完走するか。ローダー解決先・プロパティ登録・パネル登録・GPU 初期化・対称化メッシュ生成・disable→enable の往復まで |
+| `test_gpu_symmetry.py` | GPU 経路（`request_gpu_chunked_mesh_update`）での対称化 |
+| `test_dc_symmetry.py` | MC / DC 両方での対称化（`request_mesh_update`） |
+| `test_boundary.py` | どの配置で壊れるかの境界（正側・面上・またぎ・負側） |
+
+```powershell
+$bl = "C:\Program Files (x86)\Steam\steamapps\common\Blender\blender.exe"
+$env:BLENDER_USER_RESOURCES = "<一時フォルダ>"   # ← 実環境を汚さないため必須
+& $bl --background --factory-startup --python scratch\test_addon_enable.py -- <addon_zip>
+```
+
+> ⚠️ `BLENDER_USER_RESOURCES` を指定しないと、**普段使っている Blender の
+> `scripts/addons` に実際にインストールされます。** 必ず一時フォルダへ逃がしてください。
+
+> ⚠️ `--background` では `bpy.app.timers` が回らないため、アドオンの GPU 初期化スレッドは
+> 自動起動しません（ヘッドレス固有の挙動で不具合ではない）。`test_addon_enable.py` は
+> `init_gpu()` を明示的に呼んで GPU 経路を検証しています。これをやらないと
+> `request_gpu_chunked_mesh_update` が **CPU フォールバックに落ち、GPU 側の修正を
+> 検証したつもりで CPU を測ることになります。** 診断文字列の `algo=GPU_CHUNKED_MC` で
+> 経路を確認してください。
+
+V16.1.3 では、修正前（V16.1.2）と修正後で以下の差が出ることを確認しています。
+
+| ケース | V16.1.2 | V16.1.3 |
+|---|---|---|
+| MC 負側 X=−2.0 + Sym X | **verts=0** | 14160 |
+| DC 負側 X=−2.0 + Sym X | **verts=0** | 2368 |
+| MC 負側またぎ X=−0.5 | X[−0.50, 0.50]（形が縮む） | X[−1.50, 1.50] |
+| 正側・面上・Symmetry オフ | 正常 | 同一（回帰なし） |
 
 ---
 
@@ -532,7 +593,8 @@ GitHub ActionsなどのCI環境でビルドされたmacOS用のバイナリ（`r
 | — | Artifacts の zip をそのまま配布すると構造エラー | GitHub Actions の仕様で二重ZIPになる | セクション4の手順。**必ず一度解凍する** |
 | — | `ubuntu-20.04` 指定で CI がフリーズ | ランナーが廃止済み | `ubuntu-22.04` を明示。`latest` も使わない（glibc） |
 | Blender 4.2+ 対応時 | `attempted relative import with no known parent package` | `__package__` が `None` になる一時ロード | `_native.py` のフォールバック（セクション2）。**必ず前バージョンからコピー** |
-| V16.1.3 準備時 | `_MAC` / `_LINUX` の **`__init__.py` だけ `from . import rust_gpu_sdf` のまま**だった（`engine.py` / `ui.py` は書き換え済み） | 通常版ツリーからコピーした際、3ファイルのうち `__init__.py` の書き換えが漏れた。ファイル構成・ファイル数・yml・`.sh` はすべて正しく、**目視では気づけない状態**だった | セクション6の検証スクリプトが `[NG] __init__.py が ._native 経由` として検出。**push 前に必ず流す**。この1行が漏れると CI は緑のまま、ユーザーの有効化時に `partially initialized module ... (circular import)` で落ちる |
+| V16.1.3 準備時 | `_MAC` / `_LINUX` の **`__init__.py` だけ `from . import rust_gpu_sdf` のまま**だった（`engine.py` / `ui.py` は書き換え済み） | 通常版ツリーからコピーした際、3ファイルのうち `__init__.py` の書き換えが漏れた。ファイル構成・ファイル数・yml・`.sh` はすべて正しく、**目視では気づけない状態**だった | ① セクション6の検証スクリプトが検出。**push 前に必ず流す**<br>② **恒久対策として通常版も `_native.py` に統一した**（セクション0のB）。書き換え工程そのものが無くなったので、この種のミスは今後発生しない |
+| V16.1.3 検証時 | ヘッドレステストが「成功」したが、**修正を1行も通っていなかった** | `scratch/test_blender_symmetry.py` が呼ぶ `request_chunked_mesh_update` は `generate_sdf_mesh_chunked_cpu_mc` = AABB カリングを持たない CPU パス。今回の修正箇所（`build_gpu_primitive_aabbs` / `common.wgsl` / `detect.wgsl`）はどれも GPU 側にある。**修正前のバイナリでも同じように通るテストだった** | **テストが修正前のバイナリで落ちることを必ず確認する。** 落ちないテストは何も保証していない。`scratch/test_gpu_symmetry.py` は GPU 経路を叩き、V16.1.2 で `verts=0`、V16.1.3 で正常という差が出ることを確認済み |
 | V16.1.3 準備時 | 起動時コンソールの `Initializing GPU Engine (V16.1.2)` / `Starting GPU Warming-up (V16.1.2)` が旧版数のままだった（3ツリーとも） | `bl_info` と Loader Marker だけを更新し、`register()` 内の print 文を見落とした | 版数更新後に `grep -rn "16[._]1[._]2"` で残骸を確認する。動作には影響しないが、**ユーザーがコンソールで版数を確認したときに誤認する** |
 | V16.1.2 push 時 | 8ヶ月前の V15.9.8.1 のビルドが勝手に走り、Actions の先頭に出て「版数が古い成果物ができた」と誤認 | リポジトリ整理でドキュメントを追跡対象に加えた際、`Rust-GPU-SDF-V15.9.8.1_MAC/implementation_plan.md` も一緒に追加された。これが古い yml の `paths` に一致 | 古いワークフローは削除する（最新2つだけ残す）。確認は「All workflows」ではなく**目的の yml のページ**で行う |
 
@@ -542,5 +604,11 @@ GitHub ActionsなどのCI環境でビルドされたmacOS用のバイナリ（`r
 
 - `working-directory` の変更漏れ → **前バージョンをビルドしている**
 - `ZIP_FILE` の版数更新漏れ → 中身は新しいが**ファイル名が古い**
-- import 書き換え漏れ → ビルドは通るが、**ユーザーの環境で有効化時に落ちる**
-  （CI の検証は `import rust_gpu_sdf` 単体なので、アドオンとしてのロードまでは見ていない）
+- **その版の修正を通らないテストで「検証完了」とする** → 何も保証していない。
+  修正前のバイナリで**落ちること**を必ず確認する（V16.1.3 で実際に踏んだ。上表参照）
+- ~~import 書き換え漏れ~~ → V16.1.3 の `_native.py` 統一で書き換え工程そのものが消滅
+
+> **CI の検証範囲に注意。** `build_sdf_addon.sh` が行うのは `import rust_gpu_sdf` 単体で、
+> **アドオンとしての `register()` は通りません。** そこは `scratch/test_addon_enable.py` を
+> Windows の Blender で流して担保します（3ツリーが同一コードになったため、Windows での
+> 結果がそのまま Mac/Linux の検証になります）。
