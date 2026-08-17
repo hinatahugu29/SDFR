@@ -73,6 +73,15 @@ off are identical to V16.1.2 — nothing else about the output changes in this r
 If you tried Global Symmetry, got an empty mesh and assumed you had set something up wrong: you
 had not.
 
+### 🖱️ Clicking a layer in The Stack now selects it
+
+Also from the same feedback: selecting a layer only worked by clicking its **name**. Clicking
+anywhere else in the row moved the highlight but left the viewport selection alone, so the panel
+and the scene disagreed about what you had selected. The whole row now works.
+
+Selecting objects in the viewport still drives the panel the other way, and multi-selection is
+preserved — selecting several objects no longer gets collapsed down to one.
+
 ### 🔧 One internal change
 
 All three platform builds now load their native engine through the same code path. Until now the
@@ -172,6 +181,15 @@ Layout セクションのプリミティブ単位の **Mirror** は元から影�
 オフにして生成したメッシュは V16.1.2 と同一で、それ以外の出力は今回変わりません。
 
 全体対称化を試してメッシュが出ず、設定の誤りだと思われた方がいらしたら、**それは違います。**
+
+### 🖱️ The Stack のレイヤーが、行のどこをクリックしても選択できるようになりました
+
+同じくいただいたご意見です。これまではレイヤーの**名前**をクリックしたときだけ選択が連動し、
+行の他の場所を押すとハイライトだけが動いて、ビューポートの選択は変わりませんでした。パネルと
+シーンで「今どれを選んでいるか」が食い違う状態です。行全体が反応するようになりました。
+
+ビューポート側で選んだときにパネルが追従する動きはこれまでどおりで、**複数選択も維持されます**
+（ビューポートで複数選んだものが1つに減ることはありません）。
 
 ### 🔧 内部的な変更が1点あります
 

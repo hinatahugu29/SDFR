@@ -101,6 +101,14 @@ the search volume was empty and the output was an empty mesh.
 
 ## 🔧 Also in this release
 
+**Clicking a layer in The Stack now selects it, wherever you click the row.** Until now only the
+layer's *name* selected the object — clicking anywhere else in the row moved the highlight but left
+the viewport selection where it was, so the panel and the scene disagreed about what you had
+selected. The whole row now works, which is what the rest of Blender does.
+
+Selecting objects in the viewport still drives the panel the other way, and multi-selection is
+preserved: selecting several objects in the viewport no longer gets collapsed to one.
+
 **One internal change, with no visible effect:** all three platform builds now load their native
 engine through the same code path. Until now the Windows build loaded it one way and the macOS and
 Linux builds another, which meant the three packages carried slightly different Python and had to
