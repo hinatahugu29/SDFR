@@ -114,9 +114,13 @@ The macOS build is not notarized, so if Gatekeeper blocks it, open
 
 Full release notes and updated documentation are on the product page.
 
-As always: I develop on Windows and do not own a Mac or a Linux machine, so those builds improve
-exactly as fast as people tell me things — including telling me when things work. One sentence
-genuinely helps.
+**A note on the macOS and Linux builds:** several of you have now written to say they are running
+fine on your machines. Thank you — that is the first time I have had that confirmation, and it
+matters, because I develop on Windows and own neither. As of this release all three platforms also
+ship byte-identical add-on code, so the macOS and Linux builds run exactly what I can test here.
+
+Those builds still improve exactly as fast as people tell me things, and that includes telling me
+when things work. One sentence genuinely helps.
 
 Thank you,
 
@@ -225,9 +229,14 @@ macOS 版は公証（notarization）を受けていないため、Gatekeeper に
 
 詳細なリリースノートと更新済みドキュメントは製品ページに掲載しています。
 
-いつものお願いですが、私は Windows で開発しており Mac も Linux の実機も持っていないため、
-これらのビルドは皆さんが教えてくださる分だけ良くなります。**「問題なく動いています」という
-一言も含めて**、ご連絡いただけると本当に助かります。
+**macOS / Linux 版について。** 「問題なく動いています」というご連絡を、複数の方からいただきました。
+ありがとうございます。**動作しているという確認が取れたのは今回が初めて**で、私は Windows で開発
+しており Mac も Linux の実機も持っていないため、これは大きな意味を持ちます。さらに今回のリリース
+から、3プラットフォームのアドオンコードはバイト単位で同一になりました。macOS / Linux 版は、私が
+手元でテストできるコードそのものを動かしています。
+
+これらのビルドが皆さんが教えてくださる分だけ良くなるのは変わりません。**「問題なく動いています」
+という一言も含めて**、ご連絡いただけると本当に助かります。
 
 引き続きよろしくお願いいたします。
 
