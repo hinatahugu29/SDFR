@@ -110,3 +110,106 @@ that makes the add-on better.
 3. **スタック整理の追加ヒアリング** — 原文1点目の前半（コレクション整理のしづらさ）は具体策が
    まだ無いため、事例を伺う形にしています。今回は触れない方針であれば削除してください
 4. **クーポンや謝礼**の類は入れていません。付ける場合は末尾に追記してください
+
+---
+
+# フォローアップ返信案 — 「プレビューのベイク」について
+
+報告者から画像付きで補足あり。「the blue mesh」＝ゴーストプレビュー（レイマーチング描画）を
+指しており、"clean, sharp edges" が生成メッシュでは失われる、という趣旨。
+
+**要点:** 青い表示はメッシュではないので「そのままベイク」は原理的にできません。ただし
+「プレビューのような見た目のメッシュが欲しい」という目的なら、**既存設定でかなり詰められます。**
+既定値（MC / 解像度48 / Live Normals オフ）が不利に働いている可能性が高いです。
+
+---
+
+## 送付用（English）
+
+Thanks for the screenshot — that clears it up, and it changes my answer.
+
+First, the honest part: **the blue shape is not a mesh.** It is the SDF evaluated per pixel, in
+real time, by a raymarching shader. There is no geometry behind it — nothing that could be handed
+to Blender as-is. That is why "bake the preview" cannot be done literally, and I would rather say
+so than promise a button that cannot exist.
+
+But what you actually want — a generated mesh that looks like that — is largely reachable today,
+and I think the defaults are working against you. Three settings matter, and two of them are off
+by default:
+
+**1. Switch to Dual Contouring.** In Mesh Settings there are two buttons, Marching Cubes and Dual
+Contouring. MC is the default because it gives fast feedback, but by construction it can only
+place vertices along the edges of its sampling grid, so sharp creases get rounded off. Dual
+Contouring exists specifically to keep them. If "clean, sharp edges" is what you are after, this
+is the single biggest change.
+
+**2. Raise the resolution.** The default is 48, which is a value chosen for responsive editing,
+not for final output. There is a **High** button next to Low in Mesh Settings (256), and the
+Res field goes to 1024. Above 512 the engine automatically switches to chunked meshing so it does
+not run out of memory. Circular openings like the ones in your screenshot are where low resolution
+shows first — they go polygonal before anything else does.
+
+**3. Turn on Live Normals.** Part of why the preview looks so clean is that its shading normals
+come from the SDF itself rather than from polygons. Live Normals does the same thing to the
+generated mesh, so it shades like the preview even where the tessellation is coarser. It is off by
+default because it costs time on every update. It is labelled "Live Normals (Heavy)" for that
+reason, but for a final bake that cost does not matter.
+
+Some gap will always remain. Raymarching evaluates per pixel and adapts to whatever you are
+looking at; meshing samples a fixed grid and has to commit. They cannot be made identical. But
+between DC, resolution and live normals, most of what you are seeing should close.
+
+Could I ask which part degrades for you? "Sharp edges" could mean a few different things:
+
+- creases and corners becoming rounded → that is Marching Cubes, use DC
+- the circular openings turning polygonal → that is resolution
+- the surface looking faceted while the silhouette is fine → that is shading, use Live Normals
+
+If you try DC at 256 with Live Normals on and there is still a specific gap, send me a screenshot
+of the two side by side. Either it is a limitation I should document properly, or it is a bug, and
+I would like to know which.
+
+— hinata_hugu
+
+---
+
+## 参考訳（確認用・送付しません）
+
+まず正直にお伝えすると、**青い形状はメッシュではありません。** レイマーチングシェーダーが
+リアルタイムにピクセル単位でSDFを評価した描画結果で、背後にジオメトリは存在しません。
+そのため「プレビューをそのままベイクする」ことは原理的にできません。実現できないボタンを
+約束するより、この点は正直にお伝えします。
+
+ただし「プレビューのような見た目のメッシュが欲しい」という目的であれば、**現状の設定でかなり
+近づけられます。** そして既定値が不利に働いている可能性が高いです。
+
+1. **Dual Contouring に切り替える** — MC は原理上サンプリング格子の辺上にしか頂点を置けず、
+   角が丸まります。DC はシャープなエッジを保つための実装です。最も効きます
+2. **解像度を上げる** — 既定の48は編集時の応答性のための値です。High ボタン（256）があり、
+   最大1024。512超は自動でチャンク分割されます。画像のような円形の開口部は、解像度不足が
+   最初に出る場所です
+3. **Live Normals をオンにする** — プレビューが滑らかに見える理由の一部は、法線をポリゴンでは
+   なくSDFから取っていることです。Live Normals は生成メッシュで同じことをします。既定オフは
+   毎回の更新コストのためで、最終出力なら問題になりません
+
+そのうえで、どの部分が劣化するのかを逆質問（角が丸まる／円が多角形になる／面がファセット状に
+見える、で原因が違うため）。DC・256・Live Normals で試してなお差があれば、比較画像を送って
+ほしい、と締めています。
+
+---
+
+## 送信前の確認事項
+
+1. **「ベイクできない」と明言しています。** 実装できないものを約束しないための書き方ですが、
+   要望を突き返す印象になっていないかご確認ください。「目的は達成できる」に重心を置いています
+2. **既定値が不利、という書き方**をしています。製品側の設定設計への批判とも読めるので、
+   表現を和らげたい場合は「編集時の応答性を優先した既定値です」の側を強調してください
+3. **逆質問を3択にしています。** 相手に切り分けを頼む形なので、負担に感じさせるようなら
+   削って「比較画像を送ってください」だけにしてもよいです
+
+## 製品側で検討の余地（今回の返信には含めていません）
+
+報告者が既定値のまま比較していたのだとすると、**「最終出力用の設定」への導線が弱い**可能性が
+あります。解像度の High ボタンはありますが、DC と Live Normals は個別に切り替える必要があります。
+「Final Quality」のようなプリセット（DC + 高解像度 + Live Normals を一括）が有効かもしれません。
+同種の問い合わせが続くようなら検討対象です。
