@@ -1004,7 +1004,10 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
             )
                     
             if item.is_layer_boundary:
-                _finalize_group_elements(working_group, primitives, auto_domain, inv_world_output, props, max_extent_list)
+                # レイアウト展開済みの expanded_group を確定する。working_group（未展開）を
+                # 渡すと、Radial/Grid 等を持つ仕切りで Layer Boundary を ON にした瞬間に
+                # レイアウトが丸ごと失われる
+                _finalize_group_elements(expanded_group, primitives, auto_domain, inv_world_output, props, max_extent_list)
                 working_group = []
                 active_layer_id = next_layer_id
                 next_layer_id += 1
