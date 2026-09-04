@@ -34,7 +34,6 @@ struct Primitive {
     deform_data4: vec4<f32>,
     modifier_params: vec4<f32>,
     gyroid_params: vec4<f32>,
-    layer_params: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> config: Config;
@@ -754,10 +753,9 @@ fn get_scene_dist_indexed(p: vec3<f32>, b_ptr: u32) -> f32 {
                     layer = empty_accum();
                 }
                 current_layer_id = layer_id;
-                // 合流の強さは仕切りの設定から取る（プリミティブ自身の smoothness ではない）
-                layer_k = prim.layer_params.x;
-                layer_profile = u32(prim.layer_params.y);
-                layer_cs = prim.layer_params.z;
+                layer_k = k;
+                layer_profile = profile;
+                layer_cs = cs;
             }
             layer = apply_to_accum(layer, d_prim, dummy_color, 0.0, 0.5, op, profile, k, cs);
         } else {
@@ -818,10 +816,9 @@ fn get_scene_sdf_indexed(p: vec3<f32>, b_ptr: u32) -> SdfResult {
                     layer = empty_accum();
                 }
                 current_layer_id = layer_id;
-                // 合流の強さは仕切りの設定から取る（プリミティブ自身の smoothness ではない）
-                layer_k = prim.layer_params.x;
-                layer_profile = u32(prim.layer_params.y);
-                layer_cs = prim.layer_params.z;
+                layer_k = k;
+                layer_profile = profile;
+                layer_cs = cs;
             }
             layer = apply_to_accum(layer, dp_final, color, prim.params.z, prim.params.w, op, profile, k, cs);
         } else {

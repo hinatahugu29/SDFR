@@ -196,6 +196,8 @@ def _build_prim_data_for_element(el, o_props):
     rot = el['rot']
     sc = el['scale']
     layer_id = float(el.get('layer_id', 0))
+    # 仕切り由来のレイヤー合流設定。engine.py / lib.rs / common.wgsl と同じ値を使う
+    layer_k, layer_prof, layer_cs = el.get('layer_params') or (0.0, 0, 0.0)
 
     if p_props and p_props.is_primitive:
         shape_type = _SHAPE_MAP.get(p_props.shape_type, 0.0)
@@ -348,6 +350,8 @@ def _build_prim_data_for_element(el, o_props):
         data.extend([0.0, 0.0, 0.0, 0.0])
     # 16: gyroid_params [phase, axis_x, axis_y, axis_z]
     data.extend(gyroid_p)
+    # 17: layer_params [layer_smoothness, layer_blend_profile, layer_chamfer_smooth, unused]
+    data.extend([layer_k, float(layer_prof), layer_cs, 0.0])
 
     return data
 
@@ -397,10 +401,21 @@ def _flatten_stack_for_preview(output_obj, inv_world_output):
                     expanded_group.append(copied_el)
 
             if item.is_layer_boundary:
-                flat_elements.extend(working_group)
-                working_group = []
-                active_layer_id = next_layer_id
+                # engine.py の同じ分岐と揃えること。レイアウト展開済みの expanded_group を
+                # 使い、レイヤーは仕切りより「上」のグループに掛ける
+                layer_id = next_layer_id
                 next_layer_id += 1
+                layer_params = (
+                    item.layer_smoothness,
+                    int(item.layer_blend_profile),
+                    item.layer_chamfer_smooth,
+                )
+                for el in expanded_group:
+                    el['layer_id'] = layer_id
+                    el['layer_params'] = layer_params
+                flat_elements.extend(expanded_group)
+                working_group = []
+                active_layer_id = 0
             elif item.start_new_group:
                 active_layer_id = 0
                 flat_elements.extend(expanded_group)
@@ -675,7 +690,7 @@ def _draw_callback_3d_impl(self, context):
             # V16.0.4: 17 pixels per primitive (68 floats)
             prim_count = len(prim_data) // 68
             data_buf = gpu.types.Buffer('FLOAT', len(prim_data), prim_data)
-            prim_tex = gpu.types.GPUTexture((17, prim_count), format='RGBA32F', data=data_buf)
+            prim_tex = gpu.types.GPUTexture((18, prim_count), format='RGBA32F', data=data_buf)
 
             domain_size = _compute_preview_domain_size(output_obj, o_props, inv_world_output, flat_elements)
 

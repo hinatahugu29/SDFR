@@ -330,7 +330,8 @@ vec4 map_impl(vec3 p){
         vec4 dd3 = texelFetch(primTex,ivec2(13,i),0); 
         vec4 dd4 = texelFetch(primTex,ivec2(14,i),0); 
         vec4 mod_p = texelFetch(primTex,ivec2(15,i),0); 
-        vec4 gyro_p = texelFetch(primTex,ivec2(16,i),0); 
+        vec4 gyro_p = texelFetch(primTex,ivec2(16,i),0);
+        vec4 layer_p = texelFetch(primTex,ivec2(17,i),0); // [layer_smoothness, layer_blend_profile, layer_chamfer_smooth, unused] 
         
         vec3 lp = q_rotate(p - c0.xyz, q_conj(c1));
         float k=max(c3.y, 0.0001);
@@ -523,7 +524,8 @@ vec4 map_impl(vec3 p){
                     }
                 }
                 currentLayerId=layerId; layerD=1e10; layerCol=vec3(1.0); layerMet=0.0; layerRou=0.5; layerInit=false;
-                layerK=k; layerProfile=c5.y; layerCS=c5.z;
+                // 合流の強さは仕切りの設定から。プリミティブ自身の smoothness ではない
+                layerK=max(layer_p.x, 0.0001); layerProfile=layer_p.y; layerCS=layer_p.z;
             }
             if(!layerInit){
                 if(op > 0.5) layerD = 1e10; else layerD = dd;

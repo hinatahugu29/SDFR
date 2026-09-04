@@ -19,15 +19,9 @@ pub struct GpuPrimitive {
     pub deform_data2: [f32; 4],     // [bend_angle, bend_axis, bend_center, twist_angle]
     pub deform_data3: [f32; 4],     // [twist_axis, twist_center, taper_factor, taper_axis]
     pub deform_data4: [f32; 4],     // [taper_center, 0, 0, 0]
-    pub modifier_params: [f32; 4],  // [edge_profile, shell_thickness, edge_chamfer_smooth, edge_profile_size]
+    pub modifier_params: [f32; 4],  // [edge_profile, shell_thickness, edge_chamfer_smooth, free]
     pub gyroid_params: [f32; 4],     // [phase, axis_x, axis_y, axis_z]
-    // 仕切り由来のレイヤー合流設定。common.wgsl の struct Primitive と順序を揃えること
-    pub layer_params: [f32; 4],      // [layer_smoothness, layer_blend_profile, layer_chamfer_smooth, unused]
 }
-
-// common.wgsl の struct Primitive は vec4 のみで構成される。数が食い違うと
-// シェーダは通るのにフィールドがずれて読まれるため、サイズを固定しておく
-const _: () = assert!(std::mem::size_of::<GpuPrimitive>() == 18 * 16);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]

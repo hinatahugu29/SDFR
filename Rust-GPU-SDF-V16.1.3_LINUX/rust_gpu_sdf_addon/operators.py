@@ -273,14 +273,13 @@ class SDF_OT_move_to_sdf_collection(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     
     def execute(self, context):
-        # 行き先は「アクティブな出力オブジェクトの target_collection」。scene.objects の
-        # 先頭ヒットで決めると、出力オブジェクトが複数あるシーンで意図しない側へ入り、
-        # しかも順序が Blender 内部の都合で決まるため再現性が無い
         target_col = None
-        out_obj = get_sdf_output_obj(context)
-        if out_obj:
-            target_col = out_obj.sdf_props.target_collection
-
+        for o in context.scene.objects:
+            p = getattr(o, "sdf_props", None)
+            if p and p.is_output and p.target_collection:
+                target_col = p.target_collection
+                break
+        
         if not target_col:
             target_col = bpy.data.collections.get("SDF_Collection")
             
@@ -288,12 +287,9 @@ class SDF_OT_move_to_sdf_collection(bpy.types.Operator):
             self.report({'WARNING'}, "SDF Collection not found")
             return {'CANCELLED'}
             
-        guessed_sphere = []
         for obj in context.selected_objects:
             if obj.name not in target_col.objects:
-                # users_collection は参照のたびに再構築されるので、unlink しながら回すと
-                # 取りこぼして元のコレクションにリンクが残る（二重所属になる）
-                for col in list(obj.users_collection):
+                for col in obj.users_collection:
                     col.objects.unlink(obj)
                 target_col.objects.link(obj)
 
@@ -309,21 +305,7 @@ class SDF_OT_move_to_sdf_collection(bpy.types.Operator):
             if 'box' in name_lower or 'cube' in name_lower: obj.sdf_props.shape_type = 'box'
             elif 'torus' in name_lower: obj.sdf_props.shape_type = 'torus'
             elif 'cylinder' in name_lower: obj.sdf_props.shape_type = 'cylinder'
-            else:
-                # 形状はオブジェクト名からしか推定できない。当たらなければ球になるが、
-                # 無言だと「ボタンが壊れている」と受け取られるので必ず知らせる
-                obj.sdf_props.shape_type = 'sphere'
-                guessed_sphere.append(obj.name)
-
-        if guessed_sphere:
-            names = ", ".join(guessed_sphere[:5])
-            if len(guessed_sphere) > 5:
-                names += f", ... (+{len(guessed_sphere) - 5})"
-            self.report(
-                {'WARNING'},
-                f"Shape not recognized from the object name; defaulted to Sphere: {names}. "
-                "Set Shape Type manually in the SDF panel"
-            )
+            else: obj.sdf_props.shape_type = 'sphere'
 
         return {'FINISHED'}
 
