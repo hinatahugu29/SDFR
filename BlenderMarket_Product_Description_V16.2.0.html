@@ -125,6 +125,7 @@
             <strong>V16.0.6</strong> focuses on finishing workflow quality. Shared material controls make it easier to unify a piece by applying one base color, Metallic, or Roughness value across the full SDF stack. Snapshot Mesh creates a static mesh copy while preserving the live SDF workspace for further iteration.<br><br>
             <strong>V16.0.7</strong> adds a layer-style boolean workflow through <strong>Layer Boundary</strong> collection dividers. This lets decorative Math Field layers use local Subtract or Intersect operations without cutting every earlier primitive in the stack, opening a more controllable way to build pattern-over-form designs.<br><br>
             <strong>V16.1.0</strong> brings native Blender Curves into the SDF stack. With <strong>Curve Sync</strong> you can draw a path using Blender's own curve tools and have it generate a solid, blendable SDF pipe that supports Union, Subtract, and Intersect just like any other primitive — either by moving the curve into the SDF Collection, or by pointing a lightweight <strong>Curve Ref</strong> proxy at a curve that lives anywhere else in your scene. A new numeric <strong>Bezier</strong> primitive and a whole-material <strong>Transmission</strong> control round out the release.<br><br>
+            <strong>V16.2.0</strong> reworks <strong>Layer Boundary</strong>. Switching it on used to give you a group that fused into one shape and then blended softly into the rest of the model — the opposite of a boundary — because the strength of that merge was read from whichever primitive came first in the group. The divider now carries its own <strong>Layer Blend</strong>, defaulting to a hard seam, and the group it governs is the rows above it, matching group layout and parenting. Files that use Layer Boundary may look different.<br><br>
             <strong>V16.1.3</strong> fixes Global Symmetry: with Symmetry X/Y/Z enabled the Ghost Preview showed the mirrored result correctly, but mesh generation returned an empty or half-missing mesh. <strong>V16.1.2</strong> is a bug-fix release: a crash on macOS, traced to SDF.R forcing a scene re-evaluation from a timer, is fixed. <strong>V16.1.1</strong> targeted viewport responsiveness. The Ghost Preview now renders at a reduced resolution while you navigate or transform, and returns to full resolution the moment you stop. Because this reduces pixel count rather than scene complexity, it stays effective no matter how many primitives are in play. Mesh generation is untouched.
         </p>
     </div>
@@ -132,6 +133,27 @@
     <hr style="border:0; border-top:1px solid #eee; margin:40px 0;">
 
     <!-- What's New Section -->
+    <h3 style="color:#222; border-bottom:2px solid #eee; padding-bottom:10px; font-weight:bold; font-size:1.5em;">✨ What's New in V16.2.0</h3>
+        <ul style="list-style-type:none; padding-left:0; font-size:1.05em; line-height:1.7;">
+        <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #d9534f;">
+            <strong>🧱 Layer Boundary Now Produces a Hard Boundary:</strong> a layer boundary builds its group on its own and merges the finished shape into the scene once — but that merge was a smooth union whose blend radius came from <strong>whichever primitive happened to come first in the group</strong>. Inside the group that value does nothing, so it looked inert while you worked and then quietly decided how the whole group met the rest of the model. At the default of 0.2, switching Layer Boundary on gave you a group that melted into the scene as one soft lump.
+            <br><br>
+            The divider now carries its own <strong>Layer Blend</strong> and <strong>Profile</strong>, defaulting to <strong>0.0</strong> — a hard seam. Primitive Smoothness, and the way a new primitive inherits it, are untouched.
+        </li>
+        <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #1565c0;">
+            <strong>📐 A Layer Covers the Group Above Its Divider:</strong> group layout and stack parenting always acted on the rows above a divider while the layer acted on the rows below it, so one divider's settings applied to two different groups. They now agree, and a layer no longer leaks past the next divider.
+        </li>
+        <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #1565c0;">
+            <strong>🎯 One Divider Per Part:</strong> keeping eyes, eyelids and a shell from melting into the body is what this feature is for, and it needs a layer for every part — the body included. A single layer on its own does very little: the first layer merges into an empty scene, and a shape left outside every layer still blends into whatever the layers merged into.
+        </li>
+        <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #f0ad4e;">
+            <strong>🐛 Fixes:</strong> a divider carrying Radial or Grid threw its layout away entirely when Layer Boundary was switched on; the ghost preview and the mesh now implement the same layer rules; and <strong>Move to SDF</strong> no longer picks an unpredictable destination in scenes with several SDF outputs, no longer leaves a stale collection link behind, and now says which objects it had to guess a shape for instead of silently making them spheres.
+        </li>
+        <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #6c757d;">
+            <strong>⚠️ Existing Files:</strong> both Layer Boundary changes alter scenes that use it — the groups shift, and the seams become hard. The new behaviour is what the feature was always meant to do, so the fix is usually to leave it; Layer Blend at 0.2 reproduces the old default if you want the softness back. Files that never used Layer Boundary are unchanged.
+        </li>
+    </ul>
+
     <h3 style="color:#222; border-bottom:2px solid #eee; padding-bottom:10px; font-weight:bold; font-size:1.5em;">✨ What's New in V16.1.3</h3>
         <ul style="list-style-type:none; padding-left:0; font-size:1.05em; line-height:1.7;">
         <li style="margin-bottom:20px; padding-left:15px; border-left:3px solid #d9534f;">
@@ -337,6 +359,28 @@
 
     <!-- Release Notes Header -->
     <h2 style="color:#222; font-weight:bold; font-size:1.8em; margin-bottom:20px; border-left:5px solid #222; padding-left:12px;">Release History &amp; Release Notes</h2>
+
+    <!-- V16.2.0 Release Notes -->
+    <div style="margin-bottom:40px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+        <h3 style="margin-top:0; color:#222; font-size:1.35em; font-weight:bold;">SDF.R V16.2.0 Release Notes — Layer Boundary, Reworked</h3>
+        <p style="font-size:0.95em; color:#666; margin-bottom:15px; font-style:italic;">
+            Layer Boundary now does what its name promises. Files that use it may look different; files that never did are unchanged from V16.1.3.
+        </p>
+
+        <strong style="color:#0066cc; font-size:1.05em;">The seam belongs to the divider now</strong>
+        <ul style="padding-left:20px; line-height:1.6; font-size:0.95em; color:#444; margin-top:5px;">
+            <li style="margin-bottom:10px;">The merge into the scene took its blend radius from the first primitive in the group — a value that does nothing inside the group, so it appeared inert and then decided the outer seam. At the default 0.2, a layer melted into the model.</li>
+            <li style="margin-bottom:10px;">The divider now carries <strong>Layer Blend</strong> (default 0.0, a hard seam) and its own <strong>Profile</strong>. Primitive Smoothness and its inheritance are unchanged.</li>
+            <li style="margin-bottom:0;">A layer now covers the group <strong>above</strong> its divider, matching group layout and parenting, and no longer leaks past the next divider.</li>
+        </ul>
+
+        <strong style="color:#222; font-size:1.05em;">Fixes</strong>
+        <ul style="padding-left:20px; line-height:1.6; font-size:0.95em; color:#444; margin-top:5px;">
+            <li style="margin-bottom:10px;">A divider carrying Radial, Grid or any other group layout discarded that layout when Layer Boundary was switched on. The two now work together.</li>
+            <li style="margin-bottom:10px;">The ghost preview and the mesh generator now implement the same layer rules.</li>
+            <li style="margin-bottom:0;"><strong>Move to SDF:</strong> uses the active SDF output as its destination rather than the first one it finds, relinks cleanly for objects that belonged to several collections, and reports which objects it had to guess a shape for rather than turning them into spheres in silence.</li>
+        </ul>
+    </div>
 
     <!-- V16.1.3 Release Notes -->
     <div style="margin-bottom:40px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
@@ -937,7 +981,7 @@
 
     <!-- Footer -->
     <div style="text-align:center; color:#999; font-size:0.8em; margin-top:40px; border-top:1px solid #f1f3f5; padding-top:20px;">
-        <div style="margin-bottom:6px;">Listing reviewed on 2026-08-17 for SDF.R V16.1.3.</div>
+        <div style="margin-bottom:6px;">Listing reviewed on 2026-09-04 for SDF.R V16.2.0.</div>
         Copyright &copy; 2026 hinata_hugu. Built with passion and AI collaboration.
     </div>
 

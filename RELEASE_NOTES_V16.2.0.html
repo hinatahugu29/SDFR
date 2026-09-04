@@ -1,0 +1,162 @@
+<div style="font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:#333; line-height:1.7; max-width:820px; margin:auto; padding:10px;">
+
+  <h1 style="color:#222; font-weight:bold; font-size:2em; margin-bottom:4px;">SDF.R V16.2.0 Release Notes</h1>
+  <p style="font-size:1.2em; color:#555; margin-top:0; font-style:italic;">Layer Boundary, Reworked</p>
+  <p style="font-size:0.9em; color:#888; margin-top:0;">Released 2026-09-04</p>
+
+  <p style="font-size:1.05em; margin:24px 0 30px 0;">
+    V16.2.0 makes Layer Boundary do what its name promises. Until now, switching it on gave you a
+    group that fused into one shape and then blended softly into the rest of the scene — which is
+    the opposite of a boundary. The divider now owns the seam, and defaults to a hard one.
+    <strong>This changes how existing files look if they use Layer Boundary.</strong> Nothing else
+    in the release alters output: if you have never switched it on, your meshes are identical to
+    V16.1.3.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🧱 Layer Boundary now produces a hard boundary</h2>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">What was wrong</h3>
+    <p style="font-size:0.97em; color:#444;">
+      A layer boundary evaluates its group on its own and then merges the finished shape into the
+      scene once. That much always worked. The problem was the merge itself: it was a smooth union,
+      and the blend radius it used was read from <strong>whichever primitive happened to come first
+      in the group</strong>.
+    </p>
+    <p style="font-size:0.97em; color:#444;">
+      That value was doing double duty, and badly. Inside the group, the first primitive's
+      Smoothness has no effect at all — the accumulator has nothing to blend against yet. So the
+      number appeared to do nothing while you were shaping the group, and then silently decided how
+      the whole group met the rest of the model. With the default Smoothness of 0.2 sitting on that
+      first shape, turning Layer Boundary on produced a group that melted into the scene as one
+      soft lump.
+    </p>
+    <p style="font-size:0.97em; color:#444;">
+      If you tried to solve that by turning Smoothness down, you were working on the right idea
+      with the wrong control — and if the shape you turned down was not the first in the group, it
+      did nothing at all.
+    </p>
+  </div>
+
+  <p style="font-size:0.97em; color:#444;">The divider now carries its own settings, shown when Layer Boundary is on:</p>
+  <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin:10px 0 24px 0;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Setting</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Meaning</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Layer Blend</strong></td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">Blend radius where this layer meets the rest of the scene. Default <strong>0.0</strong> — a hard seam</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;"><strong>Profile</strong></td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">Blend shape for that merge: Round, Sharp, Soft, Tight, Chamfer</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="font-size:0.97em; color:#444;">
+    <strong>Primitive Smoothness is untouched</strong>, including the way a newly added primitive
+    inherits the value from the previous one. Shapes inside a group still blend with each other
+    exactly as before. Only the single merge into the scene changed hands.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">📐 A layer now covers the group above its divider</h2>
+
+  <p style="font-size:0.97em; color:#444;">
+    Group layout — Mirror, Radial, Spiral, Grid, Jitter — and stack parenting have always acted on
+    the rows <strong>above</strong> a divider. The layer acted on the rows <strong>below</strong>
+    it. One divider's settings applied to two different groups, which is not something you can hold
+    in your head while modelling.
+  </p>
+  <p style="font-size:0.97em; color:#444;">
+    They now agree: <strong>a divider closes the group above it.</strong> Everything from the
+    previous divider down to this one belongs to the group. A layer also no longer leaks past the
+    next divider — previously a layer ran until the next divider of any kind, so an unrelated plain
+    divider would end it without saying so.
+  </p>
+  <p style="font-size:0.97em; color:#444;">
+    <strong>If you have a file using Layer Boundary, its groups have shifted.</strong> The rows you
+    thought were in the layer are now the rows above the divider instead of below it. In most
+    stacks the fix is to move the divider, or to place a second one.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🐛 Fixes</h2>
+
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:14px;"><strong>Layout on a layer boundary no longer disappears.</strong> A divider carrying Radial, Grid or any other group layout threw the layout away entirely the moment Layer Boundary was switched on — the layer branch finalised the group before the layout matrices were applied. The two now work together on a single divider.</li>
+    <li style="margin-bottom:14px;"><strong>The ghost preview and the mesh agree on layers.</strong> The layer rules exist in three places: the CPU mesher, the GPU mesher, and the GLSL raymarch that draws the preview. All three now implement the rules above. Found while testing this release, not reported from the field.</li>
+    <li style="margin-bottom:14px;"><strong>Move to SDF chose the wrong destination.</strong> The target collection came from the first output object found while walking the scene, so a file with more than one SDF output sent objects to an unpredictable one — and since the order is Blender's internal business, not even consistently between sessions. It now uses the active output object.</li>
+    <li style="margin-bottom:14px;"><strong>Move to SDF could leave the old link behind.</strong> Unlinking while iterating an object's collections can skip entries, leaving an object in both its old collection and the SDF one.</li>
+    <li style="margin-bottom:0;"><strong>Move to SDF fell back to a sphere in silence.</strong> It identifies a shape from the object's <em>name</em> — box, cube, torus, cylinder — and anything else becomes a sphere. That is a real limitation, since there is no mesh-based SDF shape yet, but doing it without a word made it look as though the button had failed. It now reports which objects it had to guess at. An arbitrary sculpted or imported mesh still cannot be brought in this way; mesh SDF shapes are a separate piece of work.</li>
+  </ul>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">Upgrading</h2>
+
+  <p style="font-size:0.97em; color:#444;">
+    Install over the previous version as usual. <strong>Shader cache clearing is not required</strong> —
+    SDF.R detects a failed start and retries by itself. The GPU shader code did change in this
+    release, so if you keep several versions side by side, use the V16.2.0 build rather than mixing
+    folders.
+  </p>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">If your file used Layer Boundary</h3>
+    <ol style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7; margin-bottom:0;">
+      <li style="margin-bottom:8px;">Open the file and look at the shapes that were in a layer.</li>
+      <li style="margin-bottom:8px;">The group is now the rows <strong>above</strong> the divider. Move the divider, or add one, so the group is the set you meant.</li>
+      <li style="margin-bottom:0;">The seam is now hard. If you want the old softness back, raise <strong>Layer Blend</strong> on that divider — 0.2 reproduces the old default.</li>
+    </ol>
+  </div>
+
+  <div style="margin-bottom:28px; padding:20px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+    <h3 style="margin-top:0; color:#0066cc; font-size:1.2em; font-weight:bold;">If you want parts that do not melt together</h3>
+    <p style="font-size:0.97em; color:#444;">
+      This is what the feature is for, and it takes <strong>one divider per part</strong>. A single
+      layer on its own does very little: the first layer merges into an empty scene, so its Layer
+      Blend has nothing to act on, and any shape left outside every layer still blends into whatever
+      the layers merged into.
+    </p>
+    <pre style="background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:14px; font-size:0.9em; color:#333; overflow-x:auto;">01 Body A
+02 Body B
+== Layer: Head ==     Layer Boundary on
+03 Eye L
+04 Eye R
+05 Eyelid / Subtract  cuts the eyes only — the body is in another layer
+== Layer: Eyes ==     Layer Boundary on, Layer Blend 0.0
+06 Shell
+== Layer: Shell ==    Layer Boundary on</pre>
+    <p style="font-size:0.97em; color:#444; margin-bottom:0;">
+      Note that merging a layer is always a Union. Layer Boundary stops shapes from blending, but
+      overlapping shapes still form one connected solid. If you need the eyes as a separate mesh
+      object, build them as a second SDF output.
+    </p>
+  </div>
+
+  <p style="font-size:0.97em; color:#444;">
+    The user guide's chapter on Collection Divider and Layer Boundary has been rewritten around
+    this, and Workflow Examples gains a section on keeping eyes, eyelids and a shell apart.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">Previously in V16.1.3</h2>
+  <p style="font-size:0.97em; color:#444;">V16.1.3 fixed Global Symmetry:</p>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:8px;"><strong>Symmetry X / Y / Z dropped negative-side primitives when generating a mesh.</strong> The Ghost Preview showed the mirrored result correctly, but the mesh generator discarded any primitive whose centre sat on the negative side of the plane. With a Boolean, the base solid still meshed and only the cut vanished.</li>
+    <li style="margin-bottom:0;"><strong>Clicking a layer in The Stack selects it</strong> wherever you click the row, not only on the name.</li>
+  </ul>
+  <p style="font-size:0.95em; color:#666; font-style:italic;">See the V16.1.3 release notes for full details.</p>
+
+</div>
