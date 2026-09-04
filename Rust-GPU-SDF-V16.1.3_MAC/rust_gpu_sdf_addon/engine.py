@@ -110,7 +110,9 @@ def get_sdf_state_fingerprint(output_obj, depsgraph):
             state.append((i, False))
             continue
 
-        state.append((i, item.item_type, item.enabled, item.start_new_group, item.is_layer_boundary, item.obj_name, item.name_override))
+        state.append((i, item.item_type, item.enabled, item.start_new_group, item.is_layer_boundary,
+                      item.layer_smoothness, item.layer_blend_profile, item.layer_chamfer_smooth,
+                      item.obj_name, item.name_override))
         
         obj_orig = item.object_ptr
         try:
@@ -436,12 +438,14 @@ def _finalize_group_elements(elements, primitives, auto_domain, inv_world_output
             primitives.extend(prebuilt)
             continue
         p = build_element_primitive(el, auto_domain, inv_world_output, props, max_extent_list,
-                                    layer_id=el.get('layer_id', 0))
+                                    layer_id=el.get('layer_id', 0),
+                                    layer_params=el.get('layer_params'))
         if p:
             primitives.append(p)
 
 
-def build_element_primitive(el, auto_domain, inv_world_output, props, max_extent, layer_id=0):
+def build_element_primitive(el, auto_domain, inv_world_output, props, max_extent, layer_id=0,
+                            layer_params=None):
     obj_orig = el['obj_orig']
     obj = el['obj_eval']
     p_props = el['p_props']
@@ -661,6 +665,9 @@ def build_element_primitive(el, auto_domain, inv_world_output, props, max_extent
 
     sym_loc = [loc.x, loc.y, loc.z]
     size = (scale.x, scale.y, scale.z)
+
+    # レイヤー合流用の値。仕切り側の設定であり、このプリミティブ自身の smoothness とは無関係
+    layer_k, layer_prof, layer_cs = layer_params if layer_params else (0.0, 0, 0.0)
     
     return rust_gpu_sdf.SdfPrimitive(
         shape, sym_loc, [rot.x, rot.y, rot.z, rot.w], radius, size, op_int, smoothness, 
@@ -677,7 +684,10 @@ def build_element_primitive(el, auto_domain, inv_world_output, props, max_extent
         edge_chamfer_smooth=edge_chamfer_smooth,
         shell_thickness=shell_thickness,
         edge_profile_size=edge_profile_size,
-        layer_id=layer_id
+        layer_id=layer_id,
+        layer_smoothness=layer_k,
+        layer_blend_profile=layer_prof,
+        layer_chamfer_smooth=layer_cs
     )
 
 def _curve_polylines_from_to_mesh(c_obj):
@@ -1006,11 +1016,31 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
             if item.is_layer_boundary:
                 # レイアウト展開済みの expanded_group を確定する。working_group（未展開）を
                 # 渡すと、Radial/Grid 等を持つ仕切りで Layer Boundary を ON にした瞬間に
-                # レイアウトが丸ごと失われる
+                # レイアウトが丸ごと失われる。
+                # レイヤーは仕切りより「上」のグループに掛ける。レイアウト展開も親子付け
+                # （sync_sdf_stack）も上のグループを対象にしているので、以前のように
+                # 仕切りより下の要素へ layer_id を付けると、同じ仕切りの設定が機能ごとに
+                # 別のグループへ効くことになる
+                layer_id = next_layer_id
+                next_layer_id += 1
+                layer_params = (
+                    item.layer_smoothness,
+                    int(item.layer_blend_profile),
+                    item.layer_chamfer_smooth,
+                )
+                for el in expanded_group:
+                    el['layer_id'] = layer_id
+                    el['layer_params'] = layer_params
+                    prebuilt = el.get('prebuilt_prims')
+                    if prebuilt:
+                        for prim in prebuilt:
+                            prim.layer_id = layer_id
+                            prim.layer_smoothness = layer_params[0]
+                            prim.layer_blend_profile = layer_params[1]
+                            prim.layer_chamfer_smooth = layer_params[2]
                 _finalize_group_elements(expanded_group, primitives, auto_domain, inv_world_output, props, max_extent_list)
                 working_group = []
-                active_layer_id = next_layer_id
-                next_layer_id += 1
+                active_layer_id = 0
             elif item.start_new_group:
                 active_layer_id = 0
                 # 独立グループなので、ここで primitives に確定追加してリセット

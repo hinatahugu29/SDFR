@@ -124,7 +124,10 @@ fn detect_pass(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_
 
             var bound_radius = length(local_ext * size);
             let edge_pad = select(prim.modifier_params.w, 0.0, shape_id == 15u);
-            bound_radius += prim.params.y + abs(prim.noise_params.x) + prim.modifier_params.y + edge_pad;
+            // params.y はプリミティブ同士のブレンド、layer_params.x はレイヤーとシーンの合流。
+            // どちらも表面を外側へ膨らませるので、ブロック検出の余裕に両方入れないと
+            // 取りこぼしたブロックが穴になる
+            bound_radius += prim.params.y + prim.layer_params.x + abs(prim.noise_params.x) + prim.modifier_params.y + edge_pad;
 
             let mode_flags = u32(prim.layout_data1.x);
             if ((mode_flags & 1u) != 0u) {

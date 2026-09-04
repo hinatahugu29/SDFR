@@ -409,6 +409,15 @@ class SDF_PT_main(bpy.types.Panel):
                 box.label(text=f"Group Settings: {active_stack_item.name_override}", icon='FILE_FOLDER')
                 box.prop(active_stack_item, "name_override", text="Name")
                 box.prop(active_stack_item, "is_layer_boundary", text="Layer Boundary")
+                if active_stack_item.is_layer_boundary:
+                    sub_layer = box.box().column(align=True)
+                    sub_layer.label(text="Layer Merge", icon='MOD_MASK')
+                    sub_layer.prop(active_stack_item, "layer_smoothness", text="Layer Blend")
+                    sub_layer.prop(active_stack_item, "layer_blend_profile", text="Profile")
+                    if active_stack_item.layer_blend_profile == '4':
+                        sub_layer.prop(active_stack_item, "layer_chamfer_smooth", text="Chamfer Smooth")
+                    if active_stack_item.layer_smoothness <= 0.0:
+                        sub_layer.label(text="Hard boundary (no blending outside)", icon='CHECKMARK')
                 box.prop(active_stack_item, "start_new_group", text="Break Parent (Start New Group)")
                 
                 empty_props = obj.sdf_props

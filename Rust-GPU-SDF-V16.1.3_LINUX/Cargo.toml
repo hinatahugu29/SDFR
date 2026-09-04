@@ -26,3 +26,7 @@ path = "src/bin_test_wgsl.rs"
 [[bin]]
 name = "test_wgsl_spv"
 path = "src/bin_test_wgsl2.rs"
+
+[[bin]]
+name = "test_wgsl_all"
+path = "src/bin_test_wgsl_all.rs"

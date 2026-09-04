@@ -249,9 +249,36 @@ class SDF_StackItem(bpy.types.PropertyGroup):
     start_new_group: bpy.props.BoolProperty(name="Start New Group", default=False, update=update_sdf_callback)
     is_layer_boundary: bpy.props.BoolProperty(
         name="Layer Boundary",
-        description="Evaluate this divider's group as a local layer and union the layer result back into the scene",
+        description=(
+            "Keep this group from blending with anything outside it. The group is evaluated on "
+            "its own and unioned into the scene once, using Layer Blend below"
+        ),
         default=False,
         update=update_sdf_callback
+    )
+    # レイヤーをシーンへ合流させるときだけに使う値。プリミティブ側の smoothness とは別物で、
+    # 以前は「レイヤー先頭プリミティブの Smoothness」が流用されていた。その値はグループ内部の
+    # 見た目には効かないため、動かしても外との合流だけが変わるという分かりにくさがあった
+    layer_smoothness: bpy.props.FloatProperty(
+        name="Layer Blend",
+        description=(
+            "Blend radius used where this layer meets the rest of the scene. "
+            "0 keeps the boundary hard, which is what Layer Boundary is usually for"
+        ),
+        default=0.0, min=0.0, max=2.0, update=update_sdf_callback
+    )
+    layer_blend_profile: bpy.props.EnumProperty(
+        items=[
+            ('0', "Round", "Standard smooth min"),
+            ('1', "Sharp", "Pulls in toward the corner"),
+            ('2', "Soft", "Gentle, smoothly continuous"),
+            ('3', "Tight", "Squared, deep but tight"),
+            ('4', "Chamfer", "Flat 45 degree bevel")
+        ],
+        name="Layer Profile", default='0', update=update_sdf_callback
+    )
+    layer_chamfer_smooth: bpy.props.FloatProperty(
+        name="Layer Chamfer Smooth", default=0.0, min=0.0, max=2.0, update=update_sdf_callback
     )
 
 

@@ -54,7 +54,16 @@ pub struct SdfPrimitive {
     pub edge_chamfer_smooth: f32,
     pub shell_thickness: f32,
     pub gyroid_params: [f32; 4],
+    #[pyo3(get, set)]
     pub layer_id: u32,
+    // レイヤーをシーンへ合流させるときの値。仕切り（divider）側の設定であり、
+    // このプリミティブ自身の smoothness / blend_profile とは無関係
+    #[pyo3(get, set)]
+    pub layer_smoothness: f32,
+    #[pyo3(get, set)]
+    pub layer_blend_profile: u32,
+    #[pyo3(get, set)]
+    pub layer_chamfer_smooth: f32,
     pub vertices: Option<Vec<f32>>,
     pub indices: Option<Vec<u32>>,
 }
@@ -62,7 +71,7 @@ pub struct SdfPrimitive {
 #[pymethods]
 impl SdfPrimitive {
     #[new]
-    #[pyo3(signature = (shape_type, center, rotation, radius, size, operation, smoothness, color, metallic, roughness, noise_strength, noise_scale, layout_data1=[0.0,0.0,0.0,0.0], layout_data2=[0.0,0.0,0.0,0.0], layout_data3=[0.0,0.0,0.0,0.0], layout_data4=[0.0,0.0,0.0,0.0], extra_params=[0.0,0.0,0.0,0.0], gyroid_params=[0.0,1.0,1.0,1.0], deform_data1=[0.0,0.0,0.0,0.0], deform_data2=[0.0,0.0,0.0,0.0], deform_data3=[0.0,0.0,0.0,0.0], deform_data4=[0.0,0.0,0.0,0.0], blend_profile=0, chamfer_smooth=0.0, edge_profile=0, edge_chamfer_smooth=0.0, shell_thickness=0.0, edge_profile_size=0.0, layer_id=0, vertices=None, indices=None))]
+    #[pyo3(signature = (shape_type, center, rotation, radius, size, operation, smoothness, color, metallic, roughness, noise_strength, noise_scale, layout_data1=[0.0,0.0,0.0,0.0], layout_data2=[0.0,0.0,0.0,0.0], layout_data3=[0.0,0.0,0.0,0.0], layout_data4=[0.0,0.0,0.0,0.0], extra_params=[0.0,0.0,0.0,0.0], gyroid_params=[0.0,1.0,1.0,1.0], deform_data1=[0.0,0.0,0.0,0.0], deform_data2=[0.0,0.0,0.0,0.0], deform_data3=[0.0,0.0,0.0,0.0], deform_data4=[0.0,0.0,0.0,0.0], blend_profile=0, chamfer_smooth=0.0, edge_profile=0, edge_chamfer_smooth=0.0, shell_thickness=0.0, edge_profile_size=0.0, layer_id=0, layer_smoothness=0.0, layer_blend_profile=0, layer_chamfer_smooth=0.0, vertices=None, indices=None))]
     fn new(
         shape_type: String,
         center: [f32; 3],
@@ -93,6 +102,9 @@ impl SdfPrimitive {
         shell_thickness: f32,
         edge_profile_size: f32,
         layer_id: u32,
+        layer_smoothness: f32,
+        layer_blend_profile: u32,
+        layer_chamfer_smooth: f32,
         vertices: Option<Vec<f32>>,
         indices: Option<Vec<u32>>,
     ) -> Self {
@@ -126,6 +138,9 @@ impl SdfPrimitive {
             shell_thickness,
             gyroid_params,
             layer_id,
+            layer_smoothness,
+            layer_blend_profile,
+            layer_chamfer_smooth,
             vertices,
             indices,
         }
@@ -933,9 +948,12 @@ fn get_scene_sdf_with_color(p: Vector3<f32>, primitives: &[SdfPrimitive], bvhs: 
                     layer = EvalAccum::empty();
                 }
                 current_layer_id = prim.layer_id;
-                layer_k = prim.smoothness.max(0.0001);
-                layer_profile = prim.blend_profile;
-                layer_cs = prim.chamfer_smooth;
+                // 合流の強さは仕切りの設定から取る。以前はレイヤー先頭プリミティブの
+                // smoothness を流用していたが、その値はグループ内部の見た目には効かないため
+                // 「動かしても外との合流だけが変わる」分かりにくさになっていた
+                layer_k = prim.layer_smoothness;
+                layer_profile = prim.layer_blend_profile;
+                layer_cs = prim.layer_chamfer_smooth;
             }
             apply_primitive_to_accum(&mut layer, d_prim, prim);
         } else {
@@ -2457,6 +2475,7 @@ fn convert_to_gpu_prim(p: &SdfPrimitive) -> gpu::GpuPrimitive {
         deform_data3: p.deform_data3,
         deform_data4: p.deform_data4,
         modifier_params: [p.edge_profile as f32, p.shell_thickness, p.edge_chamfer_smooth, p.edge_profile_size],
+        layer_params: [p.layer_smoothness, p.layer_blend_profile as f32, p.layer_chamfer_smooth, 0.0],
         gyroid_params: p.gyroid_params,
     }
 }
