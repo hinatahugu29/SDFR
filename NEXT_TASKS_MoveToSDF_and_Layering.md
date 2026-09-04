@@ -222,3 +222,38 @@ L-1 で divider に追加する `layer_smoothness` の既定値を **0.0（硬�
 - バージョン番号（bl_info / build_sdf_addon.ps1 の ZIP 名）の更新とリリースノート。
   L-1 と L-2 は既存ファイルの見た目が変わりうる破壊的変更として明記すること
 - D-3 のドキュメント整備（Comprehensive User Guide / Workflow Examples）
+
+---
+
+# 実機検証結果（2026-09-04）
+
+Blender 実機で以下を確認し、**いずれも良好**:
+
+1. **レイヤー未使用の既存シーン** — プレビュー / ベイクとも従来どおり。`GpuPrimitive` と WGSL の
+   `struct Primitive` にフィールドを1つ追加したため、順序がずれていれば派手に壊れる。正常＝構造体は一致
+2. **Layer Blend 0.0 ↔ 0.5** — プレビューとベイクが同じように変化。GLSL（shader.py）と
+   GPU メッシャー（common.wgsl）の一致を確認
+3. **Layer Blend 1.0 以上** — 穴なし。detect.wgsl の `bound_radius += prim.layer_params.x` が効いている
+4. **Radial + Layer Boundary を同一 divider** — レイアウトが出る（L-3 修正の確認）
+
+これで V16.2.0 の技術的な検証は完了。CPU パスは headless テストで別途実測済み
+（面数が Layer Blend 0.0 > 0.2 > 0.5 の順に減少、修正前バイナリでは引数自体が TypeError）。
+
+## 実装上の注意（今後のために）
+
+レイヤー処理の実装は **3箇所** ある。1箇所でも漏らすとプレビューと確定メッシュが食い違う。
+
+- `src/lib.rs` — CPU メッシャー
+- `src/common.wgsl` — GPU メッシャー。**fast path と slow path の2箇所**にある
+- `rust_gpu_sdf_addon/shader.py` + `handlers.py` — ゴーストプレビューの GLSL レイマーチ
+
+今回、最初の実装で3つ目を見落とし、プレビューだけ旧仕様のまま出荷しかけた。
+`handlers.py` の `_flatten_stack_for_preview` は `engine.py` の走査ロジックの写しなので、
+スタックの解釈を変えるときは必ず両方を直すこと。
+
+## 残作業
+
+- SNS 投稿文（SNS_POSTS_V16.2.0.md）
+- Superhive への V16.2.0 アップロードと商品ページ更新
+- 報告者への返信送付（REPLY_TO_REPORTER_V16.2.0_LayerBoundary.md。公開後に送ること）
+- master への反映（現在 V16.2.0 の資料はローカルのみ。コードは v16.2.0-build ブランチに push 済み）
