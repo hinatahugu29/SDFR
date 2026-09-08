@@ -163,7 +163,25 @@ def _poll_sdf_output(self, obj):
 
 
 def _update_active_output(self, context):
-    """アクティブツリーが切り替わったらプレビューを作り直す。"""
+    """アクティブツリーが切り替わったら、そのツリーを実際に選択状態にする。
+
+    V16.2.1: ツリーの解決は「アクティブオブジェクトが出力ならそれ、次にアクティブ
+    オブジェクトが属するツリー、次にここで記録した値」の順で行う。
+    つまり別ツリーのプリミティブを選んだままドロップダウンだけ変えても、
+    選択のほうが優先されてパネルの中身（The Stack など）が切り替わらなかった。
+    ここで出力オブジェクトをアクティブにして、選択と記録を一致させる。
+    """
+    obj = self.active_output
+    if obj is not None:
+        try:
+            view_layer = getattr(context, "view_layer", None)
+            if view_layer and obj.name in view_layer.objects:
+                for sel in context.selected_objects:
+                    sel.select_set(False)
+                obj.select_set(True)
+                view_layer.objects.active = obj
+        except Exception as exc:
+            print(f"SDF.R: could not select the active tree: {exc}")
     try:
         from . import handlers
         handlers.mark_preview_dirty()
