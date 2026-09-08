@@ -1195,6 +1195,8 @@ class SDF_OT_finalize(bpy.types.Operator):
         history_root = get_or_create_collection("SDF_History")
         results_col = get_or_create_collection("SDF_Results", history_root)
         
+        old_name = obj.name
+
         # 2. 原型の複製（バックアップ）
         count = 1
         while bpy.data.objects.get(f"SDF_Result_{count:03}_Backup"):
@@ -1209,8 +1211,14 @@ class SDF_OT_finalize(bpy.types.Operator):
         backup_obj.sdf_props.is_output = False
         backup_obj.hide_viewport = backup_obj.hide_render = True
         
-        # 3. ライブ更新を一時停止
-        context.scene.sdf_live_update = False
+        # 3. ライブ更新
+        # V16.2.1: 以前は無条件に切っていたが、これはシーン全体の設定なので、
+        # ツリーが複数あるときに1本 Finalize しただけで**他のツリーまで更新が
+        # 止まっていた**（触っても何も起きず、全部確定したように見える）。
+        # 他にツリーが残っているなら止めない。
+        remaining_trees = [o for o in iter_sdf_outputs(context.scene) if o != obj]
+        if not remaining_trees:
+            context.scene.sdf_live_update = False
         
         # 4. 全モディファイアーを適用して確定
         bpy.ops.object.select_all(action='DESELECT')
@@ -1248,8 +1256,32 @@ class SDF_OT_finalize(bpy.types.Operator):
             
             # メインの SDF_Collection は可視のまま空っぽにする
             prim_col.hide_viewport = False 
-        
-        self.report({'INFO'}, f"Mesh finalized and moved to {results_col.name}.")
+
+        # 7. 後片付け（V16.2.1）
+        # 名前をキーにしている非同期の帳簿から、確定済みのツリーぶんを外す。
+        from . import engine as _engine
+        for store in (_engine._last_state_hashes, _engine._pending_updates,
+                      _engine._pending_retry_counts, _engine._last_mesh_requests,
+                      _engine._safe_retry_active, _engine._gpu_chunked_mc_active,
+                      _engine._gpu_chunked_dc_active, _engine._cpu_chunked_fallback_active,
+                      _engine._cached_divider_names_by_output):
+            store.pop(old_name, None)
+            store.pop(obj.name, None)
+        if _engine._inflight_owner in (old_name, obj.name):
+            _engine._inflight_owner = None
+
+        # 記録済みのアクティブツリーが、いま確定したものを指したままだと
+        # パネルが行き場を失う。外して解決に任せる。
+        scene_props = getattr(context.scene, "sdf_scene_props", None)
+        if scene_props is not None and scene_props.active_output == obj:
+            scene_props.active_output = None
+
+        if remaining_trees:
+            msg = (f"Mesh finalized and moved to {results_col.name}. "
+                   f"{len(remaining_trees)} SDF tree(s) still live.")
+        else:
+            msg = f"Mesh finalized and moved to {results_col.name}."
+        self.report({'INFO'}, msg)
         return {'FINISHED'}
 
 class SDF_OT_set_resolution_preset(bpy.types.Operator):

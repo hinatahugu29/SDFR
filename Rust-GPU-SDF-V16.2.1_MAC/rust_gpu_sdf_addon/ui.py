@@ -214,17 +214,19 @@ class SDF_PT_main(bpy.types.Panel):
         m_props = output_obj.sdf_props
 
         # SECTION 0: SDF Tree (V16.2.1)
-        # ツリーが1本だけのときは、余計な行を出さずに従来の見た目のままにする。
+        # 本数に関わらず常に出す。以前は2本以上のときだけ出していたが、
+        # 片方を Finalize して1本になった瞬間に選択UIが消え、
+        # 「触れなくなった」ように見えていた。
+        tree_box = layout.box()
+        tree_row = tree_box.row(align=True)
+        tree_row.label(text="Tree", icon='OUTLINER_COLLECTION')
+        tree_row.prop(scene.sdf_scene_props, "active_output", text="")
+        tree_row.operator("sdf.add_tree", text="", icon='ADD')
+        col_name = m_props.target_collection.name if m_props.target_collection else "(none)"
+        info = tree_box.row()
+        info.label(text=f"Parts: {col_name}")
         if len(outputs) > 1:
-            tree_box = layout.box()
-            tree_row = tree_box.row(align=True)
-            tree_row.label(text="Tree", icon='OUTLINER_COLLECTION')
-            tree_row.prop(scene.sdf_scene_props, "active_output", text="")
-            tree_row.operator("sdf.add_tree", text="", icon='ADD')
-            col_name = m_props.target_collection.name if m_props.target_collection else "(none)"
-            tree_box.label(text=f"Parts: {col_name}")
-        else:
-            layout.operator("sdf.add_tree", text="Add SDF Tree", icon='ADD')
+            info.label(text=f"{len(outputs)} trees")
 
         # SECTION 1: Output & Quality
         box = layout.box()
