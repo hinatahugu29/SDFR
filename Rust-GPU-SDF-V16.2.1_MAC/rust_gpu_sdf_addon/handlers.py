@@ -25,6 +25,11 @@ _cached_prim_count = 0
 _cached_domain_size = 0.0
 _cached_sym_mask = 0
 _cached_base_steps = 0
+# V16.2.1: キャッシュがどのツリー（出力オブジェクト）のものか。
+# プレビューはアクティブなツリーだけを描くので、ツリーが切り替わったら作り直す。
+# アクティブツリーはオブジェクトを選ぶだけでも変わる（resolve_active_output）が、
+# その経路では _preview_dirty が立たないため、名前で突き合わせて検出する。
+_cached_output_name = None
 # Curve Sync のガイド線（レイマーチ非対応の軽量プレビュー）。None=未計算、[]=計算済みで0本
 _cached_curve_guides = None
 _guide_shader = None
@@ -639,10 +644,24 @@ def _draw_raymarch_scaled(context, shader, uniforms, scale):
     return True
 
 
+def preview_cache_is_stale(output_obj):
+    """プレビュー用キャッシュを作り直す必要があるか。
+
+    V16.2.1: 「別のツリーに切り替わった」を名前で検出する条件を足した。
+    アクティブツリーはオブジェクトを選ぶだけでも変わる（resolve_active_output）が、
+    その経路は _preview_dirty を立てないので、以前はゴーストプレビューが
+    前のツリーのまま残り、何か動かして depsgraph が動くまで切り替わらなかった。
+    """
+    if _preview_dirty or _cached_prim_tex is None or _cached_curve_guides is None:
+        return True
+    return _cached_output_name != (output_obj.name if output_obj else None)
+
+
 def _draw_callback_3d_impl(self, context):
     global _batch, _preview_dirty
     global _cached_prim_tex, _cached_prim_count, _cached_domain_size
     global _cached_sym_mask, _cached_base_steps, _cached_curve_guides
+    global _cached_output_name
     global _restore_timer_armed
 
     if context is None: context = bpy.context
@@ -671,7 +690,7 @@ def _draw_callback_3d_impl(self, context):
     o_props = output_obj.sdf_props
 
     rebuilt = False
-    need_rebuild = _preview_dirty or _cached_prim_tex is None or _cached_curve_guides is None
+    need_rebuild = preview_cache_is_stale(output_obj)
     if need_rebuild:
         rebuilt = True
         # V7: スタック順序に従う
@@ -711,6 +730,7 @@ def _draw_callback_3d_impl(self, context):
             _cached_domain_size = domain_size
             _cached_base_steps = base_steps
             _cached_sym_mask = sym_mask
+        _cached_output_name = output_obj.name
         _preview_dirty = False
 
     # Curve Sync ガイド線は、レイマーチ用プリミティブが1つも無くても独立して描画する
@@ -1003,8 +1023,9 @@ def sdf_undo_handler(scene):
 
 def clear_batch():
     global _batch, _cached_prim_tex, _cached_curve_guides, _guide_shader
-    global _blit_shader, _blit_batch
+    global _blit_shader, _blit_batch, _cached_output_name
     _batch = None
+    _cached_output_name = None
     # V15.9.9.4: プレビューキャッシュも破棄して次回描画で再構築させる
     _cached_prim_tex = None
     # Curve Sync ガイド線のキャッシュとシェーダも破棄する。特に _guide_shader は
