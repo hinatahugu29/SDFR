@@ -1498,12 +1498,113 @@ def apply_mesh_data(output_obj, data, force_normals=False):
     _cpu_chunked_fallback_active[owner] = False
     return "applied"
 
-def _iter_output_objects():
+# -------------------------------------------------------------------------
+# V16.2.1: ツリー（SDFワークスペース）の解決
+#
+# 出力オブジェクト1つと、その target_collection に入ったプリミティブ群で1本の
+# ツリーになる。データ構造はもともと複数本を想定した形だったが、あちこちに
+# 「シーン内で最初に見つかった出力」という暗黙のフォールバックが残っていた。
+# 列挙元をここに集約して、UIからもハンドラからも同じ判断になるようにする。
+# -------------------------------------------------------------------------
+
+def iter_sdf_outputs(scene=None):
     """シーン内の SDF 出力オブジェクトを列挙する。"""
-    for obj in bpy.context.scene.objects:
+    scene = scene or bpy.context.scene
+    if not scene:
+        return
+    for obj in scene.objects:
         props = getattr(obj, "sdf_props", None)
         if props and props.is_output:
             yield obj
+
+
+def iter_sdf_collections(scene=None):
+    """使われている target_collection を重複なく列挙する。"""
+    seen = set()
+    for out in iter_sdf_outputs(scene):
+        col = out.sdf_props.target_collection
+        if col and col.name not in seen:
+            seen.add(col.name)
+            yield col
+
+
+def find_output_for_object(obj, scene=None):
+    """プリミティブ・仕切りEmpty・カーブから、それが属するツリーの出力を引く。"""
+    if not obj:
+        return None
+    orig = obj.original if hasattr(obj, "original") else obj
+    for out in iter_sdf_outputs(scene):
+        if out == orig:
+            return out
+        col = out.sdf_props.target_collection
+        if not col:
+            continue
+        if orig.name in col.objects:
+            return out
+        # Curve Sync プロキシが参照しているカーブ本体はコレクション外にあるので、
+        # プロキシ経由でも引けるようにする
+        for col_obj in col.objects:
+            target = _resolve_curve_sync_target(col_obj)
+            if target and target == orig:
+                return out
+    return None
+
+
+def resolve_active_output(context=None):
+    """いま操作対象にすべきツリーの出力オブジェクトを返す。
+
+    UIの draw() や オペレーターの poll() からも呼ばれるので、
+    **この関数はデータを書き換えない**（Blender は描画中の変更を許さない）。
+
+    優先順:
+      1. アクティブオブジェクトが出力なら、それ
+      2. アクティブオブジェクトがどれかのツリーの部品なら、そのツリー
+      3. シーンに記録されたアクティブツリー
+      4. 出力が1本しか無いなら、それ
+      5. 見つからない
+    """
+    context = context or bpy.context
+    scene = getattr(context, "scene", None)
+    if not scene:
+        return None
+
+    active = getattr(context, "active_object", None)
+    if active:
+        props = getattr(active, "sdf_props", None)
+        if props and props.is_output:
+            return active
+        owner = find_output_for_object(active, scene)
+        if owner:
+            return owner
+
+    scene_props = getattr(scene, "sdf_scene_props", None)
+    stored = getattr(scene_props, "active_output", None) if scene_props else None
+    if stored:
+        props = getattr(stored, "sdf_props", None)
+        if props and props.is_output and stored.name in scene.objects:
+            return stored
+
+    outputs = list(iter_sdf_outputs(scene))
+    if len(outputs) == 1:
+        return outputs[0]
+    return None
+
+
+def set_active_output(context, output_obj):
+    """アクティブツリーを記録する。オペレーターの execute からのみ呼ぶこと。"""
+    scene = getattr(context, "scene", None)
+    scene_props = getattr(scene, "sdf_scene_props", None) if scene else None
+    if scene_props is None:
+        return
+    try:
+        scene_props.active_output = output_obj
+    except Exception as exc:
+        print(f"SDF.R: failed to record the active tree: {exc}")
+
+
+def _iter_output_objects():
+    """シーン内の SDF 出力オブジェクトを列挙する。"""
+    return iter_sdf_outputs()
 
 
 def _find_output_by_name(name):

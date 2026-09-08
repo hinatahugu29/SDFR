@@ -1,7 +1,7 @@
 import bpy
 from ._native import rust_gpu_sdf
 from .constants import PRIMITIVE_UI_DEFS
-from .engine import _resolve_curve_sync_target
+from .engine import _resolve_curve_sync_target, iter_sdf_outputs, resolve_active_output
 
 
 def _gn_input_binding(mod, identifier):
@@ -153,11 +153,20 @@ class SDF_PT_main(bpy.types.Panel):
         row.prop(scene, "sdf_show_primitives", text="", icon='SHADING_WIRE' if scene.sdf_show_primitives else 'SHADING_BBOX')
         row.prop(scene, "sdf_show_preview", text="", icon='GHOST_ENABLED' if scene.sdf_show_preview else 'GHOST_DISABLED')
 
-        output_obj = None
-        for o in scene.objects:
-            if getattr(o, "sdf_props", None) and o.sdf_props.is_output:
-                output_obj = o
-                break
+        # V16.2.1: パネルの操作対象は「アクティブなツリー」。
+        # 以前はシーン内で最初に見つかった出力を使っていたので、ツリーが複数あると
+        # どれが対象になるか Blender 内部の列挙順任せだった。
+        output_obj = resolve_active_output(context)
+        outputs = list(iter_sdf_outputs(scene))
+        if output_obj is None and outputs:
+            # 複数あってどれとも決められない状態。選ばせる。
+            box = layout.box()
+            box.label(text="Select an SDF tree", icon='OUTLINER_COLLECTION')
+            for out in outputs:
+                op = box.operator("sdf.set_active_tree", text=out.name, icon='OUTLINER_OB_MESH')
+                op.output_name = out.name
+            self._draw_all_clear(layout, scene)
+            return
 
         updating = False
         try:
@@ -186,6 +195,19 @@ class SDF_PT_main(bpy.types.Panel):
             return
 
         m_props = output_obj.sdf_props
+
+        # SECTION 0: SDF Tree (V16.2.1)
+        # ツリーが1本だけのときは、余計な行を出さずに従来の見た目のままにする。
+        if len(outputs) > 1:
+            tree_box = layout.box()
+            tree_row = tree_box.row(align=True)
+            tree_row.label(text="Tree", icon='OUTLINER_COLLECTION')
+            tree_row.prop(scene.sdf_scene_props, "active_output", text="")
+            tree_row.operator("sdf.add_tree", text="", icon='ADD')
+            col_name = m_props.target_collection.name if m_props.target_collection else "(none)"
+            tree_box.label(text=f"Parts: {col_name}")
+        else:
+            layout.operator("sdf.add_tree", text="Add SDF Tree", icon='ADD')
 
         # SECTION 1: Output & Quality
         box = layout.box()

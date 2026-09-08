@@ -157,8 +157,36 @@ def sync_scene_diagnostic_flags():
             props.diagnostics_layout_debug = layout_on
     return None
 
+def _poll_sdf_output(self, obj):
+    props = getattr(obj, "sdf_props", None)
+    return bool(props and props.is_output)
+
+
+def _update_active_output(self, context):
+    """アクティブツリーが切り替わったらプレビューを作り直す。"""
+    try:
+        from . import handlers
+        handlers.mark_preview_dirty()
+    except Exception:
+        pass
+    for area in getattr(context.screen, "areas", []) or []:
+        if area.type == 'VIEW_3D':
+            area.tag_redraw()
+
+
 class SDF_SceneProperties(bpy.types.PropertyGroup):
     """Global SDF Settings"""
+    # V16.2.1: 複数のSDFツリーを同時に持てるようにしたので、
+    # 「いまどのツリーを操作しているか」をシーン側に持つ。
+    # 通常はアクティブオブジェクトから引けるが、関係ないオブジェクトを
+    # 選んでいる間もツリーを見失わないための記憶。
+    active_output: bpy.props.PointerProperty(
+        name="Active SDF Tree",
+        description="The SDF workspace that panel operations act on",
+        type=bpy.types.Object,
+        poll=_poll_sdf_output,
+        update=_update_active_output,
+    )
     all_clear_include_history: bpy.props.BoolProperty(
         name="Include Baked Results",
         description="Check to also delete all baked meshes and history collections",

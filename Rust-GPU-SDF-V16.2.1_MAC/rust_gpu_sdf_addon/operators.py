@@ -2,7 +2,8 @@ import bpy
 import os
 import colorsys
 from mathutils import Vector
-from .engine import update_sdf_mesh, trigger_normal_update
+from .engine import (update_sdf_mesh, trigger_normal_update, iter_sdf_collections,
+                     resolve_active_output, set_active_output)
 from .constants import _PRIM_COLORS, PRIMITIVE_UI_DEFS
 
 _prim_color_idx = 0
@@ -47,15 +48,69 @@ def get_or_create_collection(name, parent_col=None):
     return col
 
 def get_sdf_output_obj(context):
-    """アクティブオブジェクトまたはシーン内の最初の出力オブジェクトを返す"""
-    active = context.active_object
-    if active and getattr(active, "sdf_props", None) and active.sdf_props.is_output:
-        return active
-    for obj in context.scene.objects:
-        p = getattr(obj, "sdf_props", None)
-        if p and p.is_output:
-            return obj
-    return None
+    """操作対象のツリー（出力オブジェクト）を返す。
+
+    V16.2.1: 解決順を engine.resolve_active_output に集約した。
+    以前は「アクティブが出力でなければシーン内の**最初の**出力」だったため、
+    ツリーが複数あるとプリミティブを選んでいる間の操作が、Blender 内部の
+    列挙順で決まる別のツリーへ流れていた。
+    """
+    return resolve_active_output(context)
+
+
+def get_sdf_target_collection(context, create=True):
+    """アクティブツリーのプリミティブ置き場を返す。
+
+    ツリーがまだ無ければ、従来どおり `SDF_Collection` を作る（既存シーンとの互換）。
+    """
+    out_obj = get_sdf_output_obj(context)
+    if out_obj and out_obj.sdf_props.target_collection:
+        return out_obj.sdf_props.target_collection
+    if not create:
+        return None
+    return get_or_create_collection(unique_sdf_collection_name())
+
+
+def unique_sdf_collection_name():
+    """次に作るツリーのコレクション名。
+
+    1本目は従来どおり `SDF_Collection`。既存の .blend をそのまま開けるように、
+    名前は変えない。2本目以降だけ連番を付ける。
+    """
+    if "SDF_Collection" not in bpy.data.collections:
+        return "SDF_Collection"
+    idx = 2
+    while f"SDF_Collection_{idx:03}" in bpy.data.collections:
+        idx += 1
+    return f"SDF_Collection_{idx:03}"
+
+
+def unique_sdf_output_name():
+    """次に作るツリーの出力オブジェクト名（同じく1本目は従来名）。"""
+    if "SDF_Result" not in bpy.data.objects:
+        return "SDF_Result"
+    idx = 2
+    while f"SDF_Result_Tree_{idx:03}" in bpy.data.objects:
+        idx += 1
+    return f"SDF_Result_Tree_{idx:03}"
+
+
+def create_sdf_tree(context, make_active=True, reuse_collection=None):
+    """新しいツリー（出力オブジェクト + 専用コレクション）を作って返す。
+
+    `reuse_collection` を渡すと、そのコレクションを置き場として使い回す
+    （New SDF Workspace が、退避して空になった置き場をそのまま再利用するため）。
+    """
+    col = reuse_collection or get_or_create_collection(unique_sdf_collection_name())
+    mesh = bpy.data.meshes.new("SDF_Result_Mesh")
+    out_obj = bpy.data.objects.new(unique_sdf_output_name(), mesh)
+    context.scene.collection.objects.link(out_obj)
+    out_obj.sdf_props.is_output = True
+    out_obj.sdf_props.target_collection = col
+    if make_active:
+        context.view_layer.objects.active = out_obj
+        set_active_output(context, out_obj)
+    return out_obj, col
 
 def _set_result_float_attribute(obj, name, value):
     mesh = getattr(obj, "data", None)
@@ -187,20 +242,17 @@ class SDF_OT_add_primitive(bpy.types.Operator):
 
     def execute(self, context):
         global _prim_color_idx
-        col_name = "SDF_Collection"
-        col = get_or_create_collection(col_name)
         inherited_smoothness = _find_smoothness_source(context)
 
-        has_output = any(
-            getattr(o, 'sdf_props', None) and o.sdf_props.is_output
-            for o in context.scene.objects
-        )
-        if not has_output:
-            mesh = bpy.data.meshes.new("SDF_Result_Mesh")
-            out_obj = bpy.data.objects.new("SDF_Result", mesh)
-            context.scene.collection.objects.link(out_obj)
-            out_obj.sdf_props.is_output = True
-            out_obj.sdf_props.target_collection = col
+        # V16.2.1: 行き先はアクティブツリーの置き場。ツリーがまだ無ければ作る。
+        out_obj = get_sdf_output_obj(context)
+        if out_obj is None:
+            out_obj, col = create_sdf_tree(context, make_active=False)
+        else:
+            col = out_obj.sdf_props.target_collection
+            if col is None:
+                col = get_or_create_collection(unique_sdf_collection_name())
+                out_obj.sdf_props.target_collection = col
 
         if self.shape == 'sphere':
             bpy.ops.mesh.primitive_uv_sphere_add(radius=1.0)
@@ -282,10 +334,7 @@ class SDF_OT_move_to_sdf_collection(bpy.types.Operator):
             target_col = out_obj.sdf_props.target_collection
 
         if not target_col:
-            target_col = bpy.data.collections.get("SDF_Collection")
-            
-        if not target_col:
-            self.report({'WARNING'}, "SDF Collection not found")
+            self.report({'WARNING'}, "No SDF workspace found. Create one first.")
             return {'CANCELLED'}
             
         guessed_sphere = []
@@ -736,10 +785,7 @@ class SDF_OT_add_selected(bpy.types.Operator):
         return context.active_object and not context.active_object.sdf_props.is_output
     def execute(self, context):
         obj = context.active_object
-        col_name = "SDF_Collection"
-        col = bpy.data.collections.get(col_name) or bpy.data.collections.new(col_name)
-        if col_name not in context.scene.collection.children:
-            context.scene.collection.children.link(col)
+        col = get_sdf_target_collection(context)
         if obj.name not in col.objects:
             col.objects.link(obj)
         if obj.type != 'CURVE':
@@ -758,8 +804,11 @@ class SDF_OT_make_output(bpy.types.Operator):
         scene = context.scene
         
         # 1. Check existing work (check if archiving is needed)
-        active_col = bpy.data.collections.get("SDF_Collection")
+        # V16.2.1: 退避するのは**アクティブなツリーだけ**。以前は名前で
+        # `SDF_Collection` を直に引いていたので、ツリーが複数あると
+        # 関係ないツリーの部品まで履歴へ持っていってしまう。
         current_result = get_sdf_output_obj(context)
+        active_col = current_result.sdf_props.target_collection if current_result else None
         
         # Archive if parts exist (and not baked)
         if (active_col and active_col.objects) or current_result:
@@ -790,16 +839,9 @@ class SDF_OT_make_output(bpy.types.Operator):
             iter_col.hide_viewport = iter_col.hide_render = True
 
         # 2. Create fresh workspace
-        col_name = "SDF_Collection"
-        col = get_or_create_collection(col_name)
-        
-        mesh = bpy.data.meshes.new("SDF_Result_Mesh")
-        out_obj = bpy.data.objects.new("SDF_Result", mesh)
-        scene.collection.objects.link(out_obj)
-        
-        out_obj.sdf_props.is_output = True
-        out_obj.sdf_props.target_collection = col
-        context.view_layer.objects.active = out_obj
+        # 退避で空になった置き場があれば、それをそのまま使う（従来と同じ見え方）
+        reuse = active_col if (active_col and not active_col.objects) else None
+        out_obj, col = create_sdf_tree(context, reuse_collection=reuse)
         
         # Resume live update
         scene.sdf_live_update = True
@@ -808,6 +850,45 @@ class SDF_OT_make_output(bpy.types.Operator):
         self.report({'INFO'}, "New Workspace created. Past work archived to SDF_History.")
         return {'FINISHED'}
 
+class SDF_OT_add_tree(bpy.types.Operator):
+    bl_idname = "sdf.add_tree"
+    bl_label = "Add SDF Tree"
+    bl_description = (
+        "Add another independent SDF workspace. "
+        "Each tree has its own collection, resolution and result mesh"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        out_obj, col = create_sdf_tree(context)
+        # 新しいツリーの置き場が見えていないと、追加したプリミティブが行方不明に見える
+        col.hide_viewport = col.hide_render = False
+        context.scene.sdf_live_update = True
+        update_sdf_mesh(out_obj)
+        self.report({'INFO'}, f"Added SDF tree '{out_obj.name}' (collection: {col.name}).")
+        return {'FINISHED'}
+
+
+class SDF_OT_set_active_tree(bpy.types.Operator):
+    bl_idname = "sdf.set_active_tree"
+    bl_label = "Set Active SDF Tree"
+    bl_description = "Make this SDF workspace the one the panel acts on"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    output_name: bpy.props.StringProperty()
+
+    def execute(self, context):
+        obj = context.scene.objects.get(self.output_name)
+        props = getattr(obj, "sdf_props", None)
+        if not obj or not props or not props.is_output:
+            self.report({'WARNING'}, "That SDF workspace no longer exists.")
+            return {'CANCELLED'}
+        set_active_output(context, obj)
+        context.view_layer.objects.active = obj
+        self.report({'INFO'}, f"Active SDF tree: {obj.name}")
+        return {'FINISHED'}
+
+
 # --- V7: Stack manipulation operators ---
 class SDF_OT_stack_move(bpy.types.Operator):
     bl_idname = "sdf.stack_move"
@@ -815,11 +896,7 @@ class SDF_OT_stack_move(bpy.types.Operator):
     direction: bpy.props.EnumProperty(items=[('UP', "Up", ""), ('DOWN', "Down", "")])
 
     def execute(self, context):
-        master = None
-        for o in context.scene.objects:
-            if o.sdf_props.is_output:
-                master = o
-                break
+        master = get_sdf_output_obj(context)
         if not master: return {'CANCELLED'}
         
         props = master.sdf_props
@@ -837,11 +914,7 @@ class SDF_OT_stack_remove(bpy.types.Operator):
     bl_idname = "sdf.stack_remove"
     bl_label = "Remove Stack Item"
     def execute(self, context):
-        master = None
-        for o in context.scene.objects:
-            if o.sdf_props.is_output:
-                master = o
-                break
+        master = get_sdf_output_obj(context)
         if not master: return {'CANCELLED'}
         
         props = master.sdf_props
@@ -1211,7 +1284,14 @@ class SDF_OT_all_clear(bpy.types.Operator):
         scene = context.scene
         props = scene.sdf_scene_props
         include_results = props.all_clear_include_history
-        
+
+        # V16.2.1: 出力オブジェクトを消す前に、全ツリーの置き場を控えておく。
+        # 名前で `SDF_Collection` だけを見ていたので、2本目以降の置き場が残っていた。
+        sdf_col_names = [col.name for col in iter_sdf_collections(scene)]
+        if "SDF_Collection" in bpy.data.collections and "SDF_Collection" not in sdf_col_names:
+            # ツリーに紐づいていない旧来の置き場（過去の .blend）も対象にする
+            sdf_col_names.append("SDF_Collection")
+
         to_delete = []
         for obj in list(scene.objects):
             p = getattr(obj, "sdf_props", None)
@@ -1233,14 +1313,14 @@ class SDF_OT_all_clear(bpy.types.Operator):
             bpy.ops.object.delete()
 
         if include_results:
-            cols_to_remove = ["SDF_Collection", "SDF_History"]
-            for name in cols_to_remove:
+            for name in sdf_col_names + ["SDF_History"]:
                 col = bpy.data.collections.get(name)
                 if col: self._recursive_delete_col(col)
         else:
-            active_col = bpy.data.collections.get("SDF_Collection")
-            if active_col:
-                for obj in list(active_col.objects): bpy.data.objects.remove(obj, do_unlink=True)
+            for name in sdf_col_names:
+                active_col = bpy.data.collections.get(name)
+                if active_col:
+                    for obj in list(active_col.objects): bpy.data.objects.remove(obj, do_unlink=True)
             
             history_root = bpy.data.collections.get("SDF_History")
             if history_root:
@@ -1401,8 +1481,6 @@ class SDF_OT_add_collection_divider(bpy.types.Operator):
         empty_obj.empty_display_type = 'PLAIN_AXES'
         
         col = props.target_collection
-        if not col:
-            col = bpy.data.collections.get("SDF_Collection")
         if col:
             col.objects.link(empty_obj)
             
@@ -1513,9 +1591,7 @@ class SDF_OT_add_curve_sync(bpy.types.Operator):
         props = master.sdf_props
         col = props.target_collection
         if not col:
-            col = bpy.data.collections.get("SDF_Collection")
-        if not col:
-            self.report({'WARNING'}, "SDF Collection not found")
+            self.report({'WARNING'}, "This SDF workspace has no collection.")
             return {'CANCELLED'}
 
         # 1. プロキシEmptyを作成

@@ -124,6 +124,8 @@ classes = (
     operators.SDF_OT_generate_mesh,
     operators.SDF_OT_add_selected,
     operators.SDF_OT_make_output,
+    operators.SDF_OT_add_tree,
+    operators.SDF_OT_set_active_tree,
     operators.SDF_OT_stack_move,
     operators.SDF_OT_stack_remove,
     operators.SDF_OT_add_collection_divider,
@@ -163,10 +165,10 @@ def update_result_visibility(self, context):
 
 def update_primitives_visibility(self, context):
     """Switch source primitives between wire and bounds display."""
-    col = bpy.data.collections.get("SDF_Collection")
-    if col:
+    # V16.2.1: 置き場は1つとは限らないので、全ツリーぶんを回す。
+    display_mode = 'WIRE' if self.sdf_show_primitives else 'BOUNDS'
+    for col in engine.iter_sdf_collections(context.scene):
         col.hide_viewport = False
-        display_mode = 'WIRE' if self.sdf_show_primitives else 'BOUNDS'
         for obj in col.objects:
             obj.display_type = display_mode
 

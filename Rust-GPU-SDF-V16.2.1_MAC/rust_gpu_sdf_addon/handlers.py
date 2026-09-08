@@ -7,7 +7,8 @@ import os
 from bpy.app.handlers import persistent
 from gpu_extras.batch import batch_for_shader
 from .shader import get_shader, get_blit_shader
-from .engine import update_sdf_mesh, sync_sdf_stack, get_layout_matrices, _curve_polylines, _resolve_curve_sync_target
+from .engine import (update_sdf_mesh, sync_sdf_stack, get_layout_matrices, _curve_polylines,
+                     _resolve_curve_sync_target, iter_sdf_outputs, resolve_active_output)
 from .constants import _SHAPE_MAP, _fsq_coords, _fsq_indices, FIELD_TYPE_INDEX, PROFILE_2D_INDEX
 
 _batch = None
@@ -654,14 +655,12 @@ def _draw_callback_3d_impl(self, context):
     rv3d = context.region_data
     if not rv3d: return False
 
-    output_obj = None
-    target_col = None
-    for o in scene.objects:
-        props = getattr(o, "sdf_props", None)
-        if props and props.is_output:
-            output_obj = o
-            target_col = props.target_collection
-            break
+    # V16.2.1: プレビューはアクティブなツリー1本だけを描く。
+    # レイマーチはドメインと対称設定を uniform で1組しか持てないので、設定の
+    # 違うツリーを1枚に混ぜると誤った絵になる。描画は視点移動のたびに走るため、
+    # 複数パス化はフレームコストが本数に比例する。v1 では1本に絞る。
+    output_obj = resolve_active_output(context)
+    target_col = output_obj.sdf_props.target_collection if output_obj else None
 
     if not output_obj or not target_col: return False
 
@@ -871,10 +870,14 @@ def _sdf_depsgraph_handler_impl(scene, depsgraph):
     if active_obj:
         active_orig = active_obj.original if hasattr(active_obj, "original") else active_obj
         p_active = getattr(active_orig, "sdf_props", None)
-        col_sdf = bpy.data.collections.get("SDF_Collection")
+        # V16.2.1: 置き場は1つとは限らないので、全ツリーぶんを見る
+        in_any_tree = any(
+            out.sdf_props.target_collection
+            and active_orig.name in out.sdf_props.target_collection.objects
+            for out in iter_sdf_outputs(scene)
+        )
         is_sdf_related = (
-            (p_active and (p_active.is_primitive or p_active.is_output)) or
-            (col_sdf and active_orig.name in col_sdf.objects)
+            (p_active and (p_active.is_primitive or p_active.is_output)) or in_any_tree
         )
         if is_sdf_related:
             for obj in scene.objects:
