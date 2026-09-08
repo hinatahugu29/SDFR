@@ -101,8 +101,13 @@ if _DEBUG_LAYOUT:
     debug_source = "env:SDF_DEBUG_LAYOUT" if os.environ.get("SDF_DEBUG_LAYOUT") else f"flag:{_DEBUG_FLAG_FILE}"
     print(f"[SDF-Debug/Layout] debug logging is ENABLED ({debug_source})")
 
-def get_sdf_state_fingerprint(output_obj, depsgraph):
-    """現在の全オブジェクトの状態をハッシュ化して返す"""
+def get_sdf_state_fingerprint(output_obj, depsgraph, _visited=None):
+    """現在の全オブジェクトの状態をハッシュ化して返す
+
+    V16.2.1: ツリー参照があるときは、参照先ツリーのハッシュも混ぜる。
+    混ぜないと、参照先を編集しても取り込んだ側が「変更なし」と判定されて
+    更新されない。`_visited` は相互参照で無限再帰しないための番人。
+    """
     props = output_obj.sdf_props
     state = [
         props.resolution,
@@ -233,6 +238,31 @@ def get_sdf_state_fingerprint(output_obj, depsgraph):
         else:
             state.append(obj_orig.name)
             
+    # ツリー参照: 参照先の状態も自分の状態の一部として扱う
+    visited = set(_visited or ())
+    visited.add(output_obj.name)
+    for item in props.sdf_stack:
+        if item.item_type != 'TREE_REF' or not item.enabled:
+            continue
+        proxy = item.object_ptr
+        rp = getattr(proxy, "sdf_props", None) if proxy else None
+        ref_out = rp.tree_ref_obj if rp else None
+        if not ref_out or ref_out.name in visited:
+            continue
+        ref_props = getattr(ref_out, "sdf_props", None)
+        if not ref_props or not ref_props.is_output:
+            continue
+        state.append((
+            ref_out.name,
+            rp.tree_ref_mode,
+            rp.smoothness,
+            rp.blend_profile,
+            rp.chamfer_smooth,
+            tuple(tuple(row) for row in proxy.matrix_world),
+            tuple(tuple(row) for row in ref_out.matrix_world),
+            get_sdf_state_fingerprint(ref_out, depsgraph, visited),
+        ))
+
     return hash(tuple(state))
 
 def _resolve_curve_sync_target(stack_obj):
@@ -288,8 +318,11 @@ def sync_sdf_stack(output_obj):
     # プリミティブを先に追加し、コレクション区切りEMPTYを最後に追加する
     # （Curve Sync プロキシEmptyは仕切りではなくプリミティブ扱いなので対象外）
     # その際、複製順序タグ（_sdf_dup_order）があれば元の順序を完全に維持する
+    # V16.2.1: ツリー参照プロキシも仕切りではないので、プリミティブ側に並べる
     new_objs.sort(key=lambda o: (
-        1 if (o.type == 'EMPTY' and not getattr(o.sdf_props, "is_curve_sync_proxy", False)) else 0,
+        1 if (o.type == 'EMPTY'
+              and not getattr(o.sdf_props, "is_curve_sync_proxy", False)
+              and not getattr(o.sdf_props, "is_tree_ref_proxy", False)) else 0,
         o.get("_sdf_dup_order", 9999),
     ))
     
@@ -300,6 +333,8 @@ def sync_sdf_stack(output_obj):
         if obj.type == 'EMPTY':
             if getattr(obj.sdf_props, "is_curve_sync_proxy", False):
                 item.item_type = 'CURVE_SYNC'
+            elif getattr(obj.sdf_props, "is_tree_ref_proxy", False):
+                item.item_type = 'TREE_REF'
             else:
                 item.item_type = 'COLLECTION'
                 item.empty_ptr = obj
@@ -459,7 +494,8 @@ def get_layout_matrices(p_props):
     return matrices
 
 
-def _finalize_group_elements(elements, primitives, auto_domain, inv_world_output, props, max_extent_list):
+def _finalize_group_elements(elements, primitives, auto_domain, inv_world_output, props, max_extent_list,
+                             prim_override=None):
     """working_group / expanded_group の要素を primitives へ確定する。
     Curve Sync は構築済みカプセル群を 'prebuilt_prims' マーカーとして working_group に
     積んでいるので、ここでそのまま展開する（スタック順を保つため）。"""
@@ -470,13 +506,14 @@ def _finalize_group_elements(elements, primitives, auto_domain, inv_world_output
             continue
         p = build_element_primitive(el, auto_domain, inv_world_output, props, max_extent_list,
                                     layer_id=el.get('layer_id', 0),
-                                    layer_params=el.get('layer_params'))
+                                    layer_params=el.get('layer_params'),
+                                    prim_override=prim_override)
         if p:
             primitives.append(p)
 
 
 def build_element_primitive(el, auto_domain, inv_world_output, props, max_extent, layer_id=0,
-                            layer_params=None):
+                            layer_params=None, prim_override=None):
     obj_orig = el['obj_orig']
     obj = el['obj_eval']
     p_props = el['p_props']
@@ -489,6 +526,12 @@ def build_element_primitive(el, auto_domain, inv_world_output, props, max_extent
         shape = p_props.shape_type
         op_int = int(p_props.operation)
         smoothness = p_props.smoothness
+        # V16.2.1: ツリー参照が「取り込んだ形をまとめて Subtract する」ために使う。
+        # SdfPrimitive の operation / smoothness は Python から書き換えられない
+        # （pyo3 の get/set が付いているのは layer_* だけ）ので、生成時に差し替える。
+        if prim_override:
+            op_int = prim_override.get('operation', op_int)
+            smoothness = prim_override.get('smoothness', smoothness)
         color = list(p_props.color)
         metallic = p_props.metallic
         roughness = p_props.roughness
@@ -895,88 +938,82 @@ def _acquire_depsgraph(allow_forced_eval):
         return None
 
 
-def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
+def _build_tree_ref_primitives(proxy, ref_out, consumer_out, depsgraph, inv_world_output,
+                               auto_domain, max_extent_list, layer_id):
+    """参照先ツリーの形を、取り込む側のローカル空間のプリミティブ配列にして返す。
 
+    プロキシ Empty の位置は「参照先をどれだけずらして取り込むか」を表す。
+    プロキシは参照先の出力オブジェクトと同じ位置に作られるので、動かさなければ
+    ずれない（M = proxy.matrix_world @ ref_out.matrix_world^-1 が単位行列になる）。
 
-    global _is_timer_registered, _last_state_hashes, _in_update, _inflight_owner
-    if not output_obj or not output_obj.sdf_props.is_output or not output_obj.sdf_props.target_collection:
-        return
+    合成方法:
+      BLEND    レイヤー機構でひとかたまりの滑らかな Union として合流させる。
+               レイヤーの合流は union 固定（common.wgsl の union_layer_accum）なので、
+               これは厳密。
+      SUBTRACT 参照先の各プリミティブを個別に Subtract する。参照先が Union だけで
+               出来ていれば厳密（和集合を引くのと同じ）。参照先が内部で Subtract や
+               Intersect を使っている場合は近似になるため、UI 側で注意を出す。
+    """
+    rp = proxy.sdf_props
+    mode = rp.tree_ref_mode
 
-    # --- V15.9.9.5: トランスフォーム操作中は重いメッシュ処理をスキップ ---
     try:
-        op = bpy.context.active_operator
-        if op and op.bl_idname in {"TRANSFORM_OT_translate", "TRANSFORM_OT_rotate", "TRANSFORM_OT_resize", "TRANSFORM_OT_tweak"}:
-            return
+        ref_eval = ref_out.evaluated_get(depsgraph)
+        proxy_eval = proxy.evaluated_get(depsgraph)
     except Exception:
-        pass
+        ref_eval, proxy_eval = ref_out, proxy
 
-    if _in_update:
-        return
-
-    if not depsgraph:
-        depsgraph = _acquire_depsgraph(allow_forced_eval)
-        if depsgraph is None:
-            # 評価を強制しない経路でまだデプスグラフが無い。今回は何もしない。
-            # 呼び出し側（タイマー）が空回りを検知できるよう理由を返す。
-            return "no_depsgraph"
-
-    _in_update = True
+    # 取り込み先ローカルへの変換 = (取り込み先の逆行列) @ (ずらし) @ (参照先のワールド)
     try:
-        # 常に最新のリストを保つ (V11.2)
-        sync_sdf_stack(output_obj)
-        sync_sdf_parents(output_obj)
-    finally:
-        _in_update = False
-
-    # --- V15.9.9.4: メッシュ生成OFF時はここで即リターン ---
-    # 「Show Result Mesh」がOFFのとき、結果メッシュは hide_viewport で隠されており
-    # Rust計算もスキップされる。スタック/親子同期(sync_*)は済ませたうえで、
-    # この後に続く状態フィンガープリント計算・全プリミティブ再構築・Rustメッシュ
-    # 生成リクエスト（いずれも O(プリミティブ数) の重い処理）を丸ごと回避する。
-    # プレビュー描画は draw_callback_3d 側で独立して行われるため影響しない。
-    try:
-        if not bpy.context.scene.sdf_show_result:
-            return
+        offset = proxy_eval.matrix_world @ ref_eval.matrix_world.inverted()
     except Exception:
-        pass
+        offset = Matrix.Identity(4)
+    # collect_stack_primitives は「ワールド -> ローカル」の行列を1つ受け取る作りなので、
+    # ずらしを織り込んだものを渡す
+    ref_to_local = inv_world_output @ offset
 
-    
-    # 状態の変更をチェック
-    current_hash = get_sdf_state_fingerprint(output_obj, depsgraph)
-    if _last_state_hashes.get(output_obj.name) == current_hash:
-        return # 変更がないので何もしない
-    
-    # すでに更新中なら更新を予約して終了
-    if rust_gpu_sdf.is_updating():
-        _pending_updates[output_obj.name] = True
-        if not _is_timer_registered:
-            print("SDF Info: Re-registering mesh timer.")
-            bpy.app.timers.register(sdf_mesh_timer, first_interval=0.05)
-            _is_timer_registered = True
-        return
+    # SUBTRACT は生成時に op を差し替える（後から書き換える口が無いため）
+    override = None if mode == 'BLEND' else {'operation': 1, 'smoothness': max(0.0, rp.smoothness)}
 
-    # V16.2.1: ハッシュの確定はリクエストが受理された後に行う（下の `if requested:`）。
-    # 以前はここで更新していたため、Rust 側が計算中で要求を捨てた場合（request_* が
-    # False を返す）に、更新が失われたままハッシュだけが「最新」になっていた。
+    prims, _ = collect_stack_primitives(
+        ref_out, depsgraph, ref_to_local, auto_domain, max_extent_list,
+        layer_id_start=layer_id + 1, allow_tree_refs=False, prim_override=override)
+    if not prims:
+        return []
 
-    output_eval = output_obj.evaluated_get(depsgraph)
-    inv_world_output = output_eval.matrix_world.inverted()
+    if mode == 'BLEND':
+        smoothness = max(0.0, rp.smoothness)
+        profile = int(rp.blend_profile)
+        chamfer = rp.chamfer_smooth
+        for prim in prims:
+            prim.layer_id = layer_id
+            prim.layer_smoothness = smoothness
+            prim.layer_blend_profile = profile
+            prim.layer_chamfer_smooth = chamfer
+    else:
+        # Subtract は個別に効かせるので、参照先が内部で使っていたレイヤー分けは畳む
+        for prim in prims:
+            prim.layer_id = 0
+    return prims
 
-    
+
+def collect_stack_primitives(output_obj, depsgraph, inv_world_output, auto_domain,
+                             max_extent_list, layer_id_start=1, allow_tree_refs=True,
+                             prim_override=None):
+    """スタックを走査して Rust へ渡すプリミティブ配列を組み立てる。
+
+    V16.2.1: update_sdf_mesh の中に直書きされていた走査ループを関数にした。
+    ツリー参照（TREE_REF）が、参照先ツリーのスタックに対して同じ走査を
+    行う必要があるため。`inv_world_output` は**取り込む側**のツリーの逆行列を
+    渡すので、参照先の形はそのまま取り込む側のローカル空間に入る。
+
+    戻り値は (primitives, next_layer_id)。
+    """
     props = output_obj.sdf_props
-    res = props.resolution
-    use_dc = (props.algo_type == 'DC')
-    sym_mask = (1 if props.sym_x else 0) | (2 if props.sym_y else 0) | (4 if props.sym_z else 0)
-
-    # --- V15.3: Auto Domain Expansion ---
-    auto_domain = props.auto_domain
-    max_extent = 0.001
-
     primitives = []
     working_group = []
-    next_layer_id = 1
+    next_layer_id = layer_id_start
     active_layer_id = 0
-    max_extent_list = [max_extent] # 参照渡し用のリスト
     _dbg_mesh(f"start scanning stack (len={len(props.sdf_stack)})")
 
     for i, item in enumerate(props.sdf_stack):
@@ -1071,19 +1108,48 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
                             prim.layer_smoothness = layer_params[0]
                             prim.layer_blend_profile = layer_params[1]
                             prim.layer_chamfer_smooth = layer_params[2]
-                _finalize_group_elements(expanded_group, primitives, auto_domain, inv_world_output, props, max_extent_list)
+                _finalize_group_elements(expanded_group, primitives, auto_domain, inv_world_output, props, max_extent_list,
+                                         prim_override=prim_override)
                 working_group = []
                 active_layer_id = 0
             elif item.start_new_group:
                 active_layer_id = 0
                 # 独立グループなので、ここで primitives に確定追加してリセット
-                _finalize_group_elements(expanded_group, primitives, auto_domain, inv_world_output, props, max_extent_list)
+                _finalize_group_elements(expanded_group, primitives, auto_domain, inv_world_output, props, max_extent_list,
+                                         prim_override=prim_override)
                 working_group = []
             else:
                 # 入れ子として作業グループを引き継ぐ
                 active_layer_id = 0
                 working_group = expanded_group
                 
+        elif item.item_type == 'TREE_REF':
+            # V16.2.1: 別のツリーを取り込む。
+            # Solo判定は他の早期 continue より先に行う（CURVE_SYNC 側と同じ理由）
+            if props.use_solo and i > props.sdf_stack_index:
+                break
+            if not allow_tree_refs:
+                # 参照の入れ子は1段まで。参照先がさらに他のツリーを参照していても辿らない
+                # （評価するプリミティブ数が積算で膨らむため）
+                continue
+            proxy = item.object_ptr
+            rp = getattr(proxy, "sdf_props", None) if proxy else None
+            ref_out = rp.tree_ref_obj if rp else None
+            if not ref_out or not getattr(ref_out, "sdf_props", None) or not ref_out.sdf_props.is_output:
+                continue
+            if ref_out == output_obj:
+                continue
+
+            ref_prims = _build_tree_ref_primitives(
+                proxy, ref_out, output_obj, depsgraph, inv_world_output,
+                auto_domain, max_extent_list, next_layer_id)
+            if ref_prims:
+                if rp.tree_ref_mode == 'BLEND':
+                    # レイヤー機構で「参照先ひとかたまり」として滑らかに合流させる
+                    next_layer_id += 1
+                working_group.append({'prebuilt_prims': ref_prims, 'layer_id': active_layer_id})
+            _dbg_mesh(f"tree ref '{proxy.name}' -> '{ref_out.name}': prims={len(ref_prims)}, mode={rp.tree_ref_mode}")
+
         elif item.item_type == 'CURVE_SYNC':
             # Curve Sync: Blender カーブを capsule の連なりとして Union（複数本対応）
             # stack_obj はカーブ本体、またはカーブを指すプロキシEmpty（curve_target_obj）のどちらか。
@@ -1107,6 +1173,9 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
                 r_pipe = max(0.001, cp.curve_pipe_radius if cp else 0.15)
                 op_int = int(cp.operation) if cp else 0
                 smoothness = cp.smoothness if cp else 0.2
+                if prim_override:
+                    op_int = prim_override.get('operation', op_int)
+                    smoothness = prim_override.get('smoothness', smoothness)
                 color = list(cp.color) if cp else [0.3, 0.8, 1.0]
                 metallic = cp.metallic if cp else 0.0
                 roughness = cp.roughness if cp else 0.5
@@ -1190,12 +1259,97 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
             
     # ループ完了後に残っているものを全てビルドして primitives に追加
     _dbg_mesh(f"loop done, working_group remaining={len(working_group)}")
-    _finalize_group_elements(working_group, primitives, auto_domain, inv_world_output, props, max_extent_list)
+    _finalize_group_elements(working_group, primitives, auto_domain, inv_world_output, props, max_extent_list,
+                             prim_override=prim_override)
+
+    return primitives, next_layer_id
+
+
+def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
+
+
+    global _is_timer_registered, _last_state_hashes, _in_update, _inflight_owner
+    if not output_obj or not output_obj.sdf_props.is_output or not output_obj.sdf_props.target_collection:
+        return
+
+    # --- V15.9.9.5: トランスフォーム操作中は重いメッシュ処理をスキップ ---
+    try:
+        op = bpy.context.active_operator
+        if op and op.bl_idname in {"TRANSFORM_OT_translate", "TRANSFORM_OT_rotate", "TRANSFORM_OT_resize", "TRANSFORM_OT_tweak"}:
+            return
+    except Exception:
+        pass
+
+    if _in_update:
+        return
+
+    if not depsgraph:
+        depsgraph = _acquire_depsgraph(allow_forced_eval)
+        if depsgraph is None:
+            # 評価を強制しない経路でまだデプスグラフが無い。今回は何もしない。
+            # 呼び出し側（タイマー）が空回りを検知できるよう理由を返す。
+            return "no_depsgraph"
+
+    _in_update = True
+    try:
+        # 常に最新のリストを保つ (V11.2)
+        sync_sdf_stack(output_obj)
+        sync_sdf_parents(output_obj)
+    finally:
+        _in_update = False
+
+    # --- V15.9.9.4: メッシュ生成OFF時はここで即リターン ---
+    # 「Show Result Mesh」がOFFのとき、結果メッシュは hide_viewport で隠されており
+    # Rust計算もスキップされる。スタック/親子同期(sync_*)は済ませたうえで、
+    # この後に続く状態フィンガープリント計算・全プリミティブ再構築・Rustメッシュ
+    # 生成リクエスト（いずれも O(プリミティブ数) の重い処理）を丸ごと回避する。
+    # プレビュー描画は draw_callback_3d 側で独立して行われるため影響しない。
+    try:
+        if not bpy.context.scene.sdf_show_result:
+            return
+    except Exception:
+        pass
+
+    
+    # 状態の変更をチェック
+    current_hash = get_sdf_state_fingerprint(output_obj, depsgraph)
+    if _last_state_hashes.get(output_obj.name) == current_hash:
+        return # 変更がないので何もしない
+    
+    # すでに更新中なら更新を予約して終了
+    if rust_gpu_sdf.is_updating():
+        _pending_updates[output_obj.name] = True
+        if not _is_timer_registered:
+            print("SDF Info: Re-registering mesh timer.")
+            bpy.app.timers.register(sdf_mesh_timer, first_interval=0.05)
+            _is_timer_registered = True
+        return
+
+    # V16.2.1: ハッシュの確定はリクエストが受理された後に行う（下の `if requested:`）。
+    # 以前はここで更新していたため、Rust 側が計算中で要求を捨てた場合（request_* が
+    # False を返す）に、更新が失われたままハッシュだけが「最新」になっていた。
+
+    output_eval = output_obj.evaluated_get(depsgraph)
+    inv_world_output = output_eval.matrix_world.inverted()
+
+    
+    props = output_obj.sdf_props
+    res = props.resolution
+    use_dc = (props.algo_type == 'DC')
+    sym_mask = (1 if props.sym_x else 0) | (2 if props.sym_y else 0) | (4 if props.sym_z else 0)
+
+    # --- V15.3: Auto Domain Expansion ---
+    auto_domain = props.auto_domain
+    max_extent = 0.001
+
+    max_extent_list = [max_extent] # 参照渡し用のリスト
+    primitives, _next_layer_id = collect_stack_primitives(
+        output_obj, depsgraph, inv_world_output, auto_domain, max_extent_list)
             
     max_extent = max_extent_list[0]
     _dbg_mesh(f"total primitives={len(primitives)}, max_extent={max_extent:.4f}")
     _dbg_layout(
-        f"prepared primitives={len(primitives)}, remaining_working_group={len(working_group)}, "
+        f"prepared primitives={len(primitives)}, "
         f"auto_domain={auto_domain}, max_extent={max_extent:.4f}"
     )
         

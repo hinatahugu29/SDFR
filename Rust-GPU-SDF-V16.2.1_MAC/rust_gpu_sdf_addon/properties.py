@@ -269,6 +269,7 @@ class SDF_StackItem(bpy.types.PropertyGroup):
             ('PRIMITIVE', "Primitive", "Standard SDF Primitive Object"),
             ('COLLECTION', "Collection", "Collection divider for grouping"),
             ('CURVE_SYNC', "Curve Sync", "Blender Curve object synced as a pipe-mesh (chain of capsule primitives)"),
+            ('TREE_REF', "Tree Reference", "Another SDF tree pulled into this one"),
         ],
         name="Type", default='PRIMITIVE', update=update_sdf_callback
     )
@@ -363,6 +364,24 @@ class SDF_ObjectProperties(bpy.types.PropertyGroup):
     # Empty プロキシ（is_curve_sync_proxy=True）に持たせ、シーン中の任意のカーブを指す。
     # 同じカーブを複数のプロキシから別々の Pipe Radius / Color で参照することもできる。
     is_curve_sync_proxy: bpy.props.BoolProperty(name="Is Curve Sync Proxy", default=False)
+
+    # --- V16.2.1: ツリー参照 ---
+    # 別のSDFツリーを、この木の中へ取り込むためのプロキシ Empty。
+    # Curve Sync プロキシと同じ作りで、スタック上の順序がそのまま評価順になる。
+    is_tree_ref_proxy: bpy.props.BoolProperty(name="Is Tree Reference Proxy", default=False)
+    tree_ref_obj: bpy.props.PointerProperty(
+        name="Referenced Tree", type=bpy.types.Object,
+        description="The output object of the SDF tree to pull in",
+        poll=_poll_sdf_output,
+        update=update_sdf_callback,
+    )
+    tree_ref_mode: bpy.props.EnumProperty(
+        items=[
+            ('BLEND', "Blend", "Merge the other tree into this one as a smooth union", 'ADD', 0),
+            ('SUBTRACT', "Subtract", "Carve the other tree out of this one, e.g. to keep a fit clear", 'REMOVE', 1),
+        ],
+        name="Reference Mode", default='SUBTRACT', update=update_sdf_callback,
+    )
     curve_target_obj: bpy.props.PointerProperty(
         name="Curve Object", type=bpy.types.Object,
         poll=lambda self, obj: obj.type == 'CURVE',

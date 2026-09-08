@@ -129,6 +129,7 @@ classes = (
     operators.SDF_OT_stack_move,
     operators.SDF_OT_stack_remove,
     operators.SDF_OT_add_collection_divider,
+    operators.SDF_OT_add_tree_ref,
     operators.SDF_OT_add_curve_sync,
     operators.SDF_OT_edit_curve_sync_target,
     operators.SDF_OT_select_stack_obj,

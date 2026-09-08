@@ -3,6 +3,7 @@ import os
 import colorsys
 from mathutils import Vector
 from .engine import (update_sdf_mesh, trigger_normal_update, iter_sdf_collections,
+                     iter_sdf_outputs,
                      resolve_active_output, set_active_output)
 from .constants import _PRIM_COLORS, PRIMITIVE_UI_DEFS
 
@@ -1570,6 +1571,90 @@ class SDF_OT_edit_curve_sync_target(bpy.types.Operator):
         context.view_layer.objects.active = target
         bpy.ops.object.mode_set(mode='EDIT')
 
+        return {'FINISHED'}
+
+
+class SDF_OT_add_tree_ref(bpy.types.Operator):
+    bl_idname = "sdf.add_tree_ref"
+    bl_label = "Add Tree Reference"
+    bl_description = (
+        "Pull another SDF tree into this one, to blend the two or to carve a fit clear. "
+        "The referenced tree keeps its own stack and resolution"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        master = get_sdf_output_obj(context)
+        if not master:
+            self.report({'WARNING'}, "Workspace output object not found")
+            return {'CANCELLED'}
+
+        props = master.sdf_props
+        col = props.target_collection
+        if not col:
+            self.report({'WARNING'}, "This SDF workspace has no collection.")
+            return {'CANCELLED'}
+
+        others = [o for o in iter_sdf_outputs(context.scene) if o != master]
+        if not others:
+            self.report({'WARNING'}, "There is no other SDF tree to reference. Add one first.")
+            return {'CANCELLED'}
+
+        existing_numbers = []
+        for obj in col.objects:
+            if obj.name.startswith("SDF_TreeRef_"):
+                try:
+                    existing_numbers.append(int(obj.name.split("_")[-1]))
+                except Exception:
+                    pass
+        number = max(existing_numbers, default=0) + 1
+        empty_obj = bpy.data.objects.new(f"SDF_TreeRef_{number:03}", None)
+        empty_obj.empty_display_size = 0.5
+        empty_obj.empty_display_type = 'CUBE'
+
+        # Curve Sync プロキシと同じ理由で、コレクションへリンクする前にフラグを立てる。
+        # リンク後だと sync_sdf_stack がただのEmpty＝仕切りとして先に登録してしまう。
+        empty_obj.sdf_props.is_primitive = False
+        empty_obj.sdf_props.is_output = False
+        empty_obj.sdf_props.is_tree_ref_proxy = True
+
+        col.objects.link(empty_obj)
+
+        # 参照先の既定は「自分以外の最初のツリー」。プロキシは参照先と同じ位置に置くので、
+        # 動かさないかぎり形はずれない（engine._build_tree_ref_primitives 参照）
+        ref = others[0]
+        empty_obj.sdf_props.tree_ref_obj = ref
+        empty_obj.matrix_world = ref.matrix_world.copy()
+
+        item = None
+        item_index = None
+        for i, existing in enumerate(props.sdf_stack):
+            if existing.object_ptr and existing.object_ptr.name == empty_obj.name:
+                item = existing
+                item_index = i
+                break
+        if item is None:
+            item = props.sdf_stack.add()
+            item_index = len(props.sdf_stack) - 1
+        item.item_type = 'TREE_REF'
+        item.object_ptr = empty_obj
+        item.obj_name = empty_obj.name
+
+        idx = props.sdf_stack_index
+        stack_size = len(props.sdf_stack)
+        if stack_size > 1:
+            target_idx = min(idx + 1, stack_size - 1)
+            props.sdf_stack.move(item_index, target_idx)
+            props.sdf_stack_index = target_idx
+        else:
+            props.sdf_stack_index = 0
+
+        update_sdf_mesh(master)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        empty_obj.select_set(True)
+        context.view_layer.objects.active = empty_obj
+        self.report({'INFO'}, f"Referencing '{ref.name}' ({empty_obj.sdf_props.tree_ref_mode}).")
         return {'FINISHED'}
 
 

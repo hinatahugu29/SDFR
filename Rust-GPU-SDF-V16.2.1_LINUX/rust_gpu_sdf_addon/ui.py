@@ -4,6 +4,23 @@ from .constants import PRIMITIVE_UI_DEFS
 from .engine import _resolve_curve_sync_target, iter_sdf_outputs, resolve_active_output
 
 
+def _tree_has_non_union(output_obj):
+    """参照先ツリーが内部で Subtract / Intersect を使っているか。
+
+    使っていると、取り込み側の Subtract（プリミティブ個別に引く方式）が
+    厳密でなくなるため、UI で断りを出す。
+    """
+    props = getattr(output_obj, "sdf_props", None)
+    if not props:
+        return False
+    for item in props.sdf_stack:
+        obj = item.object_ptr
+        p = getattr(obj, "sdf_props", None) if obj else None
+        if p and getattr(p, "is_primitive", False) and str(p.operation) != '0':
+            return True
+    return False
+
+
 def _gn_input_binding(mod, identifier):
     """Geometry Nodes モディファイアの入力1件を layout.prop() へ渡す形にして返す。
 
@@ -750,6 +767,37 @@ class SDF_PT_main(bpy.types.Panel):
         row = layout.row(align=True)
         row.operator("sdf.toggle_display", text="Wire/Solid", icon='SHADING_WIRE')
         row.operator("sdf.move_to_sdf_collection", text="Move to SDF", icon='COLLECTION_NEW')
+
+        # --- V16.2.1: ツリー参照 ---
+        # 他のツリーがあるときだけ出す（1本しか無ければ参照先が無い）
+        scene = context.scene
+        active_obj = context.active_object
+        others = [o for o in iter_sdf_outputs(scene) if o != output_obj]
+        is_tree_ref = bool(
+            active_obj and active_obj.type == 'EMPTY'
+            and getattr(active_obj.sdf_props, "is_tree_ref_proxy", False)
+        )
+        if others or is_tree_ref:
+            box_tr = layout.box()
+            if is_tree_ref:
+                tp = active_obj.sdf_props
+                box_tr.label(text=f"Tree Reference: {active_obj.name}", icon='OUTLINER_COLLECTION')
+                box_tr.prop(tp, "tree_ref_obj", text="Tree")
+                box_tr.prop(tp, "tree_ref_mode", text="Mode")
+                box_tr.prop(tp, "smoothness", text="Smoothness")
+                if tp.tree_ref_mode == 'BLEND':
+                    box_tr.prop(tp, "blend_profile", text="Profile")
+                    if tp.blend_profile == '2':
+                        box_tr.prop(tp, "chamfer_smooth", text="Chamfer")
+                else:
+                    ref = tp.tree_ref_obj
+                    if ref and _tree_has_non_union(ref):
+                        col_warn = box_tr.column(align=True)
+                        col_warn.label(text="The referenced tree uses Subtract/Intersect", icon='INFO')
+                        col_warn.label(text="inside, so the carve is approximate there.")
+                box_tr.label(text="Move this empty to offset the reference.")
+            else:
+                box_tr.operator("sdf.add_tree_ref", text="Add Tree Reference", icon='OUTLINER_COLLECTION')
 
         # --- Curve Sync: Blender カーブをコレクションに入れる（直接方式）、または
         # Curve Ref プロキシから任意のカーブを参照する（プロキシ方式）の2通り ---
