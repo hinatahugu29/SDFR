@@ -93,6 +93,7 @@ else:
     from . import shader
 
 from .engine import _update_preview
+from bpy.app.handlers import persistent
 
 _LAYOUT_FLAG_FILE = os.path.join(os.path.dirname(__file__), "SDF_DEBUG_LAYOUT.ON")
 _LAYOUT_DEBUG_ENV = os.environ.get("SDF_DEBUG_LAYOUT", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -163,6 +164,23 @@ def update_result_visibility(self, context):
                 if obj.name in engine._last_state_hashes:
                     del engine._last_state_hashes[obj.name]
                 engine.update_sdf_mesh(obj)
+
+@persistent
+def sdf_load_post_handler(dummy):
+    """開いたファイルの is_gpu_ready を、実際のウォームアップ状況へ揃える。
+
+    V16.2.1: このフラグはシーンのプロパティなので .blend に保存される。
+    保存時に True だったファイルを開くと、エンジンの初期化が終わっていなくても
+    パネルのガードが外れてしまっていた（コンソールに Compiling ... が流れている
+    最中に操作できてしまう）。
+    """
+    try:
+        for scene in bpy.data.scenes:
+            if hasattr(scene, "sdf_scene_props"):
+                scene.sdf_scene_props.is_gpu_ready = bool(_gpu_init_finished)
+    except Exception as exc:
+        print(f"SDF.R: load_post GPU flag sync skipped: {exc}")
+
 
 def update_primitives_visibility(self, context):
     """Switch source primitives between wire and bounds display."""
@@ -247,6 +265,18 @@ def register():
     def init_checker():
         """Check async GPU warm-up status and update scene flags."""
         global _gpu_init_finished, _gpu_init_error
+        if not _gpu_init_finished:
+            # V16.2.1: is_gpu_ready はシーンのプロパティなので .blend に保存される。
+            # 前回のセッションで True になったファイルを開くと、エンジンがまだ
+            # パイプラインをコンパイルしている最中でもパネルのガードが外れていた。
+            # ウォームアップが終わるまでは毎回 False に落として打ち消す。
+            try:
+                for scene in bpy.data.scenes:
+                    if hasattr(scene, "sdf_scene_props") and scene.sdf_scene_props.is_gpu_ready:
+                        scene.sdf_scene_props.is_gpu_ready = False
+            except Exception:
+                pass
+            return 0.1
         if _gpu_init_finished:
             try:
                 scenes = list(bpy.data.scenes)
@@ -293,6 +323,7 @@ def register():
     )
     bpy.app.timers.register(properties.sync_scene_diagnostic_flags, first_interval=0.1)
     
+    bpy.app.handlers.load_post.append(sdf_load_post_handler)
     bpy.app.handlers.depsgraph_update_post.append(handlers.sdf_depsgraph_handler)
     bpy.app.handlers.undo_post.append(handlers.sdf_undo_handler)
     bpy.app.handlers.redo_post.append(handlers.sdf_undo_handler)
@@ -306,6 +337,8 @@ def unregister():
         bpy.types.SpaceView3D.draw_handler_remove(_draw_handler, 'WINDOW')
         _draw_handler = None
     
+    if sdf_load_post_handler in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(sdf_load_post_handler)
     if handlers.sdf_depsgraph_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(handlers.sdf_depsgraph_handler)
     if handlers.sdf_undo_handler in bpy.app.handlers.undo_post:
