@@ -187,7 +187,7 @@ def get_sdf_state_fingerprint(output_obj, depsgraph, _visited=None):
             state.append((
                 p_props.layout_use_mirror, p_props.layout_use_radial, p_props.layout_use_spiral, p_props.layout_use_jitter, p_props.layout_use_grid,
                 p_props.mirror_x, p_props.mirror_y, p_props.mirror_z,
-                p_props.mirror_offset,
+                p_props.mirror_offset, p_props.mirror_blend,
                 p_props.radial_count, p_props.radial_radius, p_props.radial_axis,
                 p_props.spiral_pitch, p_props.jitter_seed, p_props.jitter_strength,
                 p_props.grid_count_x, p_props.grid_count_y, p_props.grid_count_z,
@@ -761,7 +761,8 @@ def build_element_primitive(el, auto_domain, inv_world_output, props, max_extent
         layer_id=layer_id,
         layer_smoothness=layer_k,
         layer_blend_profile=layer_prof,
-        layer_chamfer_smooth=layer_cs
+        layer_chamfer_smooth=layer_cs,
+        mirror_blend=(p_props.mirror_blend if p_props.layout_use_mirror else 0.0)
     )
 
 def _curve_polylines_from_to_mesh(c_obj):

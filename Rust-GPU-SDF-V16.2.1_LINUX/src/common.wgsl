@@ -459,7 +459,56 @@ fn apply_deform(p_in: vec3<f32>, slot_info: u32, sd: vec4<f32>, prim_max_s: f32,
     return DeformResult(lp, sc);
 }
 
-fn evaluate_layout(p_in: vec3<f32>, prim: Primitive, accum_idx_in: f32) -> vec3<f32> {
+// V16.2.1: ミラーは元々 abs() による領域の折り返しで、2つのコピーが必ず
+// ハードな min で合わさるため、折り返し面に必ず折り目が出ていた。
+// msign に ±1 を渡すと折り返さずに「その側」だけを見る。呼び出し側で両側を
+// 評価して滑らかに結合できる（evaluate_shape_mirrored）。
+// msign が 0 の成分は従来どおり abs() で折り返す。
+// V16.2.1: Mirror Blend
+// blend <= 0 のときは従来どおり（折り返し1回）。0 より大きいときは有効な軸の
+// 数だけ側を分けて評価し、プリミティブのブレンド形状で結合する。
+// 評価回数は 2^(有効軸数) 倍になるので、必要なときだけ有効にする設計。
+fn evaluate_shape_mirrored(p_sym: vec3<f32>, prim: Primitive) -> f32 {
+    let packed1 = u32(prim.layout_data1.x);
+    let flags = packed1 & 0xFFu;
+    let mask = (packed1 >> 8u) & 0xFu;
+    let blend = prim.layer_params.w;
+
+    if ((flags & 1u) == 0u || mask == 0u || blend <= 0.0001) {
+        return evaluate_shape(evaluate_layout(p_sym, prim, 0.0), prim);
+    }
+
+    let k = max(blend, 0.0001);
+    let profile = u32(prim.color_b_and_extra.y);
+    let cs = prim.color_b_and_extra.z;
+
+    var d = 1e9;
+    var first = true;
+    for (var i = 0u; i < 8u; i = i + 1u) {
+        let nx = (i & 1u) != 0u;
+        let ny = (i & 2u) != 0u;
+        let nz = (i & 4u) != 0u;
+        // 無効な軸で「負側」を回しても同じ形を二重に評価するだけなので飛ばす
+        if (nx && (mask & 1u) == 0u) { continue; }
+        if (ny && (mask & 2u) == 0u) { continue; }
+        if (nz && (mask & 4u) == 0u) { continue; }
+        let sgn = vec3<f32>(
+            select(1.0, -1.0, nx),
+            select(1.0, -1.0, ny),
+            select(1.0, -1.0, nz)
+        );
+        let ds = evaluate_shape(evaluate_layout_side(p_sym, prim, 0.0, sgn), prim);
+        if (first) {
+            d = ds;
+            first = false;
+        } else {
+            d = apply_profile_union(d, ds, profile, k, cs);
+        }
+    }
+    return d;
+}
+
+fn evaluate_layout_side(p_in: vec3<f32>, prim: Primitive, accum_idx_in: f32, msign: vec3<f32>) -> vec3<f32> {
     // V15.4 / Ghost 互換順序: ローカル空間変換 -> Mirror -> Radial -> Grid -> StepRot
     var center = prim.center_and_shape.xyz;
     if ((config.symmetry & 1u) != 0u) { center.x = abs(center.x); }
@@ -475,9 +524,9 @@ fn evaluate_layout(p_in: vec3<f32>, prim: Primitive, accum_idx_in: f32) -> vec3<
     if ((flags & 1u) != 0u) {
         let mask = (packed1 >> 8u) & 0xFu;
         let m_offset = prim.layout_data1.y;
-        if ((mask & 1u) != 0u) { lp.x = abs(lp.x) - m_offset; }
-        if ((mask & 2u) != 0u) { lp.y = abs(lp.y) - m_offset; }
-        if ((mask & 4u) != 0u) { lp.z = abs(lp.z) - m_offset; }
+        if ((mask & 1u) != 0u) { lp.x = select(abs(lp.x), msign.x * lp.x, msign.x != 0.0) - m_offset; }
+        if ((mask & 2u) != 0u) { lp.y = select(abs(lp.y), msign.y * lp.y, msign.y != 0.0) - m_offset; }
+        if ((mask & 4u) != 0u) { lp.z = select(abs(lp.z), msign.z * lp.z, msign.z != 0.0) - m_offset; }
     }
     
     // 2. Patterns (Radial/Spiral Bit 1: 2, Bit 2: 4)
@@ -589,6 +638,10 @@ fn apply_primitive_edge(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 
         let h = max(k - abs(d1 - d2), 0.0) / k; 
         return max(d1, d2) + h * h * h * k * 0.166666;
     }
+}
+
+fn evaluate_layout(p_in: vec3<f32>, prim: Primitive, accum_idx_in: f32) -> vec3<f32> {
+    return evaluate_layout_side(p_in, prim, accum_idx_in, vec3<f32>(0.0));
 }
 
 fn evaluate_shape(lp_in: vec3<f32>, prim: Primitive) -> f32 {
@@ -739,7 +792,7 @@ fn get_scene_dist_indexed(p: vec3<f32>, b_ptr: u32) -> f32 {
         let prim = primitives[prim_idx];
         let op = u32(prim.size_and_op.w);
         let lp_layout = evaluate_layout(p_sym, prim, 0.0);
-        let d_prim = evaluate_shape(lp_layout, prim);
+        let d_prim = evaluate_shape_mirrored(p_sym, prim);
         
         let k = max(prim.params.y, 0.0001);
         let profile = u32(prim.color_b_and_extra.y);
@@ -800,7 +853,7 @@ fn get_scene_sdf_indexed(p: vec3<f32>, b_ptr: u32) -> SdfResult {
         let op = u32(prim.size_and_op.w);
         
         let lp_layout = evaluate_layout(p_sym, prim, 0.0);
-        let d_prim = evaluate_shape(lp_layout, prim);
+        let d_prim = evaluate_shape_mirrored(p_sym, prim);
         
         let k = max(prim.params.y, 0.0001);
         let profile = u32(prim.color_b_and_extra.y);

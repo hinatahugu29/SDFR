@@ -331,7 +331,7 @@ vec4 map_impl(vec3 p){
         vec4 dd4 = texelFetch(primTex,ivec2(14,i),0); 
         vec4 mod_p = texelFetch(primTex,ivec2(15,i),0); 
         vec4 gyro_p = texelFetch(primTex,ivec2(16,i),0);
-        vec4 layer_p = texelFetch(primTex,ivec2(17,i),0); // [layer_smoothness, layer_blend_profile, layer_chamfer_smooth, unused] 
+        vec4 layer_p = texelFetch(primTex,ivec2(17,i),0); // [layer_smoothness, layer_blend_profile, layer_chamfer_smooth, mirror_blend] 
         
         vec3 lp = q_rotate(p - c0.xyz, q_conj(c1));
         float k=max(c3.y, 0.0001);
@@ -344,12 +344,27 @@ vec4 map_impl(vec3 p){
         float accum_idx = 0.0;
 
         // 1. Mirror
+        //
+        // V16.2.1: Mirror Blend (layer_p.w)
+        // 最終メッシュ側 (common.wgsl の evaluate_shape_mirrored) は、折り返さずに
+        // 両側を評価して滑らかに結合する厳密な方法を使う。プレビューはこのループが
+        // 1形状1評価の構造なので、同じことをするには全体の作り替えが要る。
+        // ここでは「折り返しを丸める」近似で、継ぎ目が丸まった見た目だけ合わせる。
+        // 丸まり方は最終メッシュと厳密には一致しない（プレビューの割り切り）。
         if((flags & 1u) != 0u){
             uint mask = (packed1 >> 8u) & 0xFu;
             float offset = ld1.y;
-            if((mask & 1u) != 0u) lp.x = abs(lp.x) - offset;
-            if((mask & 2u) != 0u) lp.y = abs(lp.y) - offset;
-            if((mask & 4u) != 0u) lp.z = abs(lp.z) - offset;
+            float mb = layer_p.w;
+            float e = mb * mb * 0.25;
+            if(mb > 0.0001){
+                if((mask & 1u) != 0u) lp.x = sqrt(lp.x * lp.x + e) - offset;
+                if((mask & 2u) != 0u) lp.y = sqrt(lp.y * lp.y + e) - offset;
+                if((mask & 4u) != 0u) lp.z = sqrt(lp.z * lp.z + e) - offset;
+            } else {
+                if((mask & 1u) != 0u) lp.x = abs(lp.x) - offset;
+                if((mask & 2u) != 0u) lp.y = abs(lp.y) - offset;
+                if((mask & 4u) != 0u) lp.z = abs(lp.z) - offset;
+            }
         }
 
         // 2. Radial / Spiral

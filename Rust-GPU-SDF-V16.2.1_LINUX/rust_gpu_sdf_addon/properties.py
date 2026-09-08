@@ -539,6 +539,16 @@ class SDF_ObjectProperties(bpy.types.PropertyGroup):
     
     # Mirror settings
     mirror_offset: bpy.props.FloatProperty(name="Offset", default=0.0, update=update_sdf_callback)
+    # V16.2.1: ミラーは空間の折り返しなので、2つのコピーは必ずハードな Union で
+    # 合わさり、折り返し面に折り目が残っていた。0 より大きくすると、両側を別々に
+    # 評価して滑らかに繋ぐ（評価回数は有効な軸の数だけ倍になる）。
+    # 既存ファイルの見た目を変えないため既定は 0（従来どおり）。
+    mirror_blend: bpy.props.FloatProperty(
+        name="Mirror Blend",
+        description=("Round off the seam where the mirrored halves meet. "
+                     "0 keeps the old hard fold. Costs one extra evaluation per mirrored axis"),
+        default=0.0, min=0.0, max=2.0, precision=3, update=update_sdf_callback,
+    )
     mirror_x: bpy.props.BoolProperty(name="X", default=False, update=update_sdf_callback)
     mirror_y: bpy.props.BoolProperty(name="Y", default=False, update=update_sdf_callback)
     mirror_z: bpy.props.BoolProperty(name="Z", default=False, update=update_sdf_callback)

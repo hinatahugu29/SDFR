@@ -351,8 +351,11 @@ def _build_prim_data_for_element(el, o_props):
         data.extend([0.0, 0.0, 0.0, 0.0])
     # 16: gyroid_params [phase, axis_x, axis_y, axis_z]
     data.extend(gyroid_p)
-    # 17: layer_params [layer_smoothness, layer_blend_profile, layer_chamfer_smooth, unused]
-    data.extend([layer_k, float(layer_prof), layer_cs, 0.0])
+    # 17: layer_params [layer_smoothness, layer_blend_profile, layer_chamfer_smooth, mirror_blend]
+    mirror_blend = 0.0
+    if p_props and getattr(p_props, "layout_use_mirror", False):
+        mirror_blend = getattr(p_props, "mirror_blend", 0.0)
+    data.extend([layer_k, float(layer_prof), layer_cs, mirror_blend])
 
     return data
 

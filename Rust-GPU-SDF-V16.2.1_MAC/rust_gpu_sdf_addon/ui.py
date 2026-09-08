@@ -646,6 +646,9 @@ class SDF_PT_main(bpy.types.Panel):
                     row.prop(props, "mirror_y", text="Y", toggle=True)
                     row.prop(props, "mirror_z", text="Z", toggle=True)
                     sub.prop(props, "mirror_offset", text="Offset")
+                    sub.prop(props, "mirror_blend", text="Mirror Blend")
+                    if props.mirror_blend <= 0.0:
+                        sub.label(text="0 keeps the hard seam at the mirror plane", icon='INFO')
 
                 if props.layout_use_radial:
                     sub = col_place.box().column(align=True)
