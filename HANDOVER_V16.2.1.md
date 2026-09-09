@@ -1,6 +1,6 @@
 # SDF.R V16.2.1 引継書
 
-最終更新: 2026-09-09
+最終更新: 2026-09-09（ヘッドレス検証の結果と実機確認の手順を追記）
 対象ブランチ: `feature/multitree-phase0`（master からの分岐）
 前提バージョン: V16.2.0（リリース済み）
 
@@ -221,6 +221,14 @@ if ((mask & 4u) != 0u) { lp.z = abs(lp.z) - m_offset; }   // common.wgsl
 ## 4. コミット一覧（このブランチ）
 
 ```
+7de57ef  Name the tree behind each mesh request, and let ...  ← ログ強化 + B-1 修正
+dd43842  Finalize one tree without shutting down the others
+8873a9d  Make the tree dropdown actually change the tree
+70fdd22  Switch the ghost preview as soon as the active tree does
+0b7559e  Record the warm-up guard finding in the handover
+8a78412  Stop a saved file from unlocking the panel before the engine is up
+e0c22f1  Keep the V16.2.1 verification scripts in the repo
+b0d0426  Write the V16.2.1 handover
 d189f06  Give the mirror seam a way to round itself off      ← Mirror Blend
 0f5832d  Note what actually shipped against the plan
 be73456  Let one SDF tree reference another                  ← Phase 2
@@ -231,7 +239,15 @@ be73456  Let one SDF tree reference another                  ← Phase 2
 
 `d189f06` より前は Rust 無変更（`src/` は V16.2.0 と同一）でした。
 **戻したいときの単位としてはここが切れ目**です。Mirror Blend だけ落として複数ツリーを先に出す、
-という判断ができます。
+という判断ができます。`d189f06` 以降は Python のみなので、この性質は今も保たれています。
+
+`dd43842` / `8873a9d` / `70fdd22` の3件は、いずれも**複数ツリーにして初めて壊れた**箇所です
+（Finalize が他ツリーを巻き添えにする / ドロップダウンが実際には切り替わらない /
+ゴーストが前のツリーのまま残る）。後ろ2件はUI経路なので、同種の残りがまだある前提でいてください。
+
+`7de57ef` は2つの変更を1コミットに含んでいます（分けるべきでしたが、コミット後に気付きました）。
+ログ強化は診断のみで挙動を変えません。同居している B-1 修正だけを戻したい場合は、
+`engine.py` の早期リターン内にある `clear_geometry()` の塊を消せば元の挙動に戻ります。
 
 ---
 
@@ -257,18 +273,26 @@ RTX 3060 / Blender 5.1.1 background / MC / weld なし での実測。
 
 1. **実機での目視確認**。`--background` ではパネルの `draw()` を通していないので、
    ツリー選択UI・Tree Reference のUI・Mirror Blend のスライダーは**まだ一度も描画されていません**。
+   手順と合格基準は「8. 実機確認の手順」にまとめてあります。
+   **ロジック側は 2026-09-09 にヘッドレス9本すべてグリーンを確認済み**なので、
+   残っているのは描画とUI操作だけです。
 2. **Mac / Linux の CI ビルド**。`d189f06` で Rust が変わったので、3プラットフォームとも必要です。
    `cross_platform_build_notes.md` のチェックリストを上から潰してください。
    特に「`register()` の版数 print を更新したか」は**過去2回落としている**項目です（今回は修正済み）。
 3. **ドキュメント更新**。ユーザーガイド / UI Command Inventory に
    Add SDF Tree / Tree Reference / Mirror Blend が未記載です。
+   あわせて `BlenderMarket_Documentation.md` の初回起動の節（「15〜45秒」）に
+   **iGPU では数分かかりうる**旨を追記してください。Intel Iris Xe / Vulkan の実測は
+   **194秒**（キャッシュミス時）。2回目以降は 0.42秒で記載どおりです。
+   ユーザーがこれを踏むのは新規インストール時とキャッシュ削除後で、実際に起こります。
 
 ### B. 分かっている不具合・割り切り
 
-1. **`sdf_show_result` を OFF にしてもメッシュがクリアされない**。
-   `update_sdf_mesh` 冒頭の早期リターンが `clear_geometry()` の分岐より先に効くため、あの分岐は
-   事実上デッドコードです。**V16.2.0 でも同じ**なので今回は触っていません
-   （結果メッシュは `hide_viewport` で隠れるので実害は小さい）。
+1. ~~`sdf_show_result` を OFF にしてもメッシュがクリアされない~~ → **`7de57ef` で修正済み**。
+   V15.9.9.4 で入った早期リターンが `clear_geometry()` の分岐より先に効き、あの分岐が
+   到達不能になっていました（V16.2.0 も同じ）。クリアは早期リターンより前にしか置けないので
+   そちらへ移しています。**あわせて状態ハッシュを捨てる必要があります** —
+   捨てないと ON に戻したとき「変化なし」と判定されてメッシュが空のまま残ります。
 2. プレビューのミラー近似（3章）。
 3. Radial / Grid の折れ目（3章）。
 
@@ -323,7 +347,57 @@ def pump(n=800):
 
 ---
 
-## 8. 判断の記録（なぜそうしたか）
+## 7.5 ログからどこまで分かるか
+
+`Rust Debug: Starting SDF generation` は Rust 側の出力で、**どのツリーの要求か書いていません**。
+つまり Phase 0 の核心（結果を要求した本人に返す）は、既定のログでは検証できません。
+同じ内容のメッシュ生成が何度も並ぶログを見たとき、それが「2本が別々に更新されている」のか
+「1本が空回りしている」のかは区別がつきません。
+
+`7de57ef` で、要求側と受け取り側の両方に持ち主を出すようにしました。
+**Nパネルの診断トグル "Mesh" を ON** にすると出ます（既定は OFF）。
+
+```
+[SDF-Debug/Mesh] request  <- owner=SDF_Result algo=MC res=48 prims=5
+[SDF-Debug/Mesh] result   -> owner=SDF_Result
+```
+
+`request` と `result` の owner が食い違っていたら Phase 0 が壊れています。
+もう1つ注意して見るべきは次の行で、**持ち主が見つからず出力が1本しか無いときに
+黙って拾い上げる経路**です。ここが出るときは何かがおかしいと思ってください。
+
+```
+[SDF-Debug/Mesh] result   -> adopted by the only output 'SDF_Result' (owner=... not found)
+[SDF-Debug/Mesh] result   -> DISCARDED (owner=... not found, 2 outputs in scene)
+```
+
+---
+
+## 8. 実機確認の手順（残作業A-1）
+
+ロジックはヘッドレスで押さえてあるので、ここでは**描画とUI操作にだけ**集中します。
+
+> **必ずコンソールを開いたまま操作してください。** パネルの `draw()` で出た例外は
+> 画面上ほとんど無症状で、コンソールにしか出ません。したがって下の1・2・3・5は
+> 実質「**トレースバックが出ないこと**」が合格基準です。
+
+| # | 何を | どうやって | 合格基準 |
+|---|---|---|---|
+| 1 | ツリー選択ドロップダウン | ツリーを2本作り、往復で切り替える | 選んだ側が Parts / The Stack に反映される。トレースバックが出ない |
+| 2 | プレビュー追従 | 切り替えるたびにゴーストを見る | アクティブツリー側のゴーストだけが出る |
+| 3 | Tree Reference のUI | `Add Tree Reference` で参照を作り、Blend / Subtract を切り替える | 両モードのUIが出る。Subtract のとき近似の注意書きが出る |
+| 4 | Mirror Blend スライダー | Layout Mirror を有効にし、0 → 0.3 へ動かす | 0で継ぎ目が角張り、上げると丸くなるのが**見て分かる**。0のとき注意書きが出る |
+| 5 | `draw()` がデータを書いていないこと | 上を一通り操作する | `Writing to ID classes in this context is not allowed` が**一度も出ない** |
+
+5が最重要です。`resolve_active_output()` は `draw()` と `poll()` から呼ばれるため
+**データを書いてはいけない**（1章の注記）という制約があり、これを破ったときのエラーは
+ヘッドレスでは絶対に出ません。実機確認の主目的はここだと思ってください。
+
+4だけは目視が本質です。他は数値でヘッドレスに押さえてあります。
+
+---
+
+## 9. 判断の記録（なぜそうしたか）
 
 - **命名を変えなかった**: All Clear が名前の文字列一致で削除対象を決めており、
   リネームは「消してはいけないものを消す」方向に壊れうるため。得られるのは見た目の統一だけ。
