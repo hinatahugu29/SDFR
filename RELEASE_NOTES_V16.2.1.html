@@ -27,6 +27,14 @@
     </p>
   </div>
 
+  <div style="margin-bottom:28px; padding:16px 20px; background:#fdf4ec; border-radius:8px; border:1px solid #f0ddc9;">
+    <p style="font-size:0.97em; color:#6b4a2a; margin:0;">
+      <strong>If you are running V16.2.0, update.</strong> That release carried a regression that
+      switches the ghost preview off entirely once a tree holds more than sixteen parts. It is fixed
+      here, and it is the first item under Fixes below.
+    </p>
+  </div>
+
   <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
 
   <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🌳 Several SDF trees in one scene</h2>
@@ -179,12 +187,43 @@ Parts: SDF_Collection     &#8592; its parts live here</pre>
 
   <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🐛 Fixes</h2>
 
-  <p style="font-size:0.97em; color:#444;"><strong>Show Result Mesh now clears the mesh.</strong>
+  <h3 style="color:#222; font-weight:bold; font-size:1.15em; margin-top:22px;">The ghost preview comes back above 16 parts</h3>
+
+  <p style="font-size:0.97em; color:#444;"><strong>This is a regression introduced in V16.2.0.</strong>
+    If your ghost preview stopped appearing on that version, this is why.</p>
+
+  <p style="font-size:0.97em; color:#444;">The preview packs each part into one row of a texture that the raymarching shader
+    reads. Mirror Blend needed one more value per part, so in V16.2.0 the row grew from 17 texels to
+    18 — in the shader, and in the code that fills the row, but not in the single line that works out
+    how many rows to allocate. That line kept dividing by the old row size.</p>
+
+  <p style="font-size:0.97em; color:#444;">The arithmetic still came out right up to 16 parts and wrong from 17. From there the
+    texture is asked for more rows than the data fills, Blender refuses to build it, and the preview
+    stops drawing — every frame, with a traceback going to a console you may not have open. Most
+    people would have seen the preview quietly stop rather than an error.</p>
+
+  <p style="font-size:0.97em; color:#444;"><strong>Your meshes were never affected.</strong> Meshing runs on a separate path in the
+    engine and never touched this texture, so results and saved files are correct. The preview
+    returns as soon as you update, and it returns on files you saved while it was broken.</p>
+
+  <p style="font-size:0.97em; color:#444;">One thing worth knowing, because it makes the limit closer than it sounds: the count is
+    of parts <strong>after layout expansion</strong>, not the parts you placed. A Collection Divider
+    set to a 4×4 grid turns three parts into eighteen. A small scene could reach the limit, which is
+    why this is worth updating for even if you have never built a tree with seventeen parts in
+    it.</p>
+
+  <p style="font-size:0.97em; color:#444;">The row size is now a named constant, checked against the data before the texture is
+    built, with a test that compares it against the shader. If the three ever disagree again, the
+    preview is skipped instead of throwing, and meshing carries on.</p>
+
+  <h3 style="color:#222; font-weight:bold; font-size:1.15em; margin-top:22px;">Show Result Mesh now clears the mesh</h3>
+
+  <p style="font-size:0.97em; color:#444;">
     Switching it off hid the result but left the mesh data in place. An optimisation added in
     V15.9.9.4 returned early, ahead of the branch that empties the mesh, so that branch had become
     unreachable. It now clears, and switching back on rebuilds.</p>
 
-  <p style="font-size:0.97em; color:#444;"><strong>Fixes that came with multiple trees:</strong></p>
+  <h3 style="color:#222; font-weight:bold; font-size:1.15em; margin-top:22px;">Fixes that came with multiple trees</h3>
   <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
     <li style="margin-bottom:8px;">A finished tree no longer takes the others down with it when you Finalize.</li>
     <li style="margin-bottom:8px;">The Tree dropdown changes the tree, rather than only appearing to.</li>
@@ -194,12 +233,24 @@ Parts: SDF_Collection     &#8592; its parts live here</pre>
     <li style="margin-bottom:0;">The Tree row stays visible with one tree. It used to disappear the moment you finalized down to one, which read as the controls being taken away.</li>
   </ul>
 
-  <p style="font-size:0.97em; color:#444;"><strong>The panel no longer unlocks before the engine is ready.</strong>
-    The GPU-ready flag is a scene property, so it was saved into your .blend. Opening a file saved
+  <h3 style="color:#222; font-weight:bold; font-size:1.15em; margin-top:22px;">The panel no longer unlocks before the engine is ready</h3>
+
+  <p style="font-size:0.97em; color:#444;">The GPU-ready flag is a scene property, so it was saved into your .blend. Opening a file saved
     after initialisation unlocked the panel while shaders were still compiling. The flag is now
     checked against the engine's real state when a file loads. Nothing broke if you did operate
     during warm-up — requests waited on the same lock and ran when compilation finished — but the
     panel should not have looked ready.</p>
+
+  <h3 style="color:#222; font-weight:bold; font-size:1.15em; margin-top:22px;">Smaller fixes</h3>
+  <ul style="padding-left:20px; font-size:0.97em; color:#444; line-height:1.7;">
+    <li style="margin-bottom:8px;"><strong>All Clear removes a hidden result.</strong> It selected objects before deleting them, and an object hidden in the viewport cannot be selected. Switching Show Result Mesh off hides the result, so clearing with it off used to leave the output object behind.</li>
+    <li style="margin-bottom:8px;"><strong>All Clear no longer takes objects that merely look like SDF.R's.</strong> It matched <code>SDF_Result_</code> and <code>SDF_Backup</code> anywhere in a name, so an object of your own named something like <code>My_SDF_Backup</code> was deleted along with them. It now matches only at the start of the name.</li>
+    <li style="margin-bottom:8px;"><strong>A DC error no longer follows a file to a machine that is fine.</strong> The diagnostic message is a scene property, so it was saved into your .blend. A file saved where Dual Contouring failed to compile showed &ldquo;DC unavailable — switch to MC&rdquo; on every machine that opened it afterwards, and nothing ever cleared it. It is now checked against the engine's real state when a file loads, the same as the GPU-ready flag.</li>
+    <li style="margin-bottom:8px;"><strong>Undo after adding a part.</strong> Add Primitive registered no undo step of its own, so an undo could land between Blender creating the mesh and SDF.R turning it into a part.</li>
+    <li style="margin-bottom:8px;"><strong>A 3D view in a second window redraws.</strong> When a mesh finished, only the frontmost window was asked to repaint, so a viewport opened in another window kept showing the previous mesh.</li>
+    <li style="margin-bottom:8px;"><strong>Undo and redo no longer force a scene re-evaluation.</strong> V16.1.2 removed that pattern from the timer path, where a macOS crash was traced to it; the undo handler still had it. This is a precaution, not a fix for a crash anyone has reported.</li>
+    <li style="margin-bottom:0;"><strong>A clearer message when the engine cannot be loaded.</strong> The add-on ships the engine twice — in a platform folder and beside the Python files — so that one can cover for the other, but a failed load raised before the second was tried. It now tries both, and if neither works it reports the OS, the CPU and what each attempt said. On an Intel Mac that names the reason outright: the macOS build is Apple Silicon only.</li>
+  </ul>
 
   <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
 

@@ -10,9 +10,14 @@ Japanese version below.
 1. `SDF.R V16.2.1 — one add-on, separate objects`
 2. `SDF.R V16.2.1 is out (free update) — a scene can now hold several SDF trees`
 3. `[SDF.R] V16.2.1 released — the parts of your model can be separate meshes now`
+4. `SDF.R V16.2.1 — separate objects, and a ghost preview fix for V16.2.0 users`
 
 *Recommended: option 1 — short, and it names the outcome rather than the mechanism. Anyone who has
 asked "how do I get the eyes out as their own object?" will recognise it immediately.*
+
+*Use option 4 instead if you would rather the fix be the reason people open the mail. V16.2.0 shipped
+with a fault that switches the ghost preview off on scenes that are not unusually large, and some
+owners are sitting on it right now without knowing what it is called.*
 
 ---
 
@@ -21,6 +26,12 @@ asked "how do I get the eyes out as their own object?" will recognise it immedia
 Hi, and thank you for supporting SDF.R.
 
 **V16.2.1 is now available as a free update for all owners.**
+
+**If you are on V16.2.0, this one is worth taking now.** That release had a fault that switches the
+ghost preview off entirely once a tree holds more than sixteen parts — counted after layout
+expansion, so a Collection Divider set to a grid can reach it with only a few parts placed. Your
+meshes were never affected and nothing in your files was damaged; it is the live preview that stops
+drawing. It is fixed in this release.
 
 Until now, an SDF.R scene held exactly one SDF tree, and that tree produced exactly one mesh. If you
 wanted a model's parts as separate objects, the answer was always "build a second SDF output" — and
@@ -79,6 +90,15 @@ crease** — blending across cell boundaries needs the neighbouring cells, which
 
 ### 🐛 Also fixed
 
+- **The ghost preview works again above sixteen parts.** V16.2.0 added one value per part to the
+  preview texture but left the row size it divides by at the old number, so from the seventeenth
+  part the texture no longer matched its data and Blender refused to build it. Meshing runs on a
+  separate path and was never involved.
+- **All Clear** no longer leaves a hidden result object behind, and no longer deletes objects of
+  your own whose names happen to contain `SDF_Result_` or `SDF_Backup`.
+- A **Dual Contouring error saved into a .blend** no longer reappears on a machine where DC is fine.
+- **Undo** after adding a part now returns to a clean state.
+- A 3D view in a **second window** repaints when a mesh finishes.
 - **Show Result Mesh** now clears the mesh when switched off, instead of only hiding the result.
 - **Auto Domain** and **Use Live Normals** re-mesh when toggled.
 - The panel no longer unlocks while shaders are still compiling. The GPU-ready flag was being saved
@@ -107,6 +127,12 @@ people asking for their parts as separate objects.
 いつも SDF.R をご利用いただきありがとうございます。
 
 **V16.2.1 を公開しました。既存ユーザーの方は無償アップデートです。**
+
+**V16.2.0 をお使いの方は、早めの更新をおすすめします。** V16.2.0 には、1本のツリーの要素が16個を
+超えるとゴーストプレビューが表示されなくなる不具合がありました。数えるのはレイアウト展開後の要素数
+なので、仕切り（Collection Divider）で配列を効かせていれば、配置した部品が少なくても到達します。
+**メッシュ生成には影響がなく、ファイルが壊れることもありません**。止まるのはリアルタイムのプレビュー
+表示だけで、本アップデートで修正済みです。
 
 これまで SDF.R のシーンが持てる SDF ツリーは1本だけで、出力されるメッシュも1つでした。モデルの
 パーツを別オブジェクトにしたい場合、答えはいつも「SDF 出力をもう1つ作ってください」でしたが、
@@ -161,6 +187,16 @@ Blend は厳密です。Subtract は、**参照先が Union だけで構成さ�
 
 ### 🐛 その他の修正
 
+- **要素が16個を超えてもゴーストプレビューが出るようになりました。** V16.2.0 でプレビュー用テクスチャ
+  の1行に値を1つ追加した際、行の大きさを求める割り算だけが旧値のままでした。そのため17個目から
+  テクスチャとデータの大きさが食い違い、Blender が生成を拒否していました。メッシュ生成は別経路のため
+  影響していません
+- **All Clear** が、非表示になっている結果オブジェクトを消し残さなくなりました。あわせて、名前に
+  `SDF_Result_` や `SDF_Backup` を含むだけのご自身のオブジェクトを巻き込んで削除しなくなりました
+- .blend に保存された **Dual Contouring のエラー表示**が、DC が正常な環境で開いても残り続ける問題を
+  修正しました
+- 部品を追加した直後の **Undo** が、中途半端な状態に戻らなくなりました
+- **別ウィンドウ**に開いた3Dビューが、メッシュ完成時に再描画されるようになりました
 - **Show Result Mesh** を OFF にしたとき、結果を隠すだけでなくメッシュを空にするようになりました
 - **Auto Domain** と **Use Live Normals** の切り替えで再メッシュされるようになりました
 - シェーダーのコンパイル中にパネルが操作可能になる問題を修正しました。GPU準備完了フラグが .blend に
