@@ -1,19 +1,19 @@
-name: Build SDF.R V16.1.2 Cross Platform
+name: Build SDF.R V16.2.1 Cross Platform
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - ".github/workflows/build-sdf-r-v16-1-2-cross-platform.yml"
-      - "Rust-GPU-SDF-V16.1.2_MAC/**"
-      - "Rust-GPU-SDF-V16.1.2_LINUX/**"
+      - ".github/workflows/build-sdf-r-v16-2-1-cross-platform.yml"
+      - "Rust-GPU-SDF-V16.2.1_MAC/**"
+      - "Rust-GPU-SDF-V16.2.1_LINUX/**"
 
 jobs:
   build-macos:
     runs-on: macos-14
     defaults:
       run:
-        working-directory: Rust-GPU-SDF-V16.1.2_MAC
+        working-directory: Rust-GPU-SDF-V16.2.1_MAC
         shell: bash
     steps:
       - uses: actions/checkout@v4
@@ -32,19 +32,19 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: SDF_R_16_1_2_MAC_logs
-          path: Rust-GPU-SDF-V16.1.2_MAC/build-macos.log
+          name: SDF_R_16_2_1_MAC_logs
+          path: Rust-GPU-SDF-V16.2.1_MAC/build-macos.log
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: SDF_R_16_1_2_MAC
-          path: Rust-GPU-SDF-V16.1.2_MAC/SDF_R_16_1_2_Darwin.zip
+          name: SDF_R_16_2_1_MAC
+          path: Rust-GPU-SDF-V16.2.1_MAC/SDF_R_16_2_1_Darwin.zip
 
   build-linux:
     runs-on: ubuntu-22.04
     defaults:
       run:
-        working-directory: Rust-GPU-SDF-V16.1.2_LINUX
+        working-directory: Rust-GPU-SDF-V16.2.1_LINUX
         shell: bash
     steps:
       - uses: actions/checkout@v4
@@ -67,10 +67,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: SDF_R_16_1_2_LINUX_logs
-          path: Rust-GPU-SDF-V16.1.2_LINUX/build-linux.log
+          name: SDF_R_16_2_1_LINUX_logs
+          path: Rust-GPU-SDF-V16.2.1_LINUX/build-linux.log
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: SDF_R_16_1_2_LINUX
-          path: Rust-GPU-SDF-V16.1.2_LINUX/SDF_R_16_1_2_Linux.zip
+          name: SDF_R_16_2_1_LINUX
+          path: Rust-GPU-SDF-V16.2.1_LINUX/SDF_R_16_2_1_Linux.zip
