@@ -177,8 +177,27 @@ def sync_scene_diagnostic_flags():
     return None
 
 def _poll_sdf_output(self, obj):
+    """Tree ドロップダウンに出す候補かどうか。
+
+    V16.2.1: `is_output` だけを見ていたため、**シーンから消えたツリーも候補に残っていた**。
+    ビューポートで A → X で消すと、Blender はオブジェクトをコレクションから外すが、
+    こちらの `active_output` や `sdf_stack[].object_ptr` が参照を握っている間は
+    データブロック自体が `bpy.data` に生き残る（パージするまで消えない）。
+    その状態のオブジェクトが選択肢に並ぶと、実体の無いツリーを選べてしまう。
+
+    いまのシーンに実際に置かれているものだけを候補にする。
+    """
     props = getattr(obj, "sdf_props", None)
-    return bool(props and props.is_output)
+    if not (props and props.is_output):
+        return False
+    scene = getattr(bpy.context, "scene", None)
+    if scene is None:
+        # シーンが取れない文脈（起動直後など）では従来どおり通す。
+        return True
+    try:
+        return obj.name in scene.objects
+    except Exception:
+        return True
 
 
 def _update_active_output(self, context):

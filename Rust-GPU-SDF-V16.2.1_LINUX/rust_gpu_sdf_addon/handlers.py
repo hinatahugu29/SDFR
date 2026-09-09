@@ -905,10 +905,37 @@ def draw_callback_3d(self, context):
             _perf_draw_rebuild_count = 0
             _perf_draw_accum_time = 0.0
 
+def _release_stale_active_output(scene):
+    """シーンから消えたツリーを指している `active_output` を手放す。
+
+    V16.2.1: この参照は PointerProperty なのでユーザー数に数えられる。握ったままだと、
+    ビューポートで A → X で消したツリーのデータブロックが `bpy.data` に残り続け、
+    Tree ドロップダウンにも並んだままになる（実体が無いのに選べてしまう）。
+    参照を外せば Blender 側で回収され、選択肢からも消える。
+    """
+    props = getattr(scene, "sdf_scene_props", None)
+    if props is None:
+        return False
+    obj = props.active_output
+    if obj is None:
+        return False
+    try:
+        if obj.name in scene.objects:
+            return False
+    except Exception:
+        # 参照先が既に無効（削除済み）なら、そのまま手放す方へ進む。
+        pass
+    # 代わりに指せるツリーがあればそれへ、無ければ空にする。
+    from . import engine
+    replacement = next(engine.iter_sdf_outputs(scene), None)
+    props.active_output = replacement
+    return True
+
+
 def _sync_output_stacks_from_collection(scene):
     """Keep SDF stack UI in sync when objects are deleted with Blender shortcuts."""
     from . import engine
-    changed = False
+    changed = _release_stale_active_output(scene)
     for obj in list(scene.objects):
         props = getattr(obj.original if hasattr(obj, "original") else obj, "sdf_props", None)
         if not props or not props.is_output or not props.target_collection:
