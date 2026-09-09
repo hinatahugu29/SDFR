@@ -12,12 +12,17 @@ Japanese version below.
 3. `[SDF.R] V16.2.1 released — the parts of your model can be separate meshes now`
 4. `SDF.R V16.2.1 — separate objects, and a ghost preview fix for V16.2.0 users`
 
-*Recommended: option 1 — short, and it names the outcome rather than the mechanism. Anyone who has
-asked "how do I get the eyes out as their own object?" will recognise it immediately.*
+**Use option 4.** V16.2.0 has been out since 2026-09-04 with a fault that switches the ghost preview
+off on scenes that are not unusually large, and the people affected have no name for what they are
+seeing — the preview stops, and the traceback goes to a console most owners never have open. Nobody
+opens a mail for a fix they do not know they need, so the subject has to say it. It still leads with
+the feature, so it is not a mail about a defect.
 
-*Use option 4 instead if you would rather the fix be the reason people open the mail. V16.2.0 shipped
-with a fault that switches the ghost preview off on scenes that are not unusually large, and some
-owners are sitting on it right now without knowing what it is called.*
+*Option 1 is the better subject once this update has gone out — short, and it names the outcome
+rather than the mechanism. Keep it for a later re-announcement, when the fix is no longer the
+urgent part.*
+
+**Japanese subject:** `SDF.R V16.2.1 公開 — パーツを別オブジェクトに / V16.2.0 のプレビュー不具合を修正`
 
 ---
 
