@@ -169,7 +169,7 @@
 <td>トグル</td>
 <td>GPU Ghost Previewの表示を切り替える。</td>
 <td>表示/管理</td>
-<td>メッシュ化前のリアルタイムプレビュー用。</td>
+<td>メッシュ化前のリアルタイムプレビュー用。<strong>V16.2.1: 1本のツリーの要素が17個以上のときプレビューが出なくなる不具合を修正</strong>（V16.2.0 の退行。数えるのはレイアウト展開後の要素数）。</td>
 </tr>
 <tr>
 <td>GPU: Ready / Updating</td>
@@ -1245,7 +1245,7 @@
 <td>ボタン <code>sdf.all_clear</code></td>
 <td>SDF関連オブジェクト/コレクションを削除する。</td>
 <td>削除</td>
-<td>作業空間を掃除する操作。Include Baked Resultsの状態に注意。</td>
+<td>作業空間を掃除する操作。Include Baked Resultsの状態に注意。<strong>V16.2.1: 非表示になっている結果オブジェクトを消し残さなくなった</strong>（<code>Show Result Mesh</code> がOFFだと残っていた）。あわせて名前に <code>SDF_Result_</code> / <code>SDF_Backup</code> を含むだけの自作オブジェクトを巻き込まなくなった。</td>
 </tr>
 </tbody>
 </table>
@@ -1262,7 +1262,7 @@
 <tr>
 <td><code>sdf.add_primitive</code></td>
 <td>Add SDF Primitive</td>
-<td>プリミティブを追加する。</td>
+<td>プリミティブを追加する。<strong>V16.2.1: Undo が効くようになった</strong>（従来は追加直後の Undo が中途半端な状態に戻ることがあった）。</td>
 </tr>
 <tr>
 <td><code>sdf.add_tree</code></td>

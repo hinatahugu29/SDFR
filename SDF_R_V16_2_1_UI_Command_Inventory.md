@@ -28,7 +28,7 @@
 | Live Update | トグル | パラメータ変更やTransform変更を結果メッシュへ自動反映する。 | 表示/管理 | ON時は多くの編集操作で自動的にMesh再計算が走る。重い作業では一時OFFも有効。 |
 | Mesh icon (Show Result Mesh) | トグル `sdf_show_result` | 結果メッシュの表示/生成系ワークフローを切り替える。 | 表示/管理 | OFF時はGhost Preview中心の軽量編集に向く。**V16.2.1: OFFでメッシュを実際に空にするようになった**（従来は隠れるだけでデータが残っていた）。ONに戻すと再生成される。 |
 | Wire/BBox icon | トグル | SDFプリミティブの表示をWireまたはBounds系表示へ切り替える。 | 表示/管理 | ソースオブジェクトの見え方だけを変える。 |
-| Ghost icon | トグル | GPU Ghost Previewの表示を切り替える。 | 表示/管理 | メッシュ化前のリアルタイムプレビュー用。 |
+| Ghost icon | トグル | GPU Ghost Previewの表示を切り替える。 | 表示/管理 | メッシュ化前のリアルタイムプレビュー用。**V16.2.1: 1本のツリーの要素が17個以上のときプレビューが出なくなる不具合を修正**（V16.2.0 の退行。数えるのはレイアウト展開後の要素数）。 |
 | GPU: Ready / Updating | 状態表示 | Rust/GPUエンジンの状態を表示する。 | 表示/管理 | Updating中はメッシュ生成処理が進行中。 |
 | New SDF Workspace | ボタン `sdf.make_output` | 新しい `SDF_Collection` と `SDF_Result` を作成する。既存作業があれば履歴側へ退避する。 | Mesh再計算 | ワークスペース開始ボタン。初回はここから。 |
 
@@ -228,13 +228,13 @@
 | Wire/Solid | ボタン `sdf.toggle_display` | 選択オブジェクトの表示をWire/Textured系で切り替える。 | 表示/管理 | 見え方だけの変更。 |
 | Move to SDF | ボタン `sdf.move_to_sdf_collection` | 選択オブジェクトをSDF_Collectionへ移し、SDF Primitiveとして扱う。 | 表示/管理 | 既存Blenderオブジェクトの取り込み用。形状推定は名前ベース。 |
 | Include Baked Results | トグル | All Clearで確定済み結果も削除対象に含める。 | 表示/管理 | ONは強い掃除。履歴を残したい場合はOFF。 |
-| All Clear | ボタン `sdf.all_clear` | SDF関連オブジェクト/コレクションを削除する。 | 削除 | 作業空間を掃除する操作。Include Baked Resultsの状態に注意。 |
+| All Clear | ボタン `sdf.all_clear` | SDF関連オブジェクト/コレクションを削除する。 | 削除 | 作業空間を掃除する操作。Include Baked Resultsの状態に注意。**V16.2.1: 非表示になっている結果オブジェクトを消し残さなくなった**（`Show Result Mesh` がOFFだと残っていた）。あわせて名前に `SDF_Result_` / `SDF_Backup` を含むだけの自作オブジェクトを巻き込まなくなった。 |
 
 ## 15. Operator ID一覧
 
 | Operator ID | ラベル | 概要 |
 |----|----|----|
-| `sdf.add_primitive` | Add SDF Primitive | プリミティブを追加する。 |
+| `sdf.add_primitive` | Add SDF Primitive | プリミティブを追加する。**V16.2.1: Undo が効くようになった**（従来は追加直後の Undo が中途半端な状態に戻ることがあった）。 |
 | `sdf.add_tree` | Add SDF Tree | 新しいSDFツリーを追加する（V16.2.1）。 |
 | `sdf.set_active_tree` | Set Active SDF Tree | 編集対象のツリーを切り替える（V16.2.1）。 |
 | `sdf.add_tree_ref` | Add Tree Reference | 別ツリーを取り込む参照Emptyを追加する（V16.2.1）。 |
