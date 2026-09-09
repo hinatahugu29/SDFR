@@ -239,6 +239,11 @@ class SDF_OT_add_primitive(bpy.types.Operator):
     bl_idname = "sdf.add_primitive"
     bl_label = "Add SDF Primitive"
     bl_description = "Adds an SDF primitive (automatically creates a workspace if none exists)"
+    # V16.2.1: ここだけ bl_options が無く、他の主要オペレーターと非対称だった。
+    # 内側で呼ぶ bpy.ops.mesh.primitive_*_add は自前で undo を積むので、
+    # このオペレーター自身が積まないと Ctrl+Z が「素のメッシュだけが
+    # SDF コレクションに残った中間状態」へ戻ってしまう。
+    bl_options = {'REGISTER', 'UNDO'}
     shape: bpy.props.StringProperty()
 
     def execute(self, context):
@@ -1332,18 +1337,31 @@ class SDF_OT_all_clear(bpy.types.Operator):
                 to_delete.append(obj)
                 continue
             
-            is_sdf_history_obj = any(x in obj.name for x in ["SDF_Result_", "SDF_Backup"])
+            # V16.2.1: `x in obj.name` の部分一致だと、ユーザーが自分で付けた
+            # "My_SDF_Backup" のような名前まで巻き込んで消してしまう。
+            # このアドオンが作る履歴オブジェクトは必ずこの接頭辞で始まるので前方一致にする。
+            is_sdf_history_obj = obj.name.startswith(("SDF_Result_", "SDF_Backup"))
             if is_sdf_history_obj:
-                is_baked_result = "SDF_Result_" in obj.name and "_Backup" not in obj.name and "_Unbaked" not in obj.name
+                is_baked_result = (
+                    obj.name.startswith("SDF_Result_")
+                    and "_Backup" not in obj.name
+                    and "_Unbaked" not in obj.name
+                )
                 if include_results or not is_baked_result:
                     to_delete.append(obj)
 
         if to_delete:
-            bpy.ops.object.select_all(action='DESELECT')
+            # V16.2.1: 以前は select_set() してから bpy.ops.object.delete() だった。
+            # hide_viewport が立っているオブジェクトは選択できず except に落ちるため、
+            # 静かに削除対象から漏れていた。「Show Result Mesh」を OFF にすると
+            # 出力オブジェクトはまさにその状態になる（__init__.update_result_visibility）ので、
+            # OFF のまま All Clear すると出力が残る、という取りこぼしが起きていた。
+            # データブロックから直接消せば表示状態に左右されない。
             for obj in to_delete:
-                try: obj.select_set(True)
-                except: pass
-            bpy.ops.object.delete()
+                try:
+                    bpy.data.objects.remove(obj, do_unlink=True)
+                except Exception as exc:
+                    print(f"SDF.R All Clear: failed to remove {getattr(obj, 'name', '?')}: {exc}")
 
         if include_results:
             for name in sdf_col_names + ["SDF_History"]:

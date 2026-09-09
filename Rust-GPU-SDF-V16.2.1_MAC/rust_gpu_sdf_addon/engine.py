@@ -1809,6 +1809,26 @@ def _issue_pending_requests():
     return issued
 
 
+def _tag_redraw_all_view3d():
+    """開いている全ウィンドウの3Dビューに再描画を要求する。
+
+    タイマーからのプロパティ/メッシュ変更は、それだけでは再描画を起こさない。
+    bpy.context.screen だけを見ると前面ウィンドウしか更新されないため、
+    ウィンドウマネージャ側から全部辿る。
+    """
+    try:
+        windows = bpy.context.window_manager.windows
+    except Exception:
+        return
+    for window in windows:
+        screen = getattr(window, "screen", None)
+        if screen is None:
+            continue
+        for area in screen.areas:
+            if area.type == 'VIEW_3D':
+                area.tag_redraw()
+
+
 def sdf_mesh_timer():
     """バックグラウンド計算が終わったか監視するタイマー"""
     global _is_timer_registered, _force_next_normals, _inflight_owner
@@ -1851,9 +1871,10 @@ def sdf_mesh_timer():
             _force_next_normals = False # フラグをリセット
             
             # ビューポートを強制再描画
-            for area in bpy.context.screen.areas:
-                if area.type == 'VIEW_3D':
-                    area.tag_redraw()
+            # V16.2.1: bpy.context.screen は「いま前面にある1画面」しか指さないので、
+            # 3Dビューを別ウィンドウへ切り出していると、そちらがメッシュ完成後も
+            # 古い絵のまま残っていた。__init__.init_checker と同じく全ウィンドウを回す。
+            _tag_redraw_all_view3d()
             
             # もしペンディングがあれば、即座に次のリクエストを投げる
             if _pending_updates and _issue_pending_requests():

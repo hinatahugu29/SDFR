@@ -104,6 +104,8 @@ if _LAYOUT_DEBUG_ON:
 
 
 _draw_handler = None
+# V16.2.1: register で仕掛けた bpy.app.timers のコールバック。unregister で取り消す。
+_registered_timers = []
 _gpu_init_finished = False
 # V15.9.9.1: Stores deferred GPU/DC initialization diagnostics.
 _gpu_init_error = None
@@ -167,19 +169,46 @@ def update_result_visibility(self, context):
 
 @persistent
 def sdf_load_post_handler(dummy):
-    """開いたファイルの is_gpu_ready を、実際のウォームアップ状況へ揃える。
+    """開いたファイルのセッション状態を、いまのエンジンの実状へ揃える。
 
-    V16.2.1: このフラグはシーンのプロパティなので .blend に保存される。
-    保存時に True だったファイルを開くと、エンジンの初期化が終わっていなくても
-    パネルのガードが外れてしまっていた（コンソールに Compiling ... が流れている
-    最中に操作できてしまう）。
+    ここで扱うのはどれも「そのセッションのエンジンがどうなっているか」を表す値だが、
+    置き場がシーンのプロパティなので .blend に保存され、ファイルを開くと蘇ってしまう。
+
+    V16.2.1: is_gpu_ready — 保存時に True だったファイルを開くと、エンジンの初期化が
+    終わっていなくてもパネルのガードが外れていた（コンソールに Compiling ... が
+    流れている最中に操作できてしまう）。
+
+    V16.2.1: dc_last_error — こちらも同じ性質だが同期されていなかった。DC が動かない
+    環境で保存した .blend を正常な環境で開くと、パネルに
+    「Dual Contouring (DC) unavailable → switch Algorithm to MC」の警告が残る。
+    しかも engine 側は診断文字列が空でないときしか書き戻さないため、その後 DC が
+    正常に動いても表示は自然回復しない。開いた時点のエンジンの実状で上書きする。
+
+    V16.2.1: diagnostics_* — 実体はアドオンのインストール先に置くフラグファイルで、
+    シーンのトグルはその写し。register 時に一度同期するだけなので、診断ONで保存した
+    .blend を開くとトグルの見た目と実際のログ出力が食い違っていた。
     """
     try:
+        perf_on = properties._diagnostic_flag_enabled(
+            properties._DIAGNOSTIC_FLAGS["diagnostics_perf_log"])
+        mesh_on = properties._diagnostic_flag_enabled(
+            properties._DIAGNOSTIC_FLAGS["diagnostics_mesh_debug"])
+        layout_on = properties._diagnostic_flag_enabled(
+            properties._DIAGNOSTIC_FLAGS["diagnostics_layout_debug"])
         for scene in bpy.data.scenes:
-            if hasattr(scene, "sdf_scene_props"):
-                scene.sdf_scene_props.is_gpu_ready = bool(_gpu_init_finished)
+            if not hasattr(scene, "sdf_scene_props"):
+                continue
+            props = scene.sdf_scene_props
+            props.is_gpu_ready = bool(_gpu_init_finished)
+            if _gpu_init_finished:
+                # ウォームアップ済みなら、その結果（多くの場合は空文字列）で上書きする。
+                # まだ終わっていない場合は init_checker が終了時に書くので触らない。
+                props.dc_last_error = _gpu_init_error or ""
+            props.diagnostics_perf_log = perf_on
+            props.diagnostics_mesh_debug = mesh_on
+            props.diagnostics_layout_debug = layout_on
     except Exception as exc:
-        print(f"SDF.R: load_post GPU flag sync skipped: {exc}")
+        print(f"SDF.R: load_post session flag sync skipped: {exc}")
 
 
 def update_primitives_visibility(self, context):
@@ -303,6 +332,10 @@ def register():
         return None
     # Delay start slightly so Blender UI setup can settle.
     bpy.app.timers.register(delayed_start, first_interval=0.5)
+    # V16.2.1: unregister でタイマーを取り消せるよう控えておく。
+    # 控えないと、ウォームアップ中にアドオンを無効化したとき init_checker が
+    # 回り続ける（消えたプロパティを触るので、ガードが無ければ毎回エラーになる）。
+    _registered_timers.extend([delayed_start, init_checker])
     print("SDF.R: Addon registered. Warming-up will start in 0.5s...")
 
     # 2. Register Blender classes
@@ -322,6 +355,7 @@ def register():
         name="Show Source Primitives", default=True, update=update_primitives_visibility
     )
     bpy.app.timers.register(properties.sync_scene_diagnostic_flags, first_interval=0.1)
+    _registered_timers.append(properties.sync_scene_diagnostic_flags)
     
     bpy.app.handlers.load_post.append(sdf_load_post_handler)
     bpy.app.handlers.depsgraph_update_post.append(handlers.sdf_depsgraph_handler)
@@ -331,8 +365,29 @@ def register():
         handlers.draw_callback_3d, (None, None), 'WINDOW', 'POST_VIEW'
     )
 
+def _unregister_timers():
+    """register で仕掛けたタイマーを取り消す。
+
+    bpy.app.timers はアドオンの有効/無効とは独立して動き続ける。ウォームアップ中に
+    無効化されたときに init_checker が残ると、削除済みのシーンプロパティを
+    参照しつづけることになる。まだ動いていないものを unregister すると例外に
+    なるので、is_registered を見てから外す。
+    """
+    # engine 側のメッシュ監視タイマーも同じ理由で止める。
+    # 次に有効化したときに二重登録しないよう、フラグも倒しておく。
+    for fn in list(_registered_timers) + [engine.sdf_mesh_timer]:
+        try:
+            if bpy.app.timers.is_registered(fn):
+                bpy.app.timers.unregister(fn)
+        except Exception as exc:
+            print(f"SDF.R: timer unregister skipped ({getattr(fn, '__name__', fn)}): {exc}")
+    engine._is_timer_registered = False
+    _registered_timers.clear()
+
+
 def unregister():
     global _draw_handler
+    _unregister_timers()
     if _draw_handler:
         bpy.types.SpaceView3D.draw_handler_remove(_draw_handler, 'WINDOW')
         _draw_handler = None

@@ -14,6 +14,39 @@ from .constants import _SHAPE_MAP, _fsq_coords, _fsq_indices, FIELD_TYPE_INDEX, 
 _batch = None
 
 # -------------------------------------------------------------------------
+# プレビュー用プリミティブテクスチャの形（V16.2.1 で定数化）
+# -------------------------------------------------------------------------
+# 1プリミティブを RGBA32F の1行に詰める。横1テクセル = float 4個。
+# ここを変えるときは必ず3箇所を同時に直すこと:
+#   1. PRIM_TEX_WIDTH（テクスチャ幅）
+#   2. _build_prim_data_for_element が積む data.extend の行数
+#   3. shader.py の texelFetch(primTex, ivec2(N, i), 0) の最大 N (= WIDTH - 1)
+# V16.2.0 で 2/3 を 18 行に増やしたとき、割り算の除数だけ 68 のまま残り、
+# 「プリミティブ17個以上でプレビューが落ちる」退行を出した。同じ轍を踏まないよう、
+# 実際に積まれた長さを _assert_prim_tex_stride() で毎回検算する。
+PRIM_TEX_WIDTH = 18
+PRIM_TEX_FLOATS = PRIM_TEX_WIDTH * 4
+
+
+def _assert_prim_tex_stride(prim_data_len):
+    """積んだ float 数が1プリミティブぶんの倍数になっているか確かめる。
+
+    合っていなければテクスチャとバッファの大きさが食い違い、GPUTexture が
+    例外を投げてプレビューが丸ごと消える。原因が分かる形で早めに気づけるよう、
+    ここで内訳を出しておく。
+    """
+    if prim_data_len % PRIM_TEX_FLOATS == 0:
+        return True
+    print(
+        "SDF.R: preview primitive stride mismatch: "
+        f"{prim_data_len} floats is not a multiple of {PRIM_TEX_FLOATS} "
+        f"(PRIM_TEX_WIDTH={PRIM_TEX_WIDTH}). "
+        "handlers._build_prim_data_for_element / handlers.PRIM_TEX_WIDTH / "
+        "shader.py の texelFetch index が食い違っています。"
+    )
+    return False
+
+# -------------------------------------------------------------------------
 # V15.9.9.4: プレビュー描画の最適化用ステート
 # -------------------------------------------------------------------------
 # プリミティブデータが変化したら True。視点(カメラ)移動だけの場合は False のまま
@@ -705,13 +738,21 @@ def _draw_callback_3d_impl(self, context):
         for el in flat_elements:
             prim_data.extend(_build_prim_data_for_element(el, o_props))
 
-        if not prim_data:
+        if not prim_data or not _assert_prim_tex_stride(len(prim_data)):
+            # stride が合わない状態で GPUTexture を作ると毎フレーム例外になる。
+            # プレビューを諦めるだけにして、他の描画とメッシュ生成は生かす。
             _cached_prim_tex = None
         else:
-            # V16.0.4: 17 pixels per primitive (68 floats)
-            prim_count = len(prim_data) // 68
+            # V16.2.1: 1プリミティブ = PRIM_TEX_WIDTH テクセル = PRIM_TEX_FLOATS float。
+            # _build_prim_data_for_element が積む行数と、shader.py が texelFetch する
+            # 最大 index と、ここの3つが揃っている必要がある。
+            # V16.2.0 で layer_p 行を足して幅を 17->18 にしたとき、この除数だけ 68 のまま
+            # 残っていた。prim_count = floor(72n/68) はプリミティブ 17 個以上で実数を超え、
+            # バッファ長 < テクスチャ必要長になって GPUTexture が例外を投げる
+            # （＝17個目を足した瞬間にゴーストプレビューが出なくなる）。
+            prim_count = len(prim_data) // PRIM_TEX_FLOATS
             data_buf = gpu.types.Buffer('FLOAT', len(prim_data), prim_data)
-            prim_tex = gpu.types.GPUTexture((18, prim_count), format='RGBA32F', data=data_buf)
+            prim_tex = gpu.types.GPUTexture((PRIM_TEX_WIDTH, prim_count), format='RGBA32F', data=data_buf)
 
             domain_size = _compute_preview_domain_size(output_obj, o_props, inv_world_output, flat_elements)
 
@@ -814,11 +855,31 @@ def _draw_callback_3d_impl(self, context):
     gpu.state.face_culling_set('BACK')
     return rebuilt
 
+_last_draw_error = None
+
+
+def _report_draw_error(exc):
+    """描画ハンドラで出た例外を、同じ内容なら一度だけ報告する。"""
+    global _last_draw_error
+    msg = f"{type(exc).__name__}: {exc}"
+    if msg == _last_draw_error:
+        return
+    _last_draw_error = msg
+    print(f"SDF.R: preview draw error (further identical errors are suppressed): {msg}")
+    import traceback
+    traceback.print_exc()
+
+
 def draw_callback_3d(self, context):
     """ビューポートにレイマーチングオーバーレイを描画（プロファイララッパー）"""
     global _perf_draw_last_report_time, _perf_draw_call_count, _perf_draw_rebuild_count, _perf_draw_accum_time
     if not _PERF_LOGGING:
-        _draw_callback_3d_impl(self, context)
+        try:
+            _draw_callback_3d_impl(self, context)
+        except Exception as e:
+            # 描画ハンドラの例外は毎フレーム繰り返される。素通しするとコンソールが
+            # トレースバックで埋まって操作にも支障が出るので、同じ内容は一度だけ出す。
+            _report_draw_error(e)
         return
 
     import time
@@ -829,6 +890,8 @@ def draw_callback_3d(self, context):
         rebuilt = _draw_callback_3d_impl(self, context)
         if rebuilt:
             _perf_draw_rebuild_count += 1
+    except Exception as e:
+        _report_draw_error(e)
     finally:
         t_end = time.perf_counter()
         _perf_draw_accum_time += (t_end - t_start)
@@ -1019,7 +1082,13 @@ def sdf_undo_handler(scene):
     # 必要に応じて即座に更新をトリガー
     for obj in scene.objects:
         if getattr(obj, "sdf_props", None) and obj.sdf_props.is_output:
-            engine.update_sdf_mesh(obj)
+            # V16.2.1: undo_post/redo_post の中で evaluated_depsgraph_get() を呼ぶと、
+            # Blender が評価を予定していないタイミングでシーン全体の再評価が走る。
+            # undo 直後はオブジェクトの登録が入れ替わった直後なので、engine._acquire_depsgraph
+            # のコメントにある Base 配列の範囲外アクセス（macOS で報告のあるクラッシュ経路）に
+            # 一番近い状態にある。ここでは評価を強制せず、まだ用意されていなければ見送る。
+            # 状態ハッシュは上でクリア済みなので、次のデプスグラフ更新で必ず拾い直される。
+            engine.update_sdf_mesh(obj, allow_forced_eval=False)
 
 def clear_batch():
     global _batch, _cached_prim_tex, _cached_curve_guides, _guide_shader

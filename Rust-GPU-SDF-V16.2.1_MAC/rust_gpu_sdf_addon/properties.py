@@ -97,12 +97,31 @@ def _diagnostic_flag_path(filename):
     return os.path.join(os.path.dirname(__file__), filename)
 
 def _set_diagnostic_flag_file(filename, enabled):
+    """診断フラグの実体ファイルを作る／消す。
+
+    置き場はアドオンのインストール先。通常 Blender のアドオンディレクトリは
+    ユーザー権限で書けるが、管理者権限の場所へ配置された場合や読み取り専用の
+    配布形態では書けない。ここはプロパティの update コールバックから呼ばれるので、
+    例外を投げても Blender が受け止めてダイアログにはならないが、コンソールに
+    トレースバックが出たうえ、update_diagnostic_flags が3つのフラグを順に書く
+    途中で止まる（最初の1つで落ちると残り2つは書かれない）。
+    診断ログが無くても本体の機能には影響しないため、書けなければ知らせて諦め、
+    残りのフラグの処理は続けさせる。
+    """
     path = _diagnostic_flag_path(filename)
-    if enabled:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("enabled by SDF.R diagnostics UI\n")
-    elif os.path.exists(path):
-        os.remove(path)
+    try:
+        if enabled:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("enabled by SDF.R diagnostics UI\n")
+        elif os.path.exists(path):
+            os.remove(path)
+        return True
+    except OSError as exc:
+        print(
+            f"SDF.R: diagnostics flag file could not be updated ({path}): {exc}"
+        )
+        print("        この設定はこのセッションの間だけ有効です。")
+        return False
 
 def _diagnostic_flag_enabled(filename):
     return os.path.exists(_diagnostic_flag_path(filename))
