@@ -39,7 +39,19 @@ def _iter_candidate_paths():
 
 
 def _load_native_module():
+    """ネイティブモジュールを読み込む。
+
+    候補は「プラットフォーム別の bin/<os>/」→「パッケージ直下」の順。同じものを
+    2箇所に置いてあるのは、片方が読めなかったときの保険なので、
+    **読み込みに失敗しても次の候補へ進む**。以前はここで例外がそのまま抜けていたため、
+    最初の候補で転ぶと保険が働かなかった。
+
+    全部だめだったときは、試したパスと**それぞれの失敗理由**を添えて投げる。
+    アーキテクチャ違い（Apple Silicon 用のバイナリを Intel Mac で読んだ場合など）は
+    ここでしか分からないので、CPU 種別も一緒に出す。
+    """
     attempted = []
+    failures = []
     for candidate in _iter_candidate_paths():
         attempted.append(candidate)
         if not os.path.exists(candidate):
@@ -48,16 +60,31 @@ def _load_native_module():
         loader = importlib.machinery.ExtensionFileLoader(_MODULE_NAME, candidate)
         spec = importlib.util.spec_from_file_location(_MODULE_NAME, candidate, loader=loader)
         if spec is None:
+            failures.append((candidate, "spec could not be created"))
             continue
 
-        module = importlib.util.module_from_spec(spec)
-        loader.exec_module(module)
+        try:
+            # 拡張モジュールは module_from_spec の時点で共有ライブラリが
+            # 実際に dlopen される。アーキテクチャ不一致や依存ライブラリ不足は
+            # exec_module ではなくここで出るので、両方を囲む必要がある。
+            module = importlib.util.module_from_spec(spec)
+            loader.exec_module(module)
+        except BaseException as exc:
+            # アーキテクチャ不一致・依存ライブラリ不足・壊れたファイルなど。
+            # ここで止めず、残りの候補を試す。
+            failures.append((candidate, f"{type(exc).__name__}: {exc}"))
+            continue
         return module
 
+    detail = ""
+    if failures:
+        detail = ("\nLoad errors:\n - " +
+                  "\n - ".join(f"{path}: {reason}" for path, reason in failures))
     raise ImportError(
-        "rust_gpu_sdf native module was not found for this platform.\n"
-        f"Detected platform: {platform.system()}\n"
-        "Checked paths:\n - " + "\n - ".join(attempted)
+        "rust_gpu_sdf native module could not be loaded for this platform.\n"
+        f"Detected platform: {platform.system()} ({platform.machine()}), "
+        f"Python {platform.python_version()}\n"
+        "Checked paths:\n - " + "\n - ".join(attempted) + detail
     )
 
 
