@@ -1307,6 +1307,17 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
     # プレビュー描画は draw_callback_3d 側で独立して行われるため影響しない。
     try:
         if not bpy.context.scene.sdf_show_result:
+            # V16.2.1: 以前はここで素通しで return しており、後段にあった
+            # clear_geometry() の分岐に到達できず、OFF にしても結果メッシュが
+            # 残ったままだった（V16.2.0 以前も同じ）。空にする処理はこの
+            # 早期リターンより前にしか置けないので、ここへ移した。
+            if len(output_obj.data.vertices) > 0:
+                output_obj.data.clear_geometry()
+                output_obj.update_tag()
+                # 状態ハッシュを捨てておかないと、ON に戻したときに
+                # 「変化なし」と判定されてメッシュが空のままになる。
+                _last_state_hashes.pop(output_obj.name, None)
+            _pending_updates.pop(output_obj.name, None)
             return
     except Exception:
         pass
@@ -1367,15 +1378,6 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
                 
     if not primitives: return
 
-    # --- メッシュ生成ON/OFFスイッチ（V15.9.9 実装） ---
-    if not bpy.context.scene.sdf_show_result:
-        # メッシュ生成がOFFの場合はRust計算をスキップし、必要ならメッシュを空にする
-        if len(output_obj.data.vertices) > 0:
-            output_obj.data.clear_geometry()
-            output_obj.update_tag()
-        _pending_updates.pop(output_obj.name, None)
-        return
-
     # 非同期リクエスト
     try:
         w_thresh = props.weld_threshold if props.use_weld else 0.0
@@ -1388,6 +1390,12 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
         # print(f"SDF Debug: Requesting {algo} update (Res: {res}, Domain: {domain:.2f})")
         
         owner = output_obj.name
+        # V16.2.1: マルチツリーの切り分けは「どのツリーが要求し、どのツリーに返ったか」の
+        # 対応が読めないと不可能。Rust 側の "Starting SDF generation" は持ち主を知らないので、
+        # ここと結果適用側の2箇所でだけ owner を残す。
+        _dbg_mesh(
+            f"request  <- owner={owner} algo={algo} res={res} prims={len(primitives)}"
+        )
         _last_mesh_requests[owner] = (primitives, res, domain, use_dc, sym_mask, w_thresh)
         _safe_retry_active[owner] = False
         _gpu_chunked_mc_active[owner] = False
@@ -1820,10 +1828,19 @@ def sdf_mesh_timer():
                 outputs = list(_iter_output_objects())
                 owner_obj = outputs[0] if len(outputs) == 1 else None
                 if owner_obj is None:
-                    _dbg_mesh("fetched a mesh result with no known owner; discarded.")
+                    _dbg_mesh(
+                        f"result   -> DISCARDED (owner={_inflight_owner!r} not found, "
+                        f"{len(outputs)} outputs in scene)"
+                    )
+                else:
+                    _dbg_mesh(
+                        f"result   -> adopted by the only output {owner_obj.name!r} "
+                        f"(owner={_inflight_owner!r} not found)"
+                    )
 
             retry_requested = False
             if owner_obj is not None:
+                _dbg_mesh(f"result   -> owner={owner_obj.name}")
                 result = apply_mesh_data(owner_obj, data, force_normals=_force_next_normals)
                 retry_requested = (result == "retry")
                 owner_obj.update_tag()
