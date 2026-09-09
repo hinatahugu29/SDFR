@@ -373,6 +373,37 @@ V16.1.3 までは 17 / 68 float / max index 16 で揃っていた。V16.2.0 で 
 | 診断フラグの書き込みが読取専用環境で例外 | `properties.py` | 3つ書く途中で止まる |
 | ネイティブモジュールの読み込み失敗が不親切 | `_native.py` | 予備の候補が試されず、原因も出ない。Intel Mac で効く |
 
+#### C-2b. 実機の指摘から見つけたもの（2026-09-10）
+
+ビューポートで **A（全選択）→ X（削除）** したあと、Tree ドロップダウンに消したはずの
+ツリーが残る（`0 SDF_Result_Tree_002` のようにユーザー数0の表示になる）。
+
+Blender の削除はオブジェクトをコレクションから外すが、**参照している者がいる限り
+データブロックは `bpy.data` に生き残る**。V16.2.1 で追加した `active_output`
+（`PointerProperty`）が消したツリーを指したままだったため、実体が無くなっても残り続けていた。
+そのうえ `_poll_sdf_output` は `is_output` しか見ておらず、シーンに存在しないツリーまで
+選択肢に並べていた。
+
+**V16.2.0 の退行ではない。** `active_output` と Tree ドロップダウンは V16.2.1 で新規追加した
+もので、V16.1.3 / V16.2.0 には存在しない（`grep -c active_output` で確認済み）。
+未公開の新機能側の不具合だった。
+
+直したのは2箇所。
+
+- `properties._poll_sdf_output`: 候補を**いまのシーンにある出力**に限る
+- `handlers._release_stale_active_output`: デプスグラフ更新時に、シーンにいない
+  `active_output` を手放す（他にツリーがあればそちらへ）。参照を外すことで
+  データブロックも回収され、選択肢から消える
+
+`tests_V16.2.1/test_tree_dropdown_stale.py` が押さえる。修正前のコードでは4項目落ちる。
+**逆方向も見ている** — 正常なツリーは残ること、2本のうち1本だけ消したら残りは選択肢に残ること。
+絞り込みすぎるとツリーを選べなくなるので、そちらのほうが危ない。
+
+**教訓:** ID を握る `PointerProperty` を足したら、**参照先が消えたときに手放す経路**まで
+セットで考えること。握ったままだと Blender の削除が効かなくなる。
+`sdf_stack[].object_ptr` / `empty_ptr` も同じ性質を持つが、こちらは `sync_sdf_stack` が
+コレクションから作り直すため自然に解放される。
+
 #### C-3. 検証について分かったこと
 
 - **Linux は WSL2 で実検証できる**。Blender は公式 tarball を WSL 内に展開する。
@@ -380,9 +411,10 @@ V16.1.3 までは 17 / 68 float / max index 16 で揃っていた。V16.2.0 で 
   した（682/802/1556/7425/12）。速度は測れないが、計算結果の同一性は確認できる。
 - **Mac は手段が無い**。CI のビルド成功と `importlib.import_module` の成功まで。
   arm64 専用（min macOS 11.0）で、これは V15.9.8.1 から一貫している。
-- テストは15本。`test_preview_stride` / `test_all_clear` / `test_load_post_flags` /
-  `test_register_cycle` / `test_diagnostics_flag_ro` / `test_native_loader` を追加した。
-  **新規6本はいずれも修正前のコードで落ちることを確認済み**（テストが機能している証明）。
+- テストは16本。`test_preview_stride` / `test_all_clear` / `test_load_post_flags` /
+  `test_register_cycle` / `test_diagnostics_flag_ro` / `test_native_loader` /
+  `test_tree_dropdown_stale` を追加した。
+  **新規7本はいずれも修正前のコードで落ちることを確認済み**（テストが機能している証明）。
 
 ### C. 作業候補（やるとしたら）
 
