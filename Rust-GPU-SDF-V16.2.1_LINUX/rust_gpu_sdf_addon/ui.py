@@ -651,6 +651,12 @@ class SDF_PT_main(bpy.types.Panel):
                     sub.prop(props, "mirror_blend", text="Mirror Blend")
                     if props.mirror_blend <= 0.0:
                         sub.label(text="0 keeps the hard seam at the mirror plane", icon='INFO')
+                    # Blend が Offset の 2 倍を超えると、継ぎ目だけでなく形全体が太る。
+                    # 両側を smooth union する以上避けられない挙動なので、事前に伝える。
+                    # (境界の実測は tests_V16.2.1/test_mirror_blend_edge_cases.py)
+                    elif props.mirror_blend > 2.0 * abs(props.mirror_offset):
+                        sub.label(text="Blend over 2x Offset swells the whole shape,", icon='ERROR')
+                        sub.label(text="not just the seam. Raise Offset to keep the size.")
 
                 if props.layout_use_radial:
                     sub = col_place.box().column(align=True)

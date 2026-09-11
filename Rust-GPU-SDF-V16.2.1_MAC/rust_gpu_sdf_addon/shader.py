@@ -306,6 +306,17 @@ float sdf_noise3(vec3 p){
                    mix(sdf_hash3(i + vec3(0,1,1)), sdf_hash3(i + vec3(1,1,1)), u.x), u.y), u.z);
 }
 
+// V16.2.1 fix: Mirror Blend のプレビュー近似。
+// 最終メッシュ (common.wgsl の evaluate_shape_mirrored) は両側を別々に評価して
+// polynomial smin で結合する。プレビューは1形状1評価なので同じことはできないが、
+// 「反対側コピーとの距離差 ≒ 2*|ミラー軸のローカル座標|」と見なせば、smin の補正項
+// k*h*(1-h) を1回評価のまま再現できる。継ぎ目 (座標0) で k/4 と厳密解に一致し、
+// |座標| >= k/2 で 0 になって素の形に戻る。
+float sdf_mirror_seam_cut(float c, float k){
+    float h = clamp(0.5 + abs(c) / k, 0.0, 1.0);
+    return k * h * (1.0 - h);
+}
+
 vec4 map_impl(vec3 p){
     float d=1e10; vec3 col=vec3(1.0); float met=0.0, rou=0.5; bool sceneInit=false;
     float layerD=1e10; vec3 layerCol=vec3(1.0); float layerMet=0.0, layerRou=0.5; bool layerInit=false;
@@ -342,29 +353,31 @@ vec4 map_impl(vec3 p){
         uint flags = packed1 & 0xFFu;
         
         float accum_idx = 0.0;
+        float mirror_cut = 0.0;
 
         // 1. Mirror
         //
         // V16.2.1: Mirror Blend (layer_p.w)
-        // 最終メッシュ側 (common.wgsl の evaluate_shape_mirrored) は、折り返さずに
-        // 両側を評価して滑らかに結合する厳密な方法を使う。プレビューはこのループが
-        // 1形状1評価の構造なので、同じことをするには全体の作り替えが要る。
-        // ここでは「折り返しを丸める」近似で、継ぎ目が丸まった見た目だけ合わせる。
-        // 丸まり方は最終メッシュと厳密には一致しない（プレビューの割り切り）。
+        // 旧実装は lp = sqrt(lp*lp + mb*mb*0.25) - offset で折り返しを丸めていたが、
+        // これは形を外へ膨らませる最終メッシュとは逆に、内側へ食い込ませていた。
+        // mb > 2*(offset + 形状サイズ) でプレビューから形が消えるほどズレる。
+        // 折り返しは abs() のまま、距離側に smin の補正項を近似で入れる方式に変更。
+        // (sdf_mirror_seam_cut / 実測誤差は tests_V16.2.1/test_mirror_blend_preview_fix.py)
         if((flags & 1u) != 0u){
             uint mask = (packed1 >> 8u) & 0xFu;
             float offset = ld1.y;
             float mb = layer_p.w;
-            float e = mb * mb * 0.25;
             if(mb > 0.0001){
-                if((mask & 1u) != 0u) lp.x = sqrt(lp.x * lp.x + e) - offset;
-                if((mask & 2u) != 0u) lp.y = sqrt(lp.y * lp.y + e) - offset;
-                if((mask & 4u) != 0u) lp.z = sqrt(lp.z * lp.z + e) - offset;
-            } else {
-                if((mask & 1u) != 0u) lp.x = abs(lp.x) - offset;
-                if((mask & 2u) != 0u) lp.y = abs(lp.y) - offset;
-                if((mask & 4u) != 0u) lp.z = abs(lp.z) - offset;
+                // 軸ごとの継ぎ目は合計する。厳密解でも、同じ距離を n 回 smin で重ねると
+                // 原点で n*k/4 内側に寄る (2コピーで k/4、4コピーで k/2、8コピーで 3k/4)。
+                // max だと多軸で明確に足りない (3軸 blend=2.0 で 1.69 対 実測 2.99)。
+                if((mask & 1u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp.x, mb);
+                if((mask & 2u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp.y, mb);
+                if((mask & 4u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp.z, mb);
             }
+            if((mask & 1u) != 0u) lp.x = abs(lp.x) - offset;
+            if((mask & 2u) != 0u) lp.y = abs(lp.y) - offset;
+            if((mask & 4u) != 0u) lp.z = abs(lp.z) - offset;
         }
 
         // 2. Radial / Spiral
@@ -525,6 +538,8 @@ vec4 map_impl(vec3 p){
         float dd = sdf_eval_shape(lp, c0.w, c2.xyz, c3.x, extra, mod_p, gyro_p);
         dd *= df_bound_scale;
         if(c4.x > 0.0) dd += (sdf_noise3(lp * c4.y) * 2.0 - 1.0) * c4.x;
+        // Mirror Blend: 継ぎ目ぶんだけ距離を縮めて外へ膨らませる (最終メッシュと同じ向き)
+        dd -= mirror_cut;
 
         float layerId = floor(c5.w + 0.5);
         if(layerId > 0.5){
