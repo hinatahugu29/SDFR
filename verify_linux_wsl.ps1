@@ -4,6 +4,8 @@
 #       ディストリビューション導入直後は Windows の再起動が要る。さらに `--no-launch` で
 #       入れた場合は rootfs が未展開なので、`ubuntu.exe install --root` で登録しておく。
 #
+# 配布物はこのファイルからの相対で解く。別の zip を見たいときは第1引数で渡す。
+#
 # 見るのは「配布した .so が実際に読み込めるか」だけ。GPU は WSL で使えるとは限らないので
 # エンジンの初期化やメッシュ生成はここでは試さない。そこはユーザー環境頼り。
 #
@@ -11,7 +13,8 @@
 #       ANSI として読み、日本語が壊れてヒアドキュメントの終端を見失う。
 
 $ErrorActionPreference = 'Continue'
-$ZIP    = 'C:\Users\T03000\Desktop\CODE\BLENDER-ADDON\SDFR\dist_V16.2.2\SDF_R_16_2_2_Linux.zip'
+$ZIP    = Join-Path $PSScriptRoot 'dist_V16.2.2\SDF_R_16_2_2_Linux.zip'
+if ($args.Count -ge 1) { $ZIP = $args[0] }
 $DISTRO = 'Ubuntu'
 
 if (-not (Test-Path $ZIP)) { Write-Error "配布物が見つかりません: $ZIP"; exit 1 }
