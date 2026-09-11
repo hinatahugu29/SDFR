@@ -24,6 +24,8 @@ Windows 通常版 `Rust-GPU-SDF-VX.Y.Z` を Mac/Linux 用に移植するとき�
       - `src/` 配下すべて（15ファイル）
       - `rust_gpu_sdf_addon/` の Python 9個 + `_native.py` + `license.txt` + `assets/nodes.blend`
 - [ ] **含めてはいけないもの**: `build_sdf_addon.ps1` / `patch*.py` / `target/` / `*.zip` / `__pycache__`
+      → ここで除くのは **`_MAC` / `_LINUX` に入れない**という意味。**Windows 側の
+        `build_sdf_addon.ps1` は別途 git に入れる**（セクション F 参照）。混同しないこと
 
 ### B. アドオンコードの改修
 
@@ -121,6 +123,19 @@ __name__ : rust_gpu_sdf_addon.rust_gpu_sdf
 - [ ] `git add -An -- Rust-GPU-SDF-VX.Y.Z_MAC` が **34ファイル**（前バージョンと同数）
 
 ### F. push とビルド
+
+- [ ] **Windows のビルドスクリプトを `-f` 付きで追跡させた**
+
+      ```
+      git add -f Rust-GPU-SDF-VX.Y.Z/build_sdf_addon.ps1
+      ```
+
+      → `.gitignore` の `Rust-GPU-SDF-V*/` で Windows ツリーごと除外されるため、
+        **普通の `git add` では入らない**。`-f` が要るのはこの1ファイルだけ
+      → 入れ忘れると、**他PCでクローンしても Windows パッケージを作り直せない**。
+        V16.2.2 の作業でこれが発覚した時点で、git にあった最新は V15.9.7.1 版（70行）で、
+        現行版（124行）にある**パッケージ検証ステージが丸ごと無かった**
+      → 一度追跡すれば以降 `.gitignore` の影響は受けない。**版を切るたびに必要**
 
 - [ ] commit & push
       → `paths` トリガーに該当するので**自動でビルドが走る**。手動実行は不要

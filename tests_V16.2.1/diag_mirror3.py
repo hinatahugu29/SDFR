@@ -1,5 +1,8 @@
 import bpy, bmesh, sys, os, time, math
-sys.path.insert(0, r"E:\blender_addon\外部テスト\Rust-GPU-SDF-V16.2.1")
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from _tree import default_tree
+sys.path.insert(0, default_tree())
 import rust_gpu_sdf_addon as A; A.register()
 from rust_gpu_sdf_addon import engine
 from rust_gpu_sdf_addon._native import rust_gpu_sdf as R

@@ -7,7 +7,10 @@
 #   z=0 で k/4（厳密解と一致）、|z| >= k/2 で 0（継ぎ目から離れると素の形）。
 import bpy, sys, os, time, math
 _ARG = sys.argv[-1]
-TREE = _ARG if os.path.isdir(_ARG) else r"E:\blender_addon\外部テスト\Rust-GPU-SDF-V16.2.1"
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from _tree import default_tree
+TREE = _ARG if os.path.isdir(_ARG) else default_tree()
 sys.path.insert(0, TREE)
 import rust_gpu_sdf_addon as A; A.register()
 from rust_gpu_sdf_addon import engine
