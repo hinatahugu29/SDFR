@@ -49,7 +49,12 @@ def candidates(root=None):
 
 
 def default_tree(root=None):
-    """最も新しい作業ツリーの絶対パス。見つからなければ理由を添えて止まる。"""
+    """最も新しい作業ツリーの絶対パス。見つからなければ理由を添えて止まる。
+
+    **選んだツリーは必ず表示する。** Windows の作業ツリーは .gitignore の対象なので、
+    クローン直後に残っているのは追跡されている古い版（`Rust-GPU-SDF-V15.9.7.1`）だけ、
+    ということが起きる。黙って古い版を測ると、結果が正しく見えるぶん質が悪い。
+    """
     found = candidates(root)
     if not found:
         raise SystemExit(
@@ -60,6 +65,10 @@ def default_tree(root=None):
             "テストの最終引数でツリーのパスを渡してください。"
             % (repo_root() if root is None else root, _PREFIX)
         )
+    print("_tree: 引数が無いので %s を使う" % found[0], flush=True)
+    if len(found) > 1:
+        print("_tree: 他の候補 %s（明示するにはテストの最終引数でパスを渡す）"
+              % ", ".join(os.path.basename(f) for f in found[1:]), flush=True)
     return found[0]
 
 
