@@ -5,7 +5,6 @@ on:
   push:
     paths:
       - ".github/workflows/build-sdf-r-v16-2-2-cross-platform.yml"
-      - "Rust-GPU-SDF-V16.2.2/**"
       - "Rust-GPU-SDF-V16.2.2_MAC/**"
       - "Rust-GPU-SDF-V16.2.2_LINUX/**"
 
@@ -75,30 +74,3 @@ jobs:
         with:
           name: SDF_R_16_2_2_LINUX
           path: Rust-GPU-SDF-V16.2.2_LINUX/SDF_R_16_2_2_Linux.zip
-
-  build-windows:
-    runs-on: windows-2022
-    defaults:
-      run:
-        working-directory: Rust-GPU-SDF-V16.2.2
-        shell: pwsh
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build Windows addon zip
-        run: |
-          ./build_sdf_addon.ps1 2>&1 | Tee-Object -FilePath build-windows.log
-          exit $LASTEXITCODE
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: SDF_R_16_2_2_WIN_logs
-          path: Rust-GPU-SDF-V16.2.2/build-windows.log
-      - uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: SDF_R_16_2_2_WIN
-          path: Rust-GPU-SDF-V16.2.2/SDF_R_16_2_2.zip
