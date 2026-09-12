@@ -228,6 +228,19 @@ GLSL のコンパイル自体は `tests_V16.2.1/test_preview_shader_compiles.py`
 
 **2026-09-11 に PC 入れ替え後の環境で取り直した（Blender 5.2.1 / cargo 1.98.1）。**
 4章のとおり Windows zip を作り直したため、上の結果は旧PCビルドに対するものだった。
+
+### 実行結果（2026-09-12・CI ビルドに対して）
+
+**配布する Windows zip を CI ビルドに差し替えたので、また取り直した。**
+V16.2.2 から Windows も GitHub Actions で作るようになり、3本とも
+run 34660812170 の成果物になっている。手元ビルドは配布物から外した。
+
+配布 zip を展開したものに対して `test_native_loader` / `test_multitree` /
+`test_all_clear` / `test_mirror_blend`、zip 自身に対して `test_register_cycle`、
+新ツリーに対して `test_regression` が全て ALL PASS。
+
+**ただし Blender 5.1 で走らせている。** このPCに 5.2 が入っていないため。
+前回の 5.2.1 での結果と合わせて見ること。
 作り直した配布物に対して同じ6本を流し直して**全て ALL PASS**。あわせて
 `test_preview_shader_compiles` が実ウィンドウで `SHADER: COMPILED` / `BLIT: COMPILED`。
 

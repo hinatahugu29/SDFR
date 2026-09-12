@@ -22,8 +22,9 @@
 import os
 import re
 
-#: `_MAC` / `_LINUX` は CI 用のコピーなので、Windows の作業ツリーとしては選ばない。
-_SUFFIX_SKIP = ("_MAC", "_LINUX")
+#: `_CI` は CI 用のコピーなので、Windows の作業ツリーとしては選ばない。
+#: `_MAC` / `_LINUX` は V16.2.1 以前の呼び方。過去の版を測れるよう残してある。
+_SUFFIX_SKIP = ("_CI", "_MAC", "_LINUX")
 _PREFIX = "Rust-GPU-SDF-V"
 
 
@@ -61,7 +62,7 @@ def default_tree(root=None):
             "作業ツリーが見つかりません: %s\n"
             "Windows の作業ツリー (%s*) は .gitignore の対象なので、"
             "クローン直後には存在しません。\n"
-            "Rust-GPU-SDF-V*_MAC を複製して作るか、"
+            "Rust-GPU-SDF-V*_CI を複製して作るか、"
             "テストの最終引数でツリーのパスを渡してください。"
             % (repo_root() if root is None else root, _PREFIX)
         )
