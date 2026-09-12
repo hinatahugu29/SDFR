@@ -54,10 +54,12 @@ pushes the surface *outward* near the seam. The preview evaluates each shape onl
 cannot do that, so V16.2.1 approximated the rounding by softening the mirror fold itself. That
 rounds the seam *inward* — the opposite direction — and at larger values it ate the shape entirely.
 
-**V16.2.2 fixes it.** The preview now swells as you raise Blend, in the same direction as the mesh.
-It remains an approximation: measured on a mirrored sphere at radius 0.15 and offset 0.25, it sits
-within about 0.02–0.12 of the mesh through the range you would normally work in, against 0.11 and
-then total disappearance before. It does not round *identically* to the mesh, and it is not meant to.
+**V16.2.2 fixes it.** The preview now swells as you raise Blend, in the same direction as the mesh,
+and the shading runs unbroken across the seam instead of showing a hard crease. It remains an
+approximation: measured on a mirrored sphere at radius 0.15 and offset 0.25, it now tracks the mesh
+to within about 0.01 across the whole Blend range on a single mirror axis, against 0.11 and then
+total disappearance before. The seam itself is exact. On two or three mirror axes at once it is
+looser, and it does not round *identically* to the mesh — it is not meant to.
 
 **If you never used Mirror Blend, nothing you can see has changed.** At 0 the preview takes exactly
 the path it always did.
@@ -111,10 +113,11 @@ V16.2.1 で追加した **Mirror Blend** は、ミラーした形の中央に残
 できないため、V16.2.1 では**折り返しそのものを鈍らせる**近似を使っていました。これは継ぎ目を
 **内側へ**丸めます。向きが逆だったわけです。値が大きいと、内側への食い込みが形を完全に飲み込みます。
 
-**V16.2.2 で修正しました。** プレビューはメッシュと同じ向きに膨らみます。ただし近似である点は
-変わりません。半径0.15・オフセット0.25 のミラーした球で実測して、通常使う範囲でメッシュとの差は
-0.02〜0.12 程度です（従来は 0.11、そこから先は消滅）。**完全に一致するわけではなく、一致させることを
-目指してもいません。**
+**V16.2.2 で修正しました。** プレビューはメッシュと同じ向きに膨らみ、継ぎ目にハードな折れ目が
+出ることもなくなりました。ただし近似である点は変わりません。半径0.15・オフセット0.25 のミラーした
+球で実測して、**1軸なら Blend の全域でメッシュとの差は 0.01 程度**です（従来は 0.11、そこから先は
+消滅）。継ぎ目そのものは厳密に一致します。2軸・3軸を同時に使うと差は広がり、**完全に一致する
+わけではなく、一致させることを目指してもいません。**
 
 **Mirror Blend を使っていない場合、見える変化はありません。** 値が 0 のときは従来とまったく同じ
 経路を通ります。

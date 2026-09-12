@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SDF.R V16.2.2 — Update Announcement</title>
+  <style>
+    body {
+      margin: 0;
+      background: #f5f5f5;
+      color: #222;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.65;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 16px 64px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.3;
+    }
+    h2 {
+      margin-top: 36px;
+      padding-top: 8px;
+      border-top: 1px solid #ddd;
+      font-size: 22px;
+    }
+    h3 {
+      margin-top: 30px;
+      font-size: 18px;
+    }
+    p {
+      margin: 0 0 16px;
+    }
+    ul, ol {
+      padding-left: 24px;
+    }
+    li {
+      margin-bottom: 9px;
+    }
+    code {
+      font-family: Consolas, Monaco, monospace;
+      background: #f2f2f2;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+    .lead {
+      font-size: 17px;
+    }
+    .note {
+      background: #fafafa;
+      border-left: 4px solid #999;
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+    .subject {
+      background: #f7f7f7;
+      border: 1px solid #ddd;
+      padding: 12px 14px;
+      border-radius: 6px;
+      font-weight: bold;
+      margin: 10px 0 18px;
+    }
+    .muted {
+      color: #666;
+      font-size: 14px;
+    }
+    .lang {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #777;
+      margin-bottom: 6px;
+    }
+    strong {
+      font-weight: 700;
+    }
+    @media (max-width: 600px) {
+      .card {
+        padding: 20px;
+      }
+      h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <h1>SDF.R V16.2.2 — Update Announcement</h1>
+    <p class="muted">Simple HTML version for email / web use.</p>
+
+    <h2>Subject line options</h2>
+    <ol>
+      <li>SDF.R V16.2.2 — the Mirror Blend preview now matches the mesh</li>
+      <li>SDF.R V16.2.2 is out (free update) — Mirror Blend preview fix</li>
+      <li><strong>[SDF.R] If Mirror Blend looked broken in V16.2.1, it was the preview</strong></li>
+    </ol>
+    <p class="muted">Use option 3. The people who need this mail are the ones who tried Mirror Blend, saw the shape thin out or vanish, and stopped using it. They are not looking for a version number — they are carrying a wrong conclusion about the feature.</p>
+    <div class="subject">Japanese subject: SDF.R V16.2.2 公開 — Mirror Blend のプレビューが最終メッシュと一致するようになりました</div>
+  </div>
+
+  <div class="card">
+    <div class="lang">English</div>
+    <h1>SDF.R V16.2.2</h1>
+
+    <p>Hi, and thank you for supporting SDF.R.</p>
+    <p><strong>V16.2.2 is now available as a free update for all owners.</strong> It is a small release: one fix, and one warning added to the panel.</p>
+    <h3>🪞 If Mirror Blend looked broken in V16.2.1, it was the preview</h3>
+    <p>V16.2.1 introduced <strong>Mirror Blend</strong>, which rounds off the hard crease down the middle of a mirrored shape. If you tried it and the shape in the viewport got <em>thinner</em> as you raised the value — or disappeared once you raised it far enough — <strong>that was the ghost preview, not the feature.</strong></p>
+    <p>The generated mesh has been correct the whole time. Meshing runs on a completely separate path that never touched the preview's code, so every mesh you produced and every file you saved on V16.2.1 is fine. What was wrong was the live overlay.</p>
+    <p>The reason is worth a sentence, because it explains why the two disagreed rather than one simply failing. The final mesh evaluates both mirrored halves and joins them with a smooth union, which pushes the surface <em>outward</em> near the seam. The preview evaluates each shape only once per frame and cannot do that, so V16.2.1 approximated the rounding by softening the mirror fold itself. That rounds the seam <em>inward</em> — the opposite direction — and at larger values it ate the shape entirely.</p>
+    <p><strong>V16.2.2 fixes it.</strong> The preview now swells as you raise Blend, in the same direction as the mesh, and the shading runs unbroken across the seam instead of showing a hard crease. It remains an approximation: measured on a mirrored sphere at radius 0.15 and offset 0.25, it now tracks the mesh to within about 0.01 across the whole Blend range on a single mirror axis, against 0.11 and then total disappearance before. The seam itself is exact. On two or three mirror axes at once it is looser, and it does not round <em>identically</em> to the mesh — it is not meant to.</p>
+    <p><strong>If you never used Mirror Blend, nothing you can see has changed.</strong> At 0 the preview takes exactly the path it always did.</p>
+    <h3>⚠️ A warning for a setting that surprises people</h3>
+    <p><strong>Raising Mirror Blend past twice the Offset thickens the whole shape, not just the seam.</strong></p>
+    <p>This is not a defect and it is not new — it is what joining two halves smoothly does. Once the blend radius reaches across the gap between the halves, no part of the shape is far enough from the seam to be left alone. It is confusing in practice because the axis <em>across</em> the mirror grows too, which is not a direction the setting looks like it should touch.</p>
+    <p>The panel now tells you when your settings cross that line. If you want a rounder seam without a heavier shape, <strong>raise Offset rather than Blend</strong>.</p>
+    <h3>Upgrading</h3>
+    <p>Install over V16.2.1 as usual. Existing files need no migration.</p>
+    <p>Nothing here touches the meshing engine, so <strong>the first start is as quick as always</strong> — there is no shader cache rebuild to sit through. Only the viewport preview shader and the panel changed.</p>
+    <p>Windows, macOS and Linux builds are all available.</p>
+    <p>Thank you to the owner who asked whether Mirror Blend and the mesh were really connected. That report turned out to be about something else, but measuring it is what turned this up.</p>
+  </div>
+
+  <div class="card">
+    <div class="lang">日本語</div>
+    <h1>SDF.R V16.2.2</h1>
+
+    <p>いつも SDF.R をご利用いただきありがとうございます。</p>
+    <p><strong>V16.2.2 を公開しました。既存ユーザーの方は無償アップデートです。</strong> 修正1件と、パネルへの警告追加 1件だけの小さなリリースです。</p>
+    <h3>🪞 V16.2.1 で Mirror Blend が壊れて見えた方へ — 原因はプレビューでした</h3>
+    <p>V16.2.1 で追加した <strong>Mirror Blend</strong> は、ミラーした形の中央に残るハードな折れ目を丸める機能です。 これを試したときに、<strong>値を上げるとビューポートの形が細くなる</strong>、あるいは<strong>上げ切ると形が消える</strong>という 挙動をご覧になった方がいらっしゃると思います。<strong>それはゴーストプレビュー側の不具合で、機能自体は 正しく動いていました。</strong></p>
+    <p>生成されるメッシュは最初から正しい状態でした。メッシュ生成はプレビューとは完全に別の経路で動いて おり、プレビュー用のコードに一切触れていません。<strong>V16.2.1 で作成したメッシュも、保存されたファイルも すべて正常です。</strong> 誤っていたのはリアルタイム表示だけです。</p>
+    <p>理由を一文だけ。最終メッシュはミラーした両側を別々に評価して Smooth Union で結合するため、継ぎ目の 付近で表面が<strong>外側へ</strong>膨らみます。プレビューは1フレームにつき1形状を1回しか評価できず同じことが できないため、V16.2.1 では<strong>折り返しそのものを鈍らせる</strong>近似を使っていました。これは継ぎ目を <strong>内側へ</strong>丸めます。向きが逆だったわけです。値が大きいと、内側への食い込みが形を完全に飲み込みます。</p>
+    <p><strong>V16.2.2 で修正しました。</strong> プレビューはメッシュと同じ向きに膨らみ、継ぎ目にハードな折れ目が 出ることもなくなりました。ただし近似である点は変わりません。半径0.15・オフセット0.25 のミラーした 球で実測して、<strong>1軸なら Blend の全域でメッシュとの差は 0.01 程度</strong>です（従来は 0.11、そこから先は 消滅）。継ぎ目そのものは厳密に一致します。2軸・3軸を同時に使うと差は広がり、<strong>完全に一致する わけではなく、一致させることを目指してもいません。</strong></p>
+    <p><strong>Mirror Blend を使っていない場合、見える変化はありません。</strong> 値が 0 のときは従来とまったく同じ 経路を通ります。</p>
+    <h3>⚠️ 誤解されやすい挙動に警告を追加しました</h3>
+    <p><strong>Mirror Blend を Offset の2倍より大きくすると、継ぎ目だけでなく形全体が太ります。</strong></p>
+    <p>これは不具合ではなく、また今回始まったことでもありません。両側を滑らかに繋ぐ以上、避けられない 挙動です。ブレンドの半径が両側の隙間を超えて届くと、継ぎ目から十分に離れた場所が形の中に無くなる ためです。実際に紛らわしいのは、<strong>ミラー軸と直交する方向まで太る</strong>点で、この設定が触るように 見えない方向が動きます。</p>
+    <p>その範囲に入るとパネルが警告を表示するようにしました。形を太らせずに継ぎ目だけ丸めたい場合は、 <strong>Blend ではなく Offset を上げてください。</strong></p>
+    <h3>アップデート方法</h3>
+    <p>V16.2.1 に上書きインストールしてください。既存ファイルの移行作業は不要です。</p>
+    <p>メッシュ生成エンジンには一切手を入れていないため、<strong>初回起動もこれまでどおりすぐ立ち上がります</strong>。 シェーダーキャッシュの再構築は走りません。変わったのはビューポートのプレビューシェーダーとパネルだけです。</p>
+    <p>Windows / macOS / Linux 版すべて公開済みです。</p>
+    <p>Mirror Blend と最終メッシュが本当に連動しているのか、とご質問をくださった方にお礼を申し上げます。 ご指摘そのものは別の箇所についてのものでしたが、確認のために計測したことで今回の不具合が見つかりました。</p>
+  </div>
+
+</div>
+</body>
+</html>
