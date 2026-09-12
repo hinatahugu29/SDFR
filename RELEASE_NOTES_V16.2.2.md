@@ -1,6 +1,6 @@
 # SDF.R V16.2.2 Release Notes — The Mirror Blend preview moves with the mesh
 
-*Released 2026-09-11*
+*Released 2026-09-12*
 
 V16.2.1 added **Mirror Blend**, which rounds off the hard crease that Layout Mirror leaves down the
 middle of a mirrored shape. The final mesh has been correct since that release. **The ghost preview
