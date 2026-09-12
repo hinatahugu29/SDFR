@@ -53,19 +53,19 @@ identically. Measured on a mirrored sphere at radius 0.15 and offset 0.25:
 
 | Mirror Blend | V16.2.1 preview | V16.2.2 preview |
 |---|---|---|
-| 0.4 | 0.110 off | 0.006 off |
-| 0.8 | shape gone | 0.061 off |
-| 2.0 | shape gone | 0.333 off |
+| 0.4 | 0.110 off | 0.005 off |
+| 0.8 | shape gone | 0.010 off |
+| 2.0 | shape gone | 0.003 off |
 
 The seam itself is exact: at the mirror plane the preview lands on the same value the smooth union
-does, so the point where the two halves meet and fill is where the mesh has it. Away from the seam
-the preview stays within about 0.02–0.08 of the mesh through the range you would normally work in,
-on one, two and three axes alike. It falls behind further out — at Blend 2.0 against an Offset of
-0.25, eight times the offset, the preview is about 0.33 short. That is deep inside the region the
-panel warns about, where the shape is swelling everywhere rather than rounding a seam.
+does, so the point where the two halves meet and fill is where the mesh has it. On a single mirror
+axis the rest of the shape now tracks the mesh to within about 0.01 across the whole Blend range —
+for a sphere the approximation is exact, and what is left is the resolution of the mesh it is being
+measured against. Two axes stay within about 0.06. Three axes is the loosest, drifting to roughly
+0.29 at Blend 2.0, because the per-axis roundings are summed rather than solved together.
 
-**The preview no longer creases.** The rounding is applied with a falloff that reaches zero smoothly,
-so the shading runs unbroken across the seam the way the generated mesh does.
+**The preview no longer creases.** Both the mirror plane and the outer edge of the rounding are
+smooth, so the shading runs unbroken the way the generated mesh does.
 
 **Mirror Blend at 0 is bit-for-bit the path it was before.** If you do not use the feature, nothing
 in the preview has moved.

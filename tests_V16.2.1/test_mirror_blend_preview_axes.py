@@ -42,21 +42,24 @@ def mesh_extents(blend, axes):
     r = (0.0, 0.0) if len(vs) == 0 else (max(v.co.x for v in vs)-min(v.co.x for v in vs),
                                          max(v.co.z for v in vs)-min(v.co.z for v in vs))
     wipe(); return r
-def seam_cut(c, k, s):
-    u = min(abs(c)/(k*0.5), 1.0)
-    return k * 0.25 * (1.0 - s*u + (2.0*s-3.0)*u*u + (2.0-s)*u*u*u)
+def seam_cut(lp, disp, k):
+    near = math.sqrt(sum(t*t for t in lp))
+    far = math.sqrt(sum((t+d)**2 for t, d in zip(lp, disp)))
+    v = min(max((far-near)/k, 0.0), 1.0)
+    return k * 0.25 * (1.0-v) * (1.0-v)
 def preview(x, y, z, mb, axes):
-    # shader.py と同じ順序: 先に折り返し、畳んだ後の中心距離から s を出す。
+    # shader.py と同じ順序: 先に折り返し、その位置から距離差を採る。
     lx = abs(x) - OFFSET if 'x' in axes else x
     ly = abs(y) - OFFSET if 'y' in axes else y
     lz = abs(z) - OFFSET if 'z' in axes else z
-    L = max(math.sqrt(lx*lx + ly*ly + lz*lz), 1e-4)
+    lp = (lx, ly, lz)
+    L = math.sqrt(lx*lx + ly*ly + lz*lz)
     cut = 0.0
     if mb > 0.0001:
-        s = min(max(2.0*abs(OFFSET)/L, 0.0), 2.0)
-        if "x" in axes: cut += seam_cut(x, mb, s)
-        if "y" in axes: cut += seam_cut(y, mb, s)
-        if "z" in axes: cut += seam_cut(z, mb, s)
+        span = 2.0*abs(OFFSET)
+        if "x" in axes: cut += seam_cut(lp, (span, 0.0, 0.0), mb)
+        if "y" in axes: cut += seam_cut(lp, (0.0, span, 0.0), mb)
+        if "z" in axes: cut += seam_cut(lp, (0.0, 0.0, span), mb)
     return L - RADIUS - cut
 def preview_extents(mb, axes, n=500, half=2.5):
     xs = []; zs = []

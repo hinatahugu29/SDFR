@@ -321,17 +321,18 @@ float sdf_noise3(vec3 p){
 //     微分が 0 だとこれが素通りし、最大135度の折れ目になる。最終メッシュは両側を別評価
 //     するのでどちらも持たない。プレビューにだけ出ていた。
 //
-// 台を3次にして、u=1 側は値も傾きも 0、u=0 側の傾きは呼び出し側から s で与える。
-// s = 2*offset/L とすると (2) がちょうど打ち消える。実測で両方とも 1度未満になる。
-// 精度も落ちない。2*|c| は反対側との距離差を軸外で過大評価するが、台の速い減衰が
-// それを相殺し、くびれ形状の誤差はむしろ 1/3〜1/5 になる。
+// 鍵は距離差の見積もり方。当初は 2*|ミラー軸座標| としていたが、これは軸から離れるほど
+// 過大評価になり、補正が足りずプレビューが膨らみ不足になる。折り返した後の位置から
+// 幾何的に length(lp + 2*offset*軸) - length(lp) と採れば、球なら厳密、他の形でも
+// 誤差が 1/2〜1/3 になる。おまけに継ぎ目での傾きが常に 2*offset/L になるので、
+// 台を (1-v)^2 にするだけで (2) が位置に依らず自動的に打ち消える。
 // (実測は tests_V16.2.1/test_mirror_blend_preview_neck.py)
-// s は継ぎ目での傾き。折り返し abs() が距離に作る折れ目 (傾き -offset/L) を
-// 打ち消すため、呼び出し側が s = 2*offset/L を渡す。u=1 側は s に依らず
-// 値も傾きも 0 になるので、台の外縁も滑らかなまま。
-float sdf_mirror_seam_cut(float c, float k, float s){
-    float u = min(abs(c) / (k * 0.5), 1.0);
-    return k * 0.25 * (1.0 - s * u + (2.0 * s - 3.0) * u * u + (2.0 - s) * u * u * u);
+// lp は折り返した後のローカル位置、disp はミラー軸に沿った反対側コピーまでの変位
+// (2*offset)。v=0 (継ぎ目) で k/4、v=1 で値も傾きも 0。
+float sdf_mirror_seam_cut(vec3 lp, vec3 disp, float k){
+    float v = clamp((length(lp + disp) - length(lp)) / k, 0.0, 1.0);
+    float w = 1.0 - v;
+    return k * 0.25 * w * w;
 }
 
 vec4 map_impl(vec3 p){
@@ -384,9 +385,8 @@ vec4 map_impl(vec3 p){
             uint mask = (packed1 >> 8u) & 0xFu;
             float offset = ld1.y;
             float mb = layer_p.w;
-            // 折り返し前の座標を控えてから畳む。継ぎ目の傾きを打ち消す係数 s に
-            // 畳んだ後の中心距離が要るので、順序はこの通りでなければならない。
-            vec3 pre_fold = lp;
+            // 距離差は折り返した後の位置から採るので、畳むのが先。順序を戻すと
+            // 継ぎ目の折れ目が復活する。
             if((mask & 1u) != 0u) lp.x = abs(lp.x) - offset;
             if((mask & 2u) != 0u) lp.y = abs(lp.y) - offset;
             if((mask & 4u) != 0u) lp.z = abs(lp.z) - offset;
@@ -394,11 +394,10 @@ vec4 map_impl(vec3 p){
                 // 軸ごとの継ぎ目は合計する。厳密解でも、同じ距離を n 回 smin で重ねると
                 // 原点で n*k/4 内側に寄る (2コピーで k/4、4コピーで k/2、8コピーで 3k/4)。
                 // max だと多軸で明確に足りない (3軸 blend=2.0 で 1.69 対 実測 2.99)。
-                float fold_len = max(length(lp), 1e-4);
-                float s = clamp(2.0 * abs(offset) / fold_len, 0.0, 2.0);
-                if((mask & 1u) != 0u) mirror_cut += sdf_mirror_seam_cut(pre_fold.x, mb, s);
-                if((mask & 2u) != 0u) mirror_cut += sdf_mirror_seam_cut(pre_fold.y, mb, s);
-                if((mask & 4u) != 0u) mirror_cut += sdf_mirror_seam_cut(pre_fold.z, mb, s);
+                float mirror_span = 2.0 * abs(offset);
+                if((mask & 1u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp, vec3(mirror_span, 0.0, 0.0), mb);
+                if((mask & 2u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp, vec3(0.0, mirror_span, 0.0), mb);
+                if((mask & 4u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp, vec3(0.0, 0.0, mirror_span), mb);
             }
         }
 

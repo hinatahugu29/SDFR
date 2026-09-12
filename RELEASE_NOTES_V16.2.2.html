@@ -88,25 +88,29 @@
       <tr>
         <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.4</td>
         <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.110 off</td>
-        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.029 off</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.005 off</td>
       </tr>
       <tr>
         <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.8</td>
         <td style="padding:8px 10px; border:1px solid #e0e0e0;">shape gone</td>
-        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.120 off</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.010 off</td>
       </tr>
       <tr>
         <td style="padding:8px 10px; border:1px solid #e0e0e0;">2.0</td>
         <td style="padding:8px 10px; border:1px solid #e0e0e0;">shape gone</td>
-        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.060 off</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.003 off</td>
       </tr>
     </tbody>
   </table>
 
   <p style="font-size:0.97em; color:#444;">
-    Across one, two and three mirror axes the preview stays within about 0.02&#8211;0.12 of the mesh
-    through the range you would normally work in, widening to roughly 0.38 at Blend 2.0 on two and
-    three axes. <strong>Mirror Blend at 0 is bit-for-bit the path it was before.</strong> If you do
+    The seam itself is exact: at the mirror plane the preview lands on the same value the smooth
+    union does. On a single mirror axis the rest of the shape now tracks the mesh to within about
+    0.01 across the whole Blend range. Two axes stay within about 0.06. Three axes is the loosest,
+    drifting to roughly 0.29 at Blend 2.0, because the per-axis roundings are summed rather than
+    solved together. <strong>The preview no longer creases</strong> &#8212; both the mirror plane and
+    the outer edge of the rounding are smooth, so the shading runs unbroken the way the generated
+    mesh does. <strong>Mirror Blend at 0 is bit-for-bit the path it was before.</strong> If you do
     not use the feature, nothing in the preview has moved.
   </p>
 

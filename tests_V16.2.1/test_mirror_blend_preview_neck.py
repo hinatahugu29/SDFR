@@ -33,16 +33,18 @@ def d_mesh(x, y, z, k):
     d2 = math.sqrt((x + OFF) ** 2 + y * y + z * z) - R
     return smin0(d1, d2, k)
 
-def seam_cut(c, k, s):
+def seam_cut(lp, disp, k):
     """shader.py の sdf_mirror_seam_cut と同じ式にすること。"""
-    u = min(abs(c) / (k * 0.5), 1.0)
-    return k * 0.25 * (1.0 - s*u + (2.0*s - 3.0)*u*u + (2.0 - s)*u*u*u)
+    near = math.sqrt(sum(t * t for t in lp))
+    far = math.sqrt(sum((t + d) ** 2 for t, d in zip(lp, disp)))
+    v = min(max((far - near) / k, 0.0), 1.0)
+    w = 1.0 - v
+    return k * 0.25 * w * w
 
 def d_prev(x, y, z, k):
-    lx = abs(x) - OFF
-    L = max(math.sqrt(lx * lx + y * y + z * z), 1e-4)
-    s = min(max(2.0 * abs(OFF) / L, 0.0), 2.0)
-    return L - R - seam_cut(x, k, s)
+    lp = (abs(x) - OFF, y, z)
+    L = math.sqrt(sum(t * t for t in lp))
+    return L - R - seam_cut(lp, (2.0 * abs(OFF), 0.0, 0.0), k)
 
 def radius_at(f, x, k):
     lo, hi = 0.0, 6.0
@@ -90,7 +92,7 @@ for k in BLENDS:
     a = angle(grad(d_prev, -1e-3, 0.0, z, k), grad(d_prev, 1e-3, 0.0, z, k))
     check("blend=%.2f" % k, a <= NORMAL_TOL_DEG, "角度差 %.1f 度 (許容 %.1f)" % (a, NORMAL_TOL_DEG))
 
-print("=== 法線が |c| = Blend/2 で飛ばないか（折り目）===")
+print("=== 法線が台の外縁で飛ばないか（折り目）===")
 for k in BLENDS:
     x = k * 0.5
     lx = abs(x) - OFF
