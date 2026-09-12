@@ -78,11 +78,8 @@ heavier shape, **raise Offset rather than Blend**.
 
 Install over V16.2.1 as usual. Existing files need no migration.
 
-One thing to expect: **the first start after updating takes longer than usual.** The GPU shader code
-changed, so the cached pipeline no longer matches and is rebuilt once. On a discrete GPU that is the
-usual 15–45 seconds. **On integrated graphics it can take several minutes** — an Intel Iris Xe
-measured 194 seconds. The console prints `Compiling MC Pipeline...` while it works and
-`GPU Engine Ready!` when it is done. Later starts take a second or two.
+Nothing here touches the meshing engine, so **the first start is as quick as always** — there is no
+shader cache rebuild to sit through. Only the viewport preview shader and the panel changed.
 
 Windows, macOS and Linux builds are all available.
 
@@ -138,11 +135,8 @@ V16.2.1 で追加した **Mirror Blend** は、ミラーした形の中央に残
 
 V16.2.1 に上書きインストールしてください。既存ファイルの移行作業は不要です。
 
-1点だけご承知おきください。**更新後の初回起動は通常より時間がかかります。** GPU シェーダーのコードが
-変わったため、キャッシュ済みのパイプラインが一致せず、1度だけ再構築が走ります。ディスクリート GPU で
-通常どおり15〜45秒、**内蔵GPUでは数分かかることがあります**（Intel Iris Xe で194秒を実測）。処理中は
-コンソールに `Compiling MC Pipeline...`、完了時に `GPU Engine Ready!` と表示されます。2回目以降は
-1〜2秒です。
+メッシュ生成エンジンには一切手を入れていないため、**初回起動もこれまでどおりすぐ立ち上がります**。
+シェーダーキャッシュの再構築は走りません。変わったのはビューポートのプレビューシェーダーとパネルだけです。
 
 Windows / macOS / Linux 版すべて公開済みです。
 

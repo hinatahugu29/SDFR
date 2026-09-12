@@ -53,12 +53,19 @@ identically. Measured on a mirrored sphere at radius 0.15 and offset 0.25:
 
 | Mirror Blend | V16.2.1 preview | V16.2.2 preview |
 |---|---|---|
-| 0.4 | 0.110 off | 0.029 off |
-| 0.8 | shape gone | 0.120 off |
-| 2.0 | shape gone | 0.060 off |
+| 0.4 | 0.110 off | 0.006 off |
+| 0.8 | shape gone | 0.061 off |
+| 2.0 | shape gone | 0.333 off |
 
-Across one, two and three mirror axes the preview stays within about 0.02–0.12 of the mesh through
-the range you would normally work in, widening to roughly 0.38 at Blend 2.0 on two and three axes.
+The seam itself is exact: at the mirror plane the preview lands on the same value the smooth union
+does, so the point where the two halves meet and fill is where the mesh has it. Away from the seam
+the preview stays within about 0.02–0.08 of the mesh through the range you would normally work in,
+on one, two and three axes alike. It falls behind further out — at Blend 2.0 against an Offset of
+0.25, eight times the offset, the preview is about 0.33 short. That is deep inside the region the
+panel warns about, where the shape is swelling everywhere rather than rounding a seam.
+
+**The preview no longer creases.** The rounding is applied with a falloff that reaches zero smoothly,
+so the shading runs unbroken across the seam the way the generated mesh does.
 
 **Mirror Blend at 0 is bit-for-bit the path it was before.** If you do not use the feature, nothing
 in the preview has moved.
@@ -83,17 +90,21 @@ not just the seam. Raise Offset to keep the size.
 
 If you want a rounder seam without a heavier shape, **raise Offset rather than Blend**.
 
+Mirror Blend stops at 2.0, so whether you can reach this at all depends on your Offset. Below an
+Offset of 1.0 the warning is reachable and worth heeding. At an Offset of 1.0 or more, twice the
+Offset is already past the top of the slider, so the shape cannot be pushed into swelling and the
+warning never appears.
+
 ---
 
 ## Upgrading
 
 Install over V16.2.1 as usual. Existing files need no migration and are not changed by opening them.
 
-The GPU shader code changed in this release, so **the first start after installing takes longer than
-usual** while the cached pipeline is rebuilt once. On a discrete GPU that is the usual 15–45 seconds.
-**On integrated graphics it can take several minutes** — an Intel Iris Xe measured 194 seconds. The
-console prints `Compiling MC Pipeline...` while this happens and `GPU Engine Ready!` when it is done.
-Later starts take a second or two.
+Nothing in this release touches the meshing engine, so **there is no shader cache rebuild and no slow
+first start**. The compute pipelines are byte for byte what V16.2.1 built, and the cache on disk is
+reused as it is. Only the viewport preview shader and the panel changed, and Blender compiles that one
+from source every session anyway.
 
 Clearing the shader cache by hand is not required. If you keep several versions side by side, use the
 V16.2.2 build rather than mixing folders.

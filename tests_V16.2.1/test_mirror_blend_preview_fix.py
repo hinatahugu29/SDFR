@@ -54,8 +54,8 @@ def sdf_new(x, y, z, mb):
     d = math.sqrt(x*x + y*y + lz*lz) - RADIUS
     if mb > 0.0001:
         k = mb
-        h = min(max(0.5 + abs(z)/k, 0.0), 1.0)
-        d -= k * h * (1.0 - h)
+        u = min(abs(z)/(k*0.5), 1.0)
+        d -= k * 0.25 * (1.0-u) * (1.0-u)
     return d
 def extents(f, mb, n=400, half=1.0):
     xs = []; zs = []

@@ -150,12 +150,10 @@ not just the seam. Raise Offset to keep the size.</pre>
   </p>
 
   <p style="font-size:0.97em; color:#444;">
-    The GPU shader code changed in this release, so <strong>the first start after installing takes
-    longer than usual</strong> while the cached pipeline is rebuilt once. On a discrete GPU that is
-    the usual 15&#8211;45 seconds. <strong>On integrated graphics it can take several minutes</strong>
-    &#8212; an Intel Iris Xe measured 194 seconds. The console prints
-    <code>Compiling MC Pipeline...</code> while this happens and <code>GPU Engine Ready!</code> when
-    it is done. Later starts take a second or two.
+    Nothing in this release touches the meshing engine, so <strong>there is no shader cache rebuild
+    and no slow first start</strong>. The compute pipelines are byte for byte what V16.2.1 built, and
+    the cache on disk is reused as it is. Only the viewport preview shader and the panel changed, and
+    Blender compiles that one from source every session anyway.
   </p>
 
   <p style="font-size:0.97em; color:#444;">

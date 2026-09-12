@@ -43,8 +43,8 @@ def mesh_extents(blend, axes):
                                          max(v.co.z for v in vs)-min(v.co.z for v in vs))
     wipe(); return r
 def seam_cut(c, k):
-    h = min(max(0.5 + abs(c)/k, 0.0), 1.0)
-    return k * h * (1.0 - h)
+    u = min(abs(c)/(k*0.5), 1.0)
+    return k * 0.25 * (1.0-u) * (1.0-u)
 def preview(x, y, z, mb, axes):
     cut = 0.0
     if mb > 0.0001:
