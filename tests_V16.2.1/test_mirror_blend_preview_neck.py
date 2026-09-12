@@ -33,15 +33,16 @@ def d_mesh(x, y, z, k):
     d2 = math.sqrt((x + OFF) ** 2 + y * y + z * z) - R
     return smin0(d1, d2, k)
 
-def seam_cut(c, k):
+def seam_cut(c, k, s):
     """shader.py の sdf_mirror_seam_cut と同じ式にすること。"""
     u = min(abs(c) / (k * 0.5), 1.0)
-    w = 1.0 - u
-    return k * 0.25 * w * w
+    return k * 0.25 * (1.0 - s*u + (2.0*s - 3.0)*u*u + (2.0 - s)*u*u*u)
 
 def d_prev(x, y, z, k):
     lx = abs(x) - OFF
-    return math.sqrt(lx * lx + y * y + z * z) - R - seam_cut(x, k)
+    L = max(math.sqrt(lx * lx + y * y + z * z), 1e-4)
+    s = min(max(2.0 * abs(OFF) / L, 0.0), 2.0)
+    return L - R - seam_cut(x, k, s)
 
 def radius_at(f, x, k):
     lo, hi = 0.0, 6.0
@@ -77,6 +78,17 @@ for k in BLENDS:
         x = 3.5 * i / 60
         worst = max(worst, abs(radius_at(d_prev, x, k) - radius_at(d_mesh, x, k)))
     check("blend=%.2f" % k, worst <= NECK_TOL, "最大誤差 %.4f (許容 %.2f)" % (worst, NECK_TOL))
+
+print("=== 法線がミラー面 c = 0 で飛ばないか（折り目）===")
+# 折り返しの abs() が距離に傾き -offset/L の折れ目を作る。補正項の傾きが 0 だと
+# 素通りして最大135度になる。s = 2*offset/L で打ち消しているかを見る。
+for k in BLENDS:
+    z = radius_at(d_prev, 0.0, k)
+    if z <= 1e-6:
+        check("blend=%.2f" % k, True, "x=0 に表面が無い")
+        continue
+    a = angle(grad(d_prev, -1e-3, 0.0, z, k), grad(d_prev, 1e-3, 0.0, z, k))
+    check("blend=%.2f" % k, a <= NORMAL_TOL_DEG, "角度差 %.1f 度 (許容 %.1f)" % (a, NORMAL_TOL_DEG))
 
 print("=== 法線が |c| = Blend/2 で飛ばないか（折り目）===")
 for k in BLENDS:

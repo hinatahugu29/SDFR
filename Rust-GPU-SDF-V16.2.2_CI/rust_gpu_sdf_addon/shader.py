@@ -313,20 +313,25 @@ float sdf_noise3(vec3 p){
 // 1回評価のまま再現できる。継ぎ目 (座標0) で k/4 と厳密解に一致し、
 // |座標| >= k/2 で 0 になって素の形に戻る。
 //
-// 当初は最終メッシュと同じ k*h*(1-h) (h = clamp(0.5 + |c|/k)) を使っていた。値としては
-// 忠実だが、clamp が効く |c| = k/2 で微分が -1 から 0 へ飛ぶ。レイマーチの法線は距離場の
-// 勾配なので、そこに最大84度の折れ目が出る (Blend が小さいほど急). 最終メッシュ側は
-// 同じ不連続を持ちながら MC とスムーズシェーディングで均されるため見えず、
-// プレビューにだけ出ていた。「継ぎ目の折り目を丸める」機能の絵として本末転倒なので、
-// 台を (1-u)^2 に替えて u=1 で値も傾きも 0 にする。
+// 折れ目が出る場所が2つあり、両方を潰す必要がある。
 //
-// 副次的に精度も上がる。2*|c| は反対側との距離差を軸外で過大評価するが、(1-u)^2 の
-// 速い減衰がそれを相殺し、くびれ形状の誤差が 1/3〜1/5 になる。
-// (実測は tests_V16.2.1/test_mirror_blend_preview_fix.py と _neck.py)
-float sdf_mirror_seam_cut(float c, float k){
+// (1) 台の外縁 |c| = k/2。当初は最終メッシュと同じ k*h*(1-h) (h = clamp(0.5+|c|/k)) を
+//     使っていたが、clamp が効く所で微分が -1 から 0 へ飛び、最大84度の折れ目になる。
+// (2) ミラー面 c = 0。折り返しの abs() が距離に傾き -offset/L の折れ目を作る。補正項の
+//     微分が 0 だとこれが素通りし、最大135度の折れ目になる。最終メッシュは両側を別評価
+//     するのでどちらも持たない。プレビューにだけ出ていた。
+//
+// 台を3次にして、u=1 側は値も傾きも 0、u=0 側の傾きは呼び出し側から s で与える。
+// s = 2*offset/L とすると (2) がちょうど打ち消える。実測で両方とも 1度未満になる。
+// 精度も落ちない。2*|c| は反対側との距離差を軸外で過大評価するが、台の速い減衰が
+// それを相殺し、くびれ形状の誤差はむしろ 1/3〜1/5 になる。
+// (実測は tests_V16.2.1/test_mirror_blend_preview_neck.py)
+// s は継ぎ目での傾き。折り返し abs() が距離に作る折れ目 (傾き -offset/L) を
+// 打ち消すため、呼び出し側が s = 2*offset/L を渡す。u=1 側は s に依らず
+// 値も傾きも 0 になるので、台の外縁も滑らかなまま。
+float sdf_mirror_seam_cut(float c, float k, float s){
     float u = min(abs(c) / (k * 0.5), 1.0);
-    float w = 1.0 - u;
-    return k * 0.25 * w * w;
+    return k * 0.25 * (1.0 - s * u + (2.0 * s - 3.0) * u * u + (2.0 - s) * u * u * u);
 }
 
 vec4 map_impl(vec3 p){
@@ -379,17 +384,22 @@ vec4 map_impl(vec3 p){
             uint mask = (packed1 >> 8u) & 0xFu;
             float offset = ld1.y;
             float mb = layer_p.w;
+            // 折り返し前の座標を控えてから畳む。継ぎ目の傾きを打ち消す係数 s に
+            // 畳んだ後の中心距離が要るので、順序はこの通りでなければならない。
+            vec3 pre_fold = lp;
+            if((mask & 1u) != 0u) lp.x = abs(lp.x) - offset;
+            if((mask & 2u) != 0u) lp.y = abs(lp.y) - offset;
+            if((mask & 4u) != 0u) lp.z = abs(lp.z) - offset;
             if(mb > 0.0001){
                 // 軸ごとの継ぎ目は合計する。厳密解でも、同じ距離を n 回 smin で重ねると
                 // 原点で n*k/4 内側に寄る (2コピーで k/4、4コピーで k/2、8コピーで 3k/4)。
                 // max だと多軸で明確に足りない (3軸 blend=2.0 で 1.69 対 実測 2.99)。
-                if((mask & 1u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp.x, mb);
-                if((mask & 2u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp.y, mb);
-                if((mask & 4u) != 0u) mirror_cut += sdf_mirror_seam_cut(lp.z, mb);
+                float fold_len = max(length(lp), 1e-4);
+                float s = clamp(2.0 * abs(offset) / fold_len, 0.0, 2.0);
+                if((mask & 1u) != 0u) mirror_cut += sdf_mirror_seam_cut(pre_fold.x, mb, s);
+                if((mask & 2u) != 0u) mirror_cut += sdf_mirror_seam_cut(pre_fold.y, mb, s);
+                if((mask & 4u) != 0u) mirror_cut += sdf_mirror_seam_cut(pre_fold.z, mb, s);
             }
-            if((mask & 1u) != 0u) lp.x = abs(lp.x) - offset;
-            if((mask & 2u) != 0u) lp.y = abs(lp.y) - offset;
-            if((mask & 4u) != 0u) lp.z = abs(lp.z) - offset;
         }
 
         // 2. Radial / Spiral
