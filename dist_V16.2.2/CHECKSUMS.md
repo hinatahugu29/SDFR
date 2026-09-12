@@ -1,12 +1,12 @@
 # SDF.R V16.2.2 - distribution packages
 
-built 2026-09-12 / commit 0dcb1e1 / GitHub Actions run 34662945432
+built 2026-09-12 / commit 6b3d2c4 / GitHub Actions run 34664033920
 
 | Platform | File | Size | SHA-256 |
 |---|---|---:|---|
-| Windows | SDF_R_16_2_2.zip | 14,613,306 | 85ebfb2d8f251d708d0f802cac2674117be150e28d6da91b38311cae572df231 |
-| macOS (Apple Silicon) | SDF_R_16_2_2_Darwin.zip | 13,712,639 | eaa4ba44a912113adb7546cbfde906990c6f933d7175f7d0643115bf0d51a6c7 |
-| Linux (x86-64) | SDF_R_16_2_2_Linux.zip | 14,877,101 | 276e2a26e542fd96137023c77efbc67f81f28add65fb8fe457321b95ef653105 |
+| Windows | SDF_R_16_2_2.zip | 14,613,611 | 91e1f1b6ba2f6a6ca00d85a41cafac25af7811ad935368081a77e1be10787596 |
+| macOS (Apple Silicon) | SDF_R_16_2_2_Darwin.zip | 13,712,944 | a04d80b006d4f28e14302bb822eefc32e7b76fb4bde66560718be9272a67e29e |
+| Linux (x86-64) | SDF_R_16_2_2_Linux.zip | 14,877,406 | 905a7e3c962ee28f4d4e124ad635e7faa0cbae8d08bde5e899bb8024b7d96b11 |
 
 All three carry byte-identical Python sources; only the native module differs.
 macOS is arm64 only (built on a macos-14 runner, min macOS 11.0) and does not run on Intel Macs.
@@ -14,7 +14,7 @@ Linux requires glibc 2.35 or newer (built on ubuntu-22.04).
 
 ## 由来
 
-**3本とも GitHub Actions の run 34662945432 の成果物**で、同じ `Rust-GPU-SDF-V16.2.2_CI/`
+**3本とも GitHub Actions の run 34664033920 の成果物**で、同じ `Rust-GPU-SDF-V16.2.2_CI/`
 ツリーから windows-2022 / macos-14 / ubuntu-22.04 でビルドしたもの。V16.2.2 から
 Windows も CI に載せたので、3プラットフォームが同一のソースとツールチェーン基準で
 そろっている。手元ビルドを混ぜていない。
