@@ -1,0 +1,1417 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>SDF.R V16.2.1 UI / Command Inventory</title>
+<style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+      color: #222;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+      background: #fafafa;
+    }
+    h1, h2, h3 { line-height: 1.25; }
+    h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+    h2 {
+      margin-top: 42px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #222;
+      font-size: 1.35rem;
+    }
+    h3 {
+      margin-top: 26px;
+      font-size: 1.05rem;
+      color: #333;
+    }
+    .meta, .note {
+      color: #555;
+      font-size: 0.95rem;
+    }
+    .note {
+      background: #fff8dc;
+      border-left: 5px solid #e0b100;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 18px 0;
+    }
+    .ok {
+      background: #edf8f0;
+      border-left: 5px solid #40a060;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 18px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      margin: 14px 0 28px;
+      font-size: 0.94rem;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 9px 10px;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f3f5;
+      text-align: left;
+      white-space: nowrap;
+    }
+    code {
+      font-family: "Cascadia Mono", Consolas, monospace;
+      background: #f3f3f3;
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .tag {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 0.82em;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .mesh { background: #e8f1ff; color: #174a8b; }
+    .light { background: #eaf8ef; color: #22613a; }
+    .none { background: #f3f3f3; color: #555; }
+    .danger { background: #fff0f0; color: #9b1c1c; }
+    .small { font-size: 0.88rem; color: #555; }
+  </style>
+</head>
+<body>
+<h1>SDF.R V16.2.1 UI / Command Inventory</h1>
+<p>Target: <strong>Rust-GPU-SDF / SDF.R V16.2.1</strong> | Created: 2026-07-19 (V16.2.1 update: 2026-09-09) | Purpose: Inventory of UI buttons and major controls</p>
+<p><strong>How to read the update categories:</strong> Mesh Rebuild re-evaluates the SDF and rebuilds the result mesh; Lightweight Update only updates existing mesh attributes or display state; Display / Management covers mainly UI, selection, visibility, and management operations.</p>
+<p><strong>Important note on color updates:</strong> <code>Apply Color All</code> applies a single color to the entire result, so it can use a lightweight update. In contrast, the color swatches in the Stack and individual <code>Color</code> values affect color blending, so a Mesh Rebuild is required to preserve correct colors at boundaries.</p>
+<h2>0. Tree (Added in V16.2.1)</h2>
+<p>At the top of the panel. <strong>Always shown even when there is only one tree.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tree</td>
+<td>Dropdown <code>sdf_scene_props.active_output</code></td>
+<td>Selects the SDF tree to edit. The entire panel below (Parts / The Stack / Output &amp; Quality) follows this selection.</td>
+<td>Display / Management</td>
+<td>Selecting a part in the viewport also switches to the tree that contains that part.</td>
+</tr>
+<tr>
+<td>＋</td>
+<td>Button <code>sdf.add_tree</code></td>
+<td>Adds a new SDF tree. Existing trees are not archived.</td>
+<td>Mesh Rebuild</td>
+<td>The first tree keeps the names <code>SDF_Collection</code> / <code>SDF_Result</code>. The second and subsequent trees use sequential numbering.</td>
+</tr>
+<tr>
+<td>Parts:</td>
+<td>Status Display</td>
+<td>The name of the parts collection for the current tree.</td>
+<td>Display / Management</td>
+<td>—</td>
+</tr>
+<tr>
+<td>N trees</td>
+<td>Status Display</td>
+<td>Number of trees in the scene. Shown only when there are two or more.</td>
+<td>Display / Management</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h2>1. Header / Status</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Live Update</td>
+<td>Toggle</td>
+<td>Automatically applies parameter and Transform changes to the result mesh.</td>
+<td>Display / Management</td>
+<td>When ON, many editing operations automatically trigger a Mesh Rebuild. Temporarily turning it OFF can help during heavy work.</td>
+</tr>
+<tr>
+<td>Mesh icon (Show Result Mesh)</td>
+<td>Toggle <code>sdf_show_result</code></td>
+<td>Toggles the result-mesh display/generation workflow.</td>
+<td>Display / Management</td>
+<td>When OFF, it is suited to lightweight editing centered on Ghost Preview.<strong>V16.2.1: When OFF, the mesh is now actually cleared</strong> (previously it was only hidden and the data remained). Turning it back ON regenerates the mesh.</td>
+</tr>
+<tr>
+<td>Wire/BBox icon</td>
+<td>Toggle</td>
+<td>Switches SDF primitive display between Wire and Bounds-style display.</td>
+<td>Display / Management</td>
+<td>Changes only the appearance of the source objects.</td>
+</tr>
+<tr>
+<td>Ghost icon</td>
+<td>Toggle</td>
+<td>Toggles the GPU Ghost Preview display.</td>
+<td>Display / Management</td>
+<td>Used for real-time preview before meshing.<strong>V16.2.1: Fixed an issue where preview disappeared when a single tree contained 17 or more elements</strong> (a V16.2.0 regression; the count is based on elements after layout expansion).</td>
+</tr>
+<tr>
+<td>GPU: Ready / Updating</td>
+<td>Status Display</td>
+<td>Displays the status of the Rust/GPU engine.</td>
+<td>Display / Management</td>
+<td>While Updating is shown, mesh generation is in progress.</td>
+</tr>
+<tr>
+<td>New SDF Workspace</td>
+<td>Button <code>sdf.make_output</code></td>
+<td>Creates a new <code>SDF_Collection</code> and <code>SDF_Result</code>. If existing work is present, it is moved to history.</td>
+<td>Mesh Rebuild</td>
+<td>Starts a workspace. Use this first when beginning a new setup.</td>
+</tr>
+</tbody>
+</table>
+<h2>2. Engine Diagnostics</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Engine Diagnostics</td>
+<td>Expand Toggle</td>
+<td>Displays engine status, log path, latest mesh diagnostics, Backend, and Resolution.</td>
+<td>Display / Management</td>
+<td>The first place to check when investigating issues.</td>
+</tr>
+<tr>
+<td>Perf</td>
+<td>Diagnostic Toggle</td>
+<td>Outputs performance logs.</td>
+<td>Display / Management</td>
+<td><code>SDF_PERF_LOG.ON</code> -based diagnostics.</td>
+</tr>
+<tr>
+<td>Mesh</td>
+<td>Diagnostic Toggle</td>
+<td>Outputs mesh-generation debug logs.</td>
+<td>Display / Management</td>
+<td>Used to inspect Rust Debug logs.</td>
+</tr>
+<tr>
+<td>Layout</td>
+<td>Diagnostic Toggle</td>
+<td>Outputs logs related to Layout expansion and Collection Dividers.</td>
+<td>Display / Management</td>
+<td>Useful for investigating Mirror / Radial / Grid / Layer Boundary behavior.</td>
+</tr>
+</tbody>
+</table>
+<h2>3. Output &amp; Quality</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Low / High</td>
+<td>Button <code>sdf.set_resolution_preset</code></td>
+<td>Switches Resolution to the Low/High preset.</td>
+<td>Mesh Rebuild</td>
+<td>When switching to High, Live Normals can be enabled automatically depending on the setting.</td>
+</tr>
+<tr>
+<td>L-Val / H-Val</td>
+<td>Numeric</td>
+<td>Sets the Resolution values used by the Low/High buttons.</td>
+<td>Display / Management</td>
+<td>Only stores the values; the actual switch is performed with the Low/High buttons.</td>
+</tr>
+<tr>
+<td>Res</td>
+<td>Numeric</td>
+<td>Sets the SDF grid resolution.</td>
+<td>Mesh Rebuild</td>
+<td>A primary parameter controlling both quality and processing load.</td>
+</tr>
+<tr>
+<td>Domain</td>
+<td>Numeric</td>
+<td>Sets the size of the SDF computation domain.</td>
+<td>Mesh Rebuild</td>
+<td>Increase it if the shape is clipped. With Auto Domain ON, it is adjusted automatically.</td>
+</tr>
+<tr>
+<td>Auto Domain</td>
+<td>Toggle</td>
+<td>Automatically expands the computation domain to fit the shapes in the Stack.</td>
+<td>Mesh Rebuild</td>
+<td>Normally recommended ON.</td>
+</tr>
+<tr>
+<td>Preview Quality</td>
+<td>Selection</td>
+<td>Selects Ghost Preview quality from Low / Mid / High.</td>
+<td>Display / Management</td>
+<td>Affects Preview load and appearance, not mesh quality.</td>
+</tr>
+<tr>
+<td>Symmetry X/Y/Z</td>
+<td>Toggle</td>
+<td>Applies symmetry to the SDF calculation on the specified axes.</td>
+<td>Mesh Rebuild</td>
+<td>Calculation symmetry; separate from Mirror Layout.</td>
+</tr>
+<tr>
+<td>Marching Cubes</td>
+<td>Button <code>sdf.switch_algo</code></td>
+<td>Switches the mesh generation method to MC.</td>
+<td>Mesh Rebuild</td>
+<td>Suited to smooth, organic shapes.</td>
+</tr>
+<tr>
+<td>Dual Contouring</td>
+<td>Button <code>sdf.switch_algo</code></td>
+<td>Switches the mesh generation method to DC.</td>
+<td>Mesh Rebuild</td>
+<td>Suited to hard edges. The DC pipeline may be compiled the first time it is used.</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>Selection</td>
+<td>Selects the mesh-generation backend, such as standard or Chunked.</td>
+<td>Mesh Rebuild</td>
+<td>Affects stability with high resolutions and large meshes.</td>
+</tr>
+<tr>
+<td>Chunk / Seam / From</td>
+<td>Numeric</td>
+<td>Adjusts chunk size, seam Weld, and starting resolution for Chunked generation.</td>
+<td>Mesh Rebuild</td>
+<td>Used as a fallback/stabilization option at high resolution.</td>
+</tr>
+<tr>
+<td>Weld (Merge)</td>
+<td>Toggle</td>
+<td>Merges nearby vertices in the generated mesh.</td>
+<td>Mesh Rebuild</td>
+<td>Useful for vertex cleanup and reducing seams. This is not a curvature-aware Weld intended purely for appearance.</td>
+</tr>
+<tr>
+<td>Scale</td>
+<td>Numeric</td>
+<td>Adjusts the Weld distance scale.</td>
+<td>Mesh Rebuild</td>
+<td>Setting it too high may collapse shape details.</td>
+</tr>
+<tr>
+<td>Live Normals (Heavy)</td>
+<td>Toggle</td>
+<td>Calculates high-quality normals during generation for smoother shading.</td>
+<td>Mesh Rebuild</td>
+<td>Computationally heavy, but useful for visual inspection.</td>
+</tr>
+<tr>
+<td>Auto-enable Live Normals on High</td>
+<td>Toggle</td>
+<td>Automatically enables Live Normals when switching to the High preset.</td>
+<td>Display / Management</td>
+<td>Automation intended for final visual checks.</td>
+</tr>
+<tr>
+<td>Protect Partial Mesh</td>
+<td>Toggle</td>
+<td>Prevents unsafe results, such as capacity-overflow or empty results, from being applied.</td>
+<td>Mesh Rebuild</td>
+<td>A protection setting shown in diagnostic mode.</td>
+</tr>
+<tr>
+<td>Auto Safe Retry</td>
+<td>Toggle</td>
+<td>Automatically retries at a lower resolution when a problem occurs.</td>
+<td>Mesh Rebuild</td>
+<td>A conservative safety fallback.</td>
+</tr>
+<tr>
+<td>Chunked CPU/GPU Fallback</td>
+<td>Toggle</td>
+<td>Falls back to Chunked generation when normal generation is too demanding.</td>
+<td>Mesh Rebuild</td>
+<td>Intended for large scenes.</td>
+</tr>
+</tbody>
+</table>
+<h2>4. Post-Process (Smoothing)</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Setup Post Process</td>
+<td>Button <code>sdf.setup_post_process</code></td>
+<td><code>GeoRemesh_R</code> Adds the Geometry Nodes modifier to the result mesh.</td>
+<td>Display / Management</td>
+<td>Used for downstream smoothing and shaping after SDF mesh generation.</td>
+</tr>
+<tr>
+<td>GeoRemesh_R Inputs</td>
+<td>GN Parameters</td>
+<td>Exposes the input values of the added GN node group in the UI.</td>
+<td>Display / Management</td>
+<td>Applied through Blender modifier evaluation; separate from the SDF calculation itself.</td>
+</tr>
+</tbody>
+</table>
+<h2>5. The Stack</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Color Swatch</td>
+<td>Color</td>
+<td>Changes the Color of an individual primitive.</td>
+<td>Mesh Rebuild</td>
+<td>A rebuild is required to preserve color blending.</td>
+</tr>
+<tr>
+<td>Row Click / Object Name</td>
+<td>Button <code>sdf.select_stack_obj</code></td>
+<td>Selects the corresponding SDF object.</td>
+<td>Display / Management</td>
+<td>Synchronizes Stack and Viewport selection.</td>
+</tr>
+<tr>
+<td>Operation Icon</td>
+<td>Selection</td>
+<td>Switches between Union / Subtract / Intersect.</td>
+<td>Mesh Rebuild</td>
+<td>Core to shape evaluation. Inside a Layer, it affects only that group.</td>
+</tr>
+<tr>
+<td>Enabled Checkbox</td>
+<td>Toggle</td>
+<td>Enables or disables a Stack item.</td>
+<td>Mesh Rebuild</td>
+<td>Disabled items are excluded from SDF evaluation.</td>
+</tr>
+<tr>
+<td>Collection Row Name</td>
+<td>Button <code>sdf.select_stack_obj</code></td>
+<td>Selects the Collection Divider Empty.</td>
+<td>Display / Management</td>
+<td>Entry point for displaying Group Settings.</td>
+</tr>
+<tr>
+<td>Duplicate</td>
+<td>Button <code>sdf.duplicate_collection</code></td>
+<td>Duplicates the Collection Divider and its target group.</td>
+<td>Mesh Rebuild</td>
+<td>After duplication, the new Empty is selected.</td>
+</tr>
+<tr>
+<td>Layer Boundary icon</td>
+<td>Toggle</td>
+<td>Evaluates the group above that Divider as a local Layer, then unions the result into the whole scene.</td>
+<td>Mesh Rebuild</td>
+<td>Place a Divider for each part you want to separate.</td>
+</tr>
+<tr>
+<td>Break Parent icon</td>
+<td>Toggle</td>
+<td>Breaks the grouping defined by parent-child relationships.</td>
+<td>Mesh Rebuild</td>
+<td>Adjusts hierarchy and movement units using Collection Dividers.</td>
+</tr>
+<tr>
+<td>Up / Down</td>
+<td>Button <code>sdf.stack_move</code></td>
+<td>Moves a Stack item up or down in evaluation order.</td>
+<td>Mesh Rebuild</td>
+<td>SDF evaluation is order-dependent, so the appearance can change significantly.</td>
+</tr>
+<tr>
+<td>Solo</td>
+<td>Toggle</td>
+<td>Shows the selected Stack item in isolation.</td>
+<td>Mesh Rebuild</td>
+<td>Useful for inspecting complex Stacks.</td>
+</tr>
+<tr>
+<td>X</td>
+<td>Button <code>sdf.stack_remove</code></td>
+<td>Removes the selected Stack item.</td>
+<td>Mesh Rebuild</td>
+<td>For Collections, be careful with how the Empty and its children are handled.</td>
+</tr>
+<tr>
+<td>Add Collection Divider</td>
+<td>Button <code>sdf.add_collection_divider</code></td>
+<td>Adds an Empty/Divider to the Stack to define a group boundary.</td>
+<td>Mesh Rebuild</td>
+<td>After adding it, that Empty is selected.</td>
+</tr>
+</tbody>
+</table>
+<h2>6. Material</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Setup Nodes</td>
+<td>Button <code>sdf.setup_material</code></td>
+<td><code>Color</code> / <code>Metallic</code> / <code>Roughness</code> Creates standard material nodes that read the attributes.</td>
+<td>Display / Management</td>
+<td>Builds shader nodes only.</td>
+</tr>
+<tr>
+<td>Reset</td>
+<td>Button <code>sdf.reset_material</code></td>
+<td>Restores the standard material-node setup.</td>
+<td>Display / Management</td>
+<td>Shared Metallic/Roughness values are also reset to defaults.</td>
+</tr>
+<tr>
+<td>Base Color + Apply Color All</td>
+<td>Color + Button <code>sdf.apply_color_all</code></td>
+<td>Applies the same Color to all primitives.</td>
+<td>Lightweight Update</td>
+<td>Because the entire result uses one color, this is handled by updating the Color attribute on the existing mesh.</td>
+</tr>
+<tr>
+<td>Metallic / Roughness + Apply Material All</td>
+<td>Numeric + Button <code>sdf.apply_material_all</code></td>
+<td>Applies the same Metallic/Roughness values to all primitives.</td>
+<td>Lightweight Update</td>
+<td>Updates existing mesh attributes and avoids re-evaluating the SDF.</td>
+</tr>
+</tbody>
+</table>
+<h2>7. Finalize / Output</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fix Normals</td>
+<td>Button <code>sdf.update_normals</code></td>
+<td>Recalculates and applies high-quality normals.</td>
+<td>Mesh Rebuild</td>
+<td>Intended for final appearance checks.</td>
+</tr>
+<tr>
+<td>Force Update</td>
+<td>Button <code>sdf.generate_mesh</code></td>
+<td>Manually regenerates the SDF result mesh.</td>
+<td>Mesh Rebuild</td>
+<td>Used to apply or verify changes after turning Live Update OFF.</td>
+</tr>
+<tr>
+<td>Snapshot Mesh</td>
+<td>Button <code>sdf.bake_mesh</code></td>
+<td>Creates a static mesh copy from the current SDF result while keeping the Live SDF workspace intact.</td>
+<td>Display / Management</td>
+<td>Only the created Snapshot remains selected.</td>
+</tr>
+<tr>
+<td>Finalize (Bake)</td>
+<td>Button <code>sdf.finalize</code></td>
+<td>Finalizes the SDF result as a regular mesh and moves the used primitives to history.</td>
+<td>Mesh Rebuild / Finalize</td>
+<td>Ends Live editing. To go back, use history or a previous version.<strong>V16.2.1: Only the single active tree is affected.</strong>As long as other trees remain, Live Update stays enabled and editing can continue. Live Update is turned off, as before, only when the final remaining tree is finalized.</td>
+</tr>
+</tbody>
+</table>
+<h2>8. Group Settings: Collection Divider</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td>Text</td>
+<td>Changes the display name of the Collection Divider in the Stack.</td>
+<td>Mesh Rebuild</td>
+<td>The name itself does not affect geometry, but currently uses the normal update path.</td>
+</tr>
+<tr>
+<td>Layer Boundary</td>
+<td>Toggle</td>
+<td>Evaluates the group above the Divider as a local Layer.</td>
+<td>Mesh Rebuild</td>
+<td><code>Base ∪ (result evaluated inside the Layer)</code> conceptually. Layer Blend controls the strength of the merge.</td>
+</tr>
+<tr>
+<td>Layer Blend</td>
+<td>Numeric</td>
+<td>Blend radius used when merging the Layer into the scene. Default: 0.0 (hard boundary).</td>
+<td>Mesh Rebuild</td>
+<td>Shown only when Layer Boundary is ON. Added in V16.2.0.</td>
+</tr>
+<tr>
+<td>Profile (Layer)</td>
+<td>Selection</td>
+<td>Blend profile used when merging: Round / Sharp / Soft / Tight / Chamfer.</td>
+<td>Mesh Rebuild</td>
+<td>Shown only when Layer Boundary is ON. Added in V16.2.0.</td>
+</tr>
+<tr>
+<td>Break Parent (Start New Group)</td>
+<td>Toggle</td>
+<td>Breaks parent/child and group continuity.</td>
+<td>Mesh Rebuild</td>
+<td>Used to organize movement and duplication by group.</td>
+</tr>
+<tr>
+<td>Group Layout: Mirror / Radial / Spiral / Grid / Jitter</td>
+<td>Toggle Group</td>
+<td>Applies layout expansion to the entire Group.</td>
+<td>Mesh Rebuild</td>
+<td>Uses the same concept as Layout on an individual primitive.</td>
+</tr>
+<tr>
+<td>Mirror X/Y/Z / Offset</td>
+<td>Toggle / Numeric</td>
+<td>Mirrors the Group along the specified axes.</td>
+<td>Mesh Rebuild</td>
+<td>Useful for left-right symmetric arrangements.</td>
+</tr>
+<tr>
+<td>Radial Count / Radius / Axis</td>
+<td>Numeric / Selection</td>
+<td>Duplicates the Group around a circle.</td>
+<td>Mesh Rebuild</td>
+<td>Radial arrangement.</td>
+</tr>
+<tr>
+<td>Spiral Count / Radius / Pitch / Axis</td>
+<td>Numeric / Selection</td>
+<td>Duplicates the Group in a spiral.</td>
+<td>Mesh Rebuild</td>
+<td>A height-axis extension of Radial.</td>
+</tr>
+<tr>
+<td>Grid Count X/Y/Z / Spacing X/Y/Z</td>
+<td>Numeric</td>
+<td>Duplicates the Group in a grid.</td>
+<td>Mesh Rebuild</td>
+<td>Suited to regular repeating structures.</td>
+</tr>
+<tr>
+<td>Rotation (Indiv &amp; Accum)</td>
+<td>Angle</td>
+<td>Sets individual and accumulated rotation for each instance.</td>
+<td>Mesh Rebuild</td>
+<td>Especially useful with Radial/Spiral.</td>
+</tr>
+<tr>
+<td>Jitter Seed / Strength</td>
+<td>Numeric</td>
+<td>Adds random variation to the layout.</td>
+<td>Mesh Rebuild</td>
+<td>Adds a handmade or more natural feel.</td>
+</tr>
+</tbody>
+</table>
+<h2>8-B. Tree Reference (Added in V16.2.1)</h2>
+<p><code>SDF_TreeRef_NNN</code> appears when an Empty with this name is selected. When the scene has multiple trees, an add button is shown.</p>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Add Tree Reference</td>
+<td>Button <code>sdf.add_tree_ref</code></td>
+<td>Adds a reference Empty to the Stack for incorporating another tree.</td>
+<td>Mesh Rebuild</td>
+<td>When created, it is placed above the referenced target. If not moved, their positions match.</td>
+</tr>
+<tr>
+<td>Tree</td>
+<td>Reference <code>tree_ref_obj</code></td>
+<td>Selects the tree (output object) to incorporate.</td>
+<td>Mesh Rebuild</td>
+<td>Self-references and mutual references are ignored to prevent infinite loops.</td>
+</tr>
+<tr>
+<td>Mode</td>
+<td>Enum <code>tree_ref_mode</code></td>
+<td><code>Blend</code> (combine) / <code>Subtract</code> (subtract).</td>
+<td>Mesh Rebuild</td>
+<td><strong>Blend is exact. Subtract is exact when the referenced tree uses only Union</strong>; if it uses Subtract/Intersect internally, the result is approximate.</td>
+</tr>
+<tr>
+<td>Smoothness</td>
+<td>Numeric</td>
+<td>Blend radius used when incorporating the referenced tree.</td>
+<td>Mesh Rebuild</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Profile / Chamfer</td>
+<td>Enum / Numeric</td>
+<td>Blend profile used in Blend mode.</td>
+<td>Mesh Rebuild</td>
+<td>Shown only when Mode is <code>Blend</code>.</td>
+</tr>
+<tr>
+<td>(Warning)</td>
+<td>Information</td>
+<td>Shown when the referenced tree uses Subtract/Intersect internally.</td>
+<td>Display / Management</td>
+<td>Shown only when Mode is <code>Subtract</code>.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Nested references are supported only one level deep.</strong> If the referenced tree itself references another tree, that additional reference is not followed.
+Editing the referenced tree also automatically updates the incorporating tree (included in the state hash).</p>
+</blockquote>
+<h2>9. Primitive Settings</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shape</td>
+<td>Selection</td>
+<td>Changes the shape type of the selected primitive.</td>
+<td>Mesh Rebuild</td>
+<td>Sphere / Box / Math Field, etc.</td>
+</tr>
+<tr>
+<td>Union / Subtract / Intersect</td>
+<td>Button / Selection</td>
+<td>Sets the Boolean operation for the selected primitive.</td>
+<td>Mesh Rebuild</td>
+<td>Same as the Operation icon in the Stack.</td>
+</tr>
+<tr>
+<td>Blend Profile</td>
+<td>Selection</td>
+<td>Selects the blend profile from Round / Sharp / Soft / Tight / Chamfer.</td>
+<td>Mesh Rebuild</td>
+<td>Used with Smoothness to control how connected the transition feels.</td>
+</tr>
+<tr>
+<td>Chamfer Factor</td>
+<td>Numeric</td>
+<td>Factor used when Blend Profile is Chamfer.</td>
+<td>Mesh Rebuild</td>
+<td>Produces a planar-style connection.</td>
+</tr>
+<tr>
+<td>Smoothness</td>
+<td>Numeric</td>
+<td>Adjusts blend width and connection smoothness.</td>
+<td>Mesh Rebuild</td>
+<td>Strongly affects the overall visual cohesion of the model.</td>
+</tr>
+<tr>
+<td>Noise / Scale</td>
+<td>Numeric</td>
+<td>Adds noise deformation to the SDF surface.</td>
+<td>Mesh Rebuild</td>
+<td>Used for surface character and roughness effects.</td>
+</tr>
+<tr>
+<td>Color</td>
+<td>Color</td>
+<td>Changes the color of an individual primitive.</td>
+<td>Mesh Rebuild</td>
+<td>A rebuild is required to correctly re-evaluate color blending.</td>
+</tr>
+<tr>
+<td>Color Mode</td>
+<td>Selection</td>
+<td>Selects how colors are assigned when adding new primitives.</td>
+<td>Display / Management</td>
+<td>Fixed Palette / Auto Hue / Single Color.</td>
+</tr>
+<tr>
+<td>Auto Hue: Saturation / Value / Hue Step / Hue Offset</td>
+<td>Numeric</td>
+<td>Adjusts automatic color assignment in Auto Hue mode.</td>
+<td>Display / Management</td>
+<td>Affects the next primitives that are added.</td>
+</tr>
+<tr>
+<td>Single Color: Base Color</td>
+<td>Color</td>
+<td>Color used for new primitives in Single Color mode.</td>
+<td>Display / Management</td>
+<td>Does not automatically change the colors of existing primitives.</td>
+</tr>
+<tr>
+<td>Metallic / Roughness</td>
+<td>Numeric</td>
+<td>Sets material attributes for the individual primitive.</td>
+<td>Mesh Rebuild</td>
+<td>Individual values use the normal update path because they are written into the SDF result attributes.</td>
+</tr>
+<tr>
+<td>Shape Parameters</td>
+<td>Numeric</td>
+<td>Adjusts shape-specific values such as radius, height, angle, and side count.</td>
+<td>Mesh Rebuild</td>
+<td>See the Primitive list below for details.</td>
+</tr>
+<tr>
+<td>Edge</td>
+<td>Selection</td>
+<td>Selects primitive edge treatment from Round / Sharp / Soft / Tight / Chamfer.</td>
+<td>Mesh Rebuild</td>
+<td>Hidden for Math Field.</td>
+</tr>
+<tr>
+<td>Edge Size</td>
+<td>Numeric</td>
+<td>Adjusts the size of the edge treatment.</td>
+<td>Mesh Rebuild</td>
+<td>Affects the beveled feel of R-Box and Cylinder-type shapes.</td>
+</tr>
+<tr>
+<td>Edge Chamfer Smoothness</td>
+<td>Numeric</td>
+<td>Smoothness used when Edge is Chamfer.</td>
+<td>Mesh Rebuild</td>
+<td>Adjusts the balance between sharpness and roundness.</td>
+</tr>
+<tr>
+<td>Shell (Hollow)</td>
+<td>Numeric</td>
+<td>Makes the shape hollow.</td>
+<td>Mesh Rebuild</td>
+<td><code>abs(d) - shell_thickness</code> -style SDF operation.</td>
+</tr>
+</tbody>
+</table>
+<h2>10. Math Field-Specific Commands</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Formula</td>
+<td>Selection</td>
+<td>Selects Gyroid / Schwarz P / Schwarz D.</td>
+<td>Mesh Rebuild</td>
+<td>TPMS-type mathematical field formulas.</td>
+</tr>
+<tr>
+<td>Preset</td>
+<td>Selection</td>
+<td>Applies initial presets such as Fine / Medium / Coarse / Thick / Shell.</td>
+<td>Mesh Rebuild</td>
+<td>Sets Scale / Thickness / Extent and related values together.</td>
+</tr>
+<tr>
+<td>Mask</td>
+<td>Selection</td>
+<td>Selects a boundary shape such as Box / Sphere / Cylinder.</td>
+<td>Mesh Rebuild</td>
+<td>Clips the Math Field to a finite region.</td>
+</tr>
+<tr>
+<td>Boundary</td>
+<td>Selection</td>
+<td>Selects boundary behavior such as Fade / Open / Box Clip.</td>
+<td>Mesh Rebuild</td>
+<td>Affects the appearance of the boundary edges.</td>
+</tr>
+<tr>
+<td>Use Previous as Mask</td>
+<td>Button <code>sdf.use_previous_as_mask</code></td>
+<td>Uses the previous primitive as an outer-shape mask and sets the Math Field to Intersect.</td>
+<td>Mesh Rebuild</td>
+<td>The legacy label comes from Gyroid, but in V16.0.7 this is intended for Math Field.</td>
+</tr>
+<tr>
+<td>Phase</td>
+<td>Numeric</td>
+<td>Phase-shifts the field period.</td>
+<td>Mesh Rebuild</td>
+<td>Adjusts the positions of holes and ridges.</td>
+</tr>
+<tr>
+<td>Axis X/Y/Z</td>
+<td>Numeric</td>
+<td>Adjusts field density along each axis.</td>
+<td>Mesh Rebuild</td>
+<td>Important for appearance adjustment under non-uniform scaling.</td>
+</tr>
+<tr>
+<td>Auto Match Scale</td>
+<td>Button <code>sdf.match_math_field_axis_to_scale</code></td>
+<td>Copies the absolute Object Scale values to Axis X/Y/Z.</td>
+<td>Mesh Rebuild</td>
+<td>Use this to keep world-space density consistent after scaling. Values are clamped from 0.05 to 8.0.</td>
+</tr>
+<tr>
+<td>Scale / Thickness / Bias / Extent</td>
+<td>Numeric</td>
+<td>Sets Math Field cell density, thickness, offset, and extent.</td>
+<td>Mesh Rebuild</td>
+<td>Basic parameters shared by all formulas.</td>
+</tr>
+</tbody>
+</table>
+<h2>11. Layout (Instancing)</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mirror</td>
+<td>Toggle</td>
+<td>Mirrors the selected primitive.</td>
+<td>Mesh Rebuild</td>
+<td>Uses X/Y/Z axis selection and Offset.</td>
+</tr>
+<tr>
+<td>Mirror Blend</td>
+<td>Numeric <code>mirror_blend</code> (V16.2.1)</td>
+<td>Rounds the seam between mirrored copies.<strong>Default: 0.0</strong>.</td>
+<td>Mesh Rebuild</td>
+<td><strong>When set to 0, it uses exactly the same path as before</strong>. At &gt;0, both sides are evaluated separately, so evaluation cost is about 1.7× for one axis and doubles with each additional axis. The primitive <code>Smoothness</code> does not affect this seam, so use this setting when you want it rounded. <strong>Radial / Grid are not supported</strong>. Preview is approximate.</td>
+</tr>
+<tr>
+<td>Radial</td>
+<td>Toggle</td>
+<td>Duplicates around a circle.</td>
+<td>Mesh Rebuild</td>
+<td>Sets Count / Radius / Axis.</td>
+</tr>
+<tr>
+<td>Spiral</td>
+<td>Toggle</td>
+<td>Duplicates in a spiral.</td>
+<td>Mesh Rebuild</td>
+<td>Pitch controls the vertical direction.</td>
+</tr>
+<tr>
+<td>Grid</td>
+<td>Toggle</td>
+<td>Duplicates in a grid.</td>
+<td>Mesh Rebuild</td>
+<td>Sets Count X/Y/Z and Spacing X/Y/Z.</td>
+</tr>
+<tr>
+<td>Jitter</td>
+<td>Toggle</td>
+<td>Adds random variation to the layout.</td>
+<td>Mesh Rebuild</td>
+<td>Sets Seed / Strength.</td>
+</tr>
+<tr>
+<td>Rotation (Indiv &amp; Accum)</td>
+<td>Angle</td>
+<td>Sets individual and accumulated rotation.</td>
+<td>Mesh Rebuild</td>
+<td>Used to orient Radial / Spiral / Grid layouts.</td>
+</tr>
+</tbody>
+</table>
+<h2>12. Deform (Stack)</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>+</td>
+<td>Button <code>sdf.deform_add</code></td>
+<td>Adds a deformation to the Deform Stack.</td>
+<td>Mesh Rebuild</td>
+<td>Up to two deformations.</td>
+</tr>
+<tr>
+<td>-</td>
+<td>Button <code>sdf.deform_remove</code></td>
+<td>Removes the selected deformation.</td>
+<td>Mesh Rebuild</td>
+<td>Deformation order also affects the result.</td>
+</tr>
+<tr>
+<td>Up / Down</td>
+<td>Button <code>sdf.deform_move</code></td>
+<td>Changes the order of deformations.</td>
+<td>Mesh Rebuild</td>
+<td>Example: Bend then Twist differs from Twist then Bend.</td>
+</tr>
+<tr>
+<td>Enabled</td>
+<td>Toggle</td>
+<td>Enables or disables the selected deformation.</td>
+<td>Mesh Rebuild</td>
+<td>Useful for quick A/B comparisons.</td>
+</tr>
+<tr>
+<td>Type</td>
+<td>Selection</td>
+<td>Selects Elongate / Bend / Twist / Taper.</td>
+<td>Mesh Rebuild</td>
+<td>SDF-space deformation.</td>
+</tr>
+<tr>
+<td>Axis</td>
+<td>Selection</td>
+<td>Selects the deformation axis.</td>
+<td>Mesh Rebuild</td>
+<td>X/Y/Z.</td>
+</tr>
+<tr>
+<td>Angle / Factor</td>
+<td>Numeric</td>
+<td>Adjusts Bend/Twist angle, Taper factor, and related values.</td>
+<td>Mesh Rebuild</td>
+<td>Meaning changes depending on Type.</td>
+</tr>
+<tr>
+<td>Origin Offset</td>
+<td>Numeric</td>
+<td>Offsets the deformation center.</td>
+<td>Mesh Rebuild</td>
+<td>The displayed component changes according to the selected axis.</td>
+</tr>
+<tr>
+<td>Elongate X/Y/Z</td>
+<td>Numeric</td>
+<td>Elongates space along each axis.</td>
+<td>Mesh Rebuild</td>
+<td>Elongate only.</td>
+</tr>
+</tbody>
+</table>
+<h2>13. Add New Primitives</h2>
+<table>
+<thead>
+<tr>
+<th>Button</th>
+<th>shape_type</th>
+<th>Main Parameters</th>
+<th>Update</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sphere</td>
+<td><code>sphere</code></td>
+<td>Radius</td>
+<td>Mesh Rebuild</td>
+<td>Basic sphere.</td>
+</tr>
+<tr>
+<td>Box</td>
+<td><code>box</code></td>
+<td>Object Scale</td>
+<td>Mesh Rebuild</td>
+<td>Basic box.</td>
+</tr>
+<tr>
+<td>R-Box</td>
+<td><code>rounded_box</code></td>
+<td>Roundness</td>
+<td>Mesh Rebuild</td>
+<td>Rounded box.</td>
+</tr>
+<tr>
+<td>Torus</td>
+<td><code>torus</code></td>
+<td>Main Radius / Pipe Radius</td>
+<td>Mesh Rebuild</td>
+<td>Torus shape.</td>
+</tr>
+<tr>
+<td>Cylinder</td>
+<td><code>cylinder</code></td>
+<td>Radius / Height (Half)</td>
+<td>Mesh Rebuild</td>
+<td>Cylinder.</td>
+</tr>
+<tr>
+<td>Capsule</td>
+<td><code>capsule</code></td>
+<td>Radius / Height (Half)</td>
+<td>Mesh Rebuild</td>
+<td>Capsule shape.</td>
+</tr>
+<tr>
+<td>Hex</td>
+<td><code>hex_prism</code></td>
+<td>Radius / Height (Half)</td>
+<td>Mesh Rebuild</td>
+<td>Hexagonal prism.</td>
+</tr>
+<tr>
+<td>Pyramid</td>
+<td><code>pyramid</code></td>
+<td>Base Size / Height</td>
+<td>Mesh Rebuild</td>
+<td>Square pyramid.</td>
+</tr>
+<tr>
+<td>Taper</td>
+<td><code>capped_cone</code></td>
+<td>Bottom Radius / Top Radius / Height</td>
+<td>Mesh Rebuild</td>
+<td>Tapered cylinder.</td>
+</tr>
+<tr>
+<td>N-gon</td>
+<td><code>ngon_prism</code></td>
+<td>Radius / Sides / Height</td>
+<td>Mesh Rebuild</td>
+<td>Polygonal prism.</td>
+</tr>
+<tr>
+<td>Ellipsoid</td>
+<td><code>ellipsoid</code></td>
+<td>Radius X/Y/Z</td>
+<td>Mesh Rebuild</td>
+<td>Ellipsoid.</td>
+</tr>
+<tr>
+<td>R-Cylinder</td>
+<td><code>rounded_cylinder</code></td>
+<td>Radius / Edge Radius / Height</td>
+<td>Mesh Rebuild</td>
+<td>Rounded cylinder.</td>
+</tr>
+<tr>
+<td>C-Torus</td>
+<td><code>capped_torus</code></td>
+<td>Main Radius / Pipe Radius / Angle</td>
+<td>Mesh Rebuild</td>
+<td>Capped/partial torus.</td>
+</tr>
+<tr>
+<td>Octahedron</td>
+<td><code>octahedron</code></td>
+<td>Size</td>
+<td>Mesh Rebuild</td>
+<td>Octahedron.</td>
+</tr>
+<tr>
+<td>Cut Sphere</td>
+<td><code>cut_sphere</code></td>
+<td>Cut Height</td>
+<td>Mesh Rebuild</td>
+<td>Cut sphere.</td>
+</tr>
+<tr>
+<td>Math Field</td>
+<td><code>math_field</code></td>
+<td>Scale / Thickness / Bias / Extent</td>
+<td>Mesh Rebuild</td>
+<td>Mathematical fields such as Gyroid / Schwarz P / Schwarz D.</td>
+</tr>
+</tbody>
+</table>
+<h2>14. Object Utilities / Cleanup</h2>
+<table>
+<thead>
+<tr>
+<th>Display Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Update</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wire/Solid</td>
+<td>Button <code>sdf.toggle_display</code></td>
+<td>Switches the selected object display between Wire and Textured-style modes.</td>
+<td>Display / Management</td>
+<td>Changes appearance only.</td>
+</tr>
+<tr>
+<td>Move to SDF</td>
+<td>Button <code>sdf.move_to_sdf_collection</code></td>
+<td>Moves the selected object to SDF_Collection and treats it as an SDF Primitive.</td>
+<td>Display / Management</td>
+<td>Used to bring in existing Blender objects. Shape inference is name-based.</td>
+</tr>
+<tr>
+<td>Include Baked Results</td>
+<td>Toggle</td>
+<td>Includes finalized/baked results in the All Clear deletion targets.</td>
+<td>Display / Management</td>
+<td>ON performs a more aggressive cleanup. Turn it OFF if you want to keep history.</td>
+</tr>
+<tr>
+<td>All Clear</td>
+<td>Button <code>sdf.all_clear</code></td>
+<td>Deletes SDF-related objects and collections.</td>
+<td>Delete</td>
+<td>Cleans up the workspace. Check the state of Include Baked Results.<strong>V16.2.1: Hidden result objects are no longer left undeleted</strong>(<code>Show Result Mesh</code> was OFF). It also no longer catches custom objects merely because their names contain <code>SDF_Result_</code> / <code>SDF_Backup</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2>15. Operator ID List</h2>
+<table>
+<thead>
+<tr>
+<th>Operator ID</th>
+<th>Label</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sdf.add_primitive</code></td>
+<td>Add SDF Primitive</td>
+<td>Adds a primitive.<strong>V16.2.1: Undo now works correctly</strong> (previously, undoing immediately after adding could restore an incomplete state).</td>
+</tr>
+<tr>
+<td><code>sdf.add_tree</code></td>
+<td>Add SDF Tree</td>
+<td>Adds a new SDF tree (V16.2.1).</td>
+</tr>
+<tr>
+<td><code>sdf.set_active_tree</code></td>
+<td>Set Active SDF Tree</td>
+<td>Switches the tree being edited (V16.2.1).</td>
+</tr>
+<tr>
+<td><code>sdf.add_tree_ref</code></td>
+<td>Add Tree Reference</td>
+<td>Adds a reference Empty for incorporating another tree (V16.2.1).</td>
+</tr>
+<tr>
+<td><code>sdf.toggle_display</code></td>
+<td>Toggle Wire/Solid</td>
+<td>Switches display mode.</td>
+</tr>
+<tr>
+<td><code>sdf.move_to_sdf_collection</code></td>
+<td>Move to SDF Collection</td>
+<td>Moves the selected object to SDF_Collection.</td>
+</tr>
+<tr>
+<td><code>sdf.duplicate_collection</code></td>
+<td>Duplicate Collection</td>
+<td>Duplicates a Collection Divider group.</td>
+</tr>
+<tr>
+<td><code>sdf.bake_mesh</code></td>
+<td>Snapshot Mesh</td>
+<td>Creates a static mesh copy.</td>
+</tr>
+<tr>
+<td><code>sdf.setup_material</code></td>
+<td>Setup Color Material</td>
+<td>Creates the standard material nodes.</td>
+</tr>
+<tr>
+<td><code>sdf.reset_material</code></td>
+<td>Reset Shader Nodes</td>
+<td>Restores the standard node setup.</td>
+</tr>
+<tr>
+<td><code>sdf.apply_color_all</code></td>
+<td>Apply Color To All</td>
+<td>Applies one color to the entire result.</td>
+</tr>
+<tr>
+<td><code>sdf.apply_material_all</code></td>
+<td>Apply Material To All</td>
+<td>Applies Metallic/Roughness values globally.</td>
+</tr>
+<tr>
+<td><code>sdf.update_normals</code></td>
+<td>Update Normals</td>
+<td>Updates normals.</td>
+</tr>
+<tr>
+<td><code>sdf.generate_mesh</code></td>
+<td>Generate SDF Mesh</td>
+<td>Forces an update of the result mesh.</td>
+</tr>
+<tr>
+<td><code>sdf.add_selected</code></td>
+<td>Add Selected to SDF</td>
+<td>Adds the selected object to the SDF Stack.</td>
+</tr>
+<tr>
+<td><code>sdf.make_output</code></td>
+<td>New SDF Workspace</td>
+<td>Creates a new SDF workspace.</td>
+</tr>
+<tr>
+<td><code>sdf.stack_move</code></td>
+<td>Move Stack Item</td>
+<td>Moves a Stack item.</td>
+</tr>
+<tr>
+<td><code>sdf.stack_remove</code></td>
+<td>Remove Stack Item</td>
+<td>Removes a Stack item.</td>
+</tr>
+<tr>
+<td><code>sdf.select_stack_obj</code></td>
+<td>Select SDF Object</td>
+<td>Selects the object corresponding to a Stack item.</td>
+</tr>
+<tr>
+<td><code>sdf.use_previous_as_mask</code></td>
+<td>Use Previous as Mask</td>
+<td>Configures the Math Field to Intersect with the previous primitive.</td>
+</tr>
+<tr>
+<td><code>sdf.match_math_field_axis_to_scale</code></td>
+<td>Auto Match Scale</td>
+<td>Matches Math Field Axis values to Object Scale.</td>
+</tr>
+<tr>
+<td><code>sdf.setup_post_process</code></td>
+<td>Setup Post Process (GN)</td>
+<td>Adds GeoRemesh_R.</td>
+</tr>
+<tr>
+<td><code>sdf.finalize</code></td>
+<td>Finalize (Bake All)</td>
+<td>Finalizes the SDF result as a mesh.</td>
+</tr>
+<tr>
+<td><code>sdf.set_resolution_preset</code></td>
+<td>Set Resolution Preset</td>
+<td>Switches to the Low/High preset.</td>
+</tr>
+<tr>
+<td><code>sdf.all_clear</code></td>
+<td>All Clear</td>
+<td>Deletes SDF-related data.</td>
+</tr>
+<tr>
+<td><code>sdf.deform_add</code></td>
+<td>Add Deform</td>
+<td>Adds to the Deform Stack.</td>
+</tr>
+<tr>
+<td><code>sdf.deform_remove</code></td>
+<td>Remove Deform</td>
+<td>Removes from the Deform Stack.</td>
+</tr>
+<tr>
+<td><code>sdf.deform_move</code></td>
+<td>Move Deform</td>
+<td>Moves a deformation in the order.</td>
+</tr>
+<tr>
+<td><code>sdf.switch_algo</code></td>
+<td>Switch Algorithm</td>
+<td>Switches between MC/DC.</td>
+</tr>
+<tr>
+<td><code>sdf.add_collection_divider</code></td>
+<td>Add Collection Divider</td>
+<td>Adds a Collection Divider.</td>
+</tr>
+</tbody>
+</table>
+<p>Source basis: <code>rust_gpu_sdf_addon/ui.py</code>, <code>operators.py</code>, <code>properties.py</code>, <code>constants.py</code> in Rust-GPU-SDF-V16.2.1.</p>
+</body>
+</html>
