@@ -16,8 +16,8 @@ Linux requires glibc 2.35 or newer (built on ubuntu-22.04).
 
 - **macOS / Linux**: GitHub Actions の run 34545919928（commit cd0d5c6、ubuntu-22.04 /
   macos-14）の成果物をそのまま使っている。2026-09-11 の記録から**サイズ・SHA-256 とも不変**。
-  cd0d5c6 以降、`Rust-GPU-SDF-V16.2.2_MAC/` と `Rust-GPU-SDF-V16.2.2_LINUX/` は変更されて
-  いないので、この成果物は HEAD の内容と一致する。
+  cd0d5c6 以降、その元になったツリー（現 `Rust-GPU-SDF-V16.2.2_CI/`、当時の
+  `_MAC` / `_LINUX`）の中身は変更されていないので、この成果物は HEAD の内容と一致する。
 - **Windows**: 2026-09-12 に本PCで `build_sdf_addon.ps1` により再ビルドした（cargo 1.92.0）。
   Rust ソースは無変更で、ツールチェーンが前回記録時（cargo 1.98.1）と異なるため、
   .pyd がバイト一致せず SHA-256 とサイズが変わっている。

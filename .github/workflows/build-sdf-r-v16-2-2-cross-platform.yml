@@ -1,19 +1,26 @@
 name: Build SDF.R V16.2.2 Cross Platform
 
+# 3OS とも同じ Rust-GPU-SDF-V16.2.2_CI ツリーからビルドする。
+# V16.2.1 までは _MAC と _LINUX に分かれていたが中身は完全に同一だったので、
+# V16.2.2 で一本化した。ビルドスクリプトだけが OS ごとに分かれる
+# （build_sdf_addon.sh が uname で Darwin/Linux を見分け、Windows は .ps1）。
+
 on:
   workflow_dispatch:
   push:
     paths:
       - ".github/workflows/build-sdf-r-v16-2-2-cross-platform.yml"
-      - "Rust-GPU-SDF-V16.2.2_MAC/**"
-      - "Rust-GPU-SDF-V16.2.2_LINUX/**"
+      - "Rust-GPU-SDF-V16.2.2_CI/**"
+
+env:
+  TREE: Rust-GPU-SDF-V16.2.2_CI
 
 jobs:
   build-macos:
     runs-on: macos-14
     defaults:
       run:
-        working-directory: Rust-GPU-SDF-V16.2.2_MAC
+        working-directory: Rust-GPU-SDF-V16.2.2_CI
         shell: bash
     steps:
       - uses: actions/checkout@v4
@@ -33,18 +40,18 @@ jobs:
         if: always()
         with:
           name: SDF_R_16_2_2_MAC_logs
-          path: Rust-GPU-SDF-V16.2.2_MAC/build-macos.log
+          path: Rust-GPU-SDF-V16.2.2_CI/build-macos.log
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: SDF_R_16_2_2_MAC
-          path: Rust-GPU-SDF-V16.2.2_MAC/SDF_R_16_2_2_Darwin.zip
+          path: Rust-GPU-SDF-V16.2.2_CI/SDF_R_16_2_2_Darwin.zip
 
   build-linux:
     runs-on: ubuntu-22.04
     defaults:
       run:
-        working-directory: Rust-GPU-SDF-V16.2.2_LINUX
+        working-directory: Rust-GPU-SDF-V16.2.2_CI
         shell: bash
     steps:
       - uses: actions/checkout@v4
@@ -68,9 +75,36 @@ jobs:
         if: always()
         with:
           name: SDF_R_16_2_2_LINUX_logs
-          path: Rust-GPU-SDF-V16.2.2_LINUX/build-linux.log
+          path: Rust-GPU-SDF-V16.2.2_CI/build-linux.log
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: SDF_R_16_2_2_LINUX
-          path: Rust-GPU-SDF-V16.2.2_LINUX/SDF_R_16_2_2_Linux.zip
+          path: Rust-GPU-SDF-V16.2.2_CI/SDF_R_16_2_2_Linux.zip
+
+  build-windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: Rust-GPU-SDF-V16.2.2_CI
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Windows addon zip
+        run: |
+          ./build_sdf_addon.ps1 2>&1 | Tee-Object -FilePath build-windows.log
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SDF_R_16_2_2_WIN_logs
+          path: Rust-GPU-SDF-V16.2.2_CI/build-windows.log
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: SDF_R_16_2_2_WIN
+          path: Rust-GPU-SDF-V16.2.2_CI/SDF_R_16_2_2.zip
