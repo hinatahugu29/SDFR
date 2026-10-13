@@ -49,7 +49,20 @@ _SHELL_CAPABLE_SHAPES = {
     'rounded_cylinder', 'capped_torus', 'octahedron', 'cut_sphere',
 }
 
+# smoothness(他プリミティブとブーリアンでブレンドするときの滑らかさ)は engine.py で
+# シェイプ別の再割り当てが一切無く(どのshape_typeでも同じ意味で使われる)、全シェイプで安全。
+# ただし効果が「このプリミティブが他と重なって混ざる場所」にしか出ないため、単独1個だけでは
+# 値を変えても見た目が変化しない(edge_profile_sizeでSphereを対象にした時と同種の落とし穴)。
+# 対象シェイプそのものは制限不要だが、検証は2プリミティブ以上が重なった状態で行うこと。
+_ALL_PRIMITIVE_SHAPES = {
+    'sphere', 'box', 'rounded_box', 'torus', 'cylinder', 'capsule',
+    'hex_prism', 'pyramid', 'capped_cone', 'ngon_prism', 'ellipsoid',
+    'rounded_cylinder', 'capped_torus', 'octahedron', 'cut_sphere',
+    'math_field', 'extrude', 'lathe', 'bezier_curve',
+}
+
 _DOWN_ROTATION = Matrix.Rotation(math.pi, 4, 'X')
+_SIDE_ROTATION = Matrix.Rotation(math.pi / 2.0, 4, 'Y')
 
 
 def _active_primitive_for(context, allowed_shapes):
@@ -133,9 +146,49 @@ class SDF_GGT_shell_thickness(bpy.types.GizmoGroup):
         gz.target_set_prop("offset", obj.sdf_props, "shell_thickness")
 
 
+class SDF_GGT_smoothness(bpy.types.GizmoGroup):
+    """アクティブなSDFプリミティブの smoothness をビューポートでドラッグする。
+
+    効果は他プリミティブとのブーリアンブレンド箇所にしか出ないため、単独表示では
+    見た目の変化が無いことがある(値自体は正しく書き換わる)。
+    """
+    bl_idname = "SDF_GGT_smoothness"
+    bl_label = "SDF Smoothness Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _ALL_PRIMITIVE_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        # edge_profile_size(+Z, オレンジ) / shell_thickness(-Z, シアン)と見分けがつくよう、
+        # 3本目は+X・マゼンタにする。
+        gz.color = 0.8, 0.2, 0.7
+        gz.color_highlight = 1.0, 0.3, 0.9
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.smoothness_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _ALL_PRIMITIVE_SHAPES)
+        if obj is None:
+            return
+        gz = self.smoothness_gizmo
+        # ローカル+Xへ向ける。原点はオブジェクト原点のまま。
+        gz.matrix_basis = obj.matrix_world.normalized() @ _SIDE_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "smoothness")
+
+
 classes = (
     SDF_GGT_edge_profile_size,
     SDF_GGT_shell_thickness,
+    SDF_GGT_smoothness,
 )
 
 
