@@ -81,6 +81,7 @@ if "bpy" in locals():
     importlib.reload(handlers)
     importlib.reload(engine)
     importlib.reload(shader)
+    importlib.reload(gizmos)
 else:
     import bpy
     import os
@@ -91,6 +92,7 @@ else:
     from . import handlers
     from . import engine
     from . import shader
+    from . import gizmos
 
 from .engine import _update_preview
 from bpy.app.handlers import persistent
@@ -341,7 +343,8 @@ def register():
     # 2. Register Blender classes
     for cls in classes:
         bpy.utils.register_class(cls)
-    
+    gizmos.register()
+
     bpy.types.Object.sdf_props = bpy.props.PointerProperty(type=properties.SDF_ObjectProperties)
     bpy.types.Scene.sdf_scene_props = bpy.props.PointerProperty(type=properties.SDF_SceneProperties)
     bpy.types.Scene.sdf_live_update = bpy.props.BoolProperty(name="Live Update", default=True)
@@ -401,9 +404,10 @@ def unregister():
     if handlers.sdf_undo_handler in bpy.app.handlers.redo_post:
         bpy.app.handlers.redo_post.remove(handlers.sdf_undo_handler)
     
+    gizmos.unregister()
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-    
+
     del bpy.types.Object.sdf_props
     del bpy.types.Scene.sdf_scene_props
     del bpy.types.Scene.sdf_live_update
