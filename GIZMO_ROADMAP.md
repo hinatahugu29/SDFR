@@ -87,7 +87,7 @@ Box(`shape_type == 'box'`)はシェイプ固有パラメータを持たず(`cons
 |---|---|---|
 | `obj.scale` (X/Y/Z, 幅/奥行き/高さ) | 1. Blender標準で既にカバー | 新規ギズモ不要。BlenderのScale(S)を使う。ドキュメント上「対応済み」と明記するだけで足りる。 |
 | `edge_profile_size`(フィレット/面取り量) | 2. 形状ギズモ化 | **Phase G0で実装済み。** |
-| `shell_thickness`(肉厚/中空) | 2. 形状ギズモ化(次点候補) | 連続量でドラッグ向き。`edge_profile_size`と同じ矢印型で、内向きオフセットとして実装する想定。Phase G2の次の一手。 |
+| `shell_thickness`(肉厚/中空) | 2. 形状ギズモ化 — **実装済み(V17.0.0)** | `SDF_GGT_shell_thickness`。角の有無に関係なく効くため、対象シェイプは`edge_profile_size`より広い(Sphere/Torus/Capsule/Ellipsoidも含む)。見分けやすいよう-Z向き・シアン色で描画し、+Z・オレンジの`edge_profile_size`と重ならないようにしている。未検証: 実機でのドラッグ連動確認待ち。 |
 | `edge_chamfer_smooth`(Chamferプロファイル時のみ意味を持つ) | 2. 形状ギズモ化(条件付き・優先度低) | `edge_profile == '4'`のときだけ出現するニッチな値。常設ギズモにすると「Chamfer以外では死んでいるギズモ」が増えるため、専用の小さいダイヤル等、別形状のギズモで検討。優先度はshell_thicknessより下。 |
 | `edge_profile`(Round/Sharp/Soft/Tight/Chamfer) | 3. 列挙 | パネルのドロップダウンのまま。ギズモ化しない(離散選択はドラッグに向かない、2.1節参照)。 |
 | `operation`(Union/Subtract/Intersect) | 3. 列挙 | 同上。 |
