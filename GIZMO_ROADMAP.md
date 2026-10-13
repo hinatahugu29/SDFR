@@ -103,8 +103,37 @@ Box(`shape_type == 'box'`)はシェイプ固有パラメータを持たず(`cons
 | Deform Stack(変形スタック) | 範囲外 | 別オペレーター体系(`SDF_OT_deform_*`)で、プロパティ単体の編集とは設計が異なる。本ロードマップの対象外として明示的に除外。 |
 
 結論: Box単体で現時点までにギズモ化したのは `edge_profile_size` / `shell_thickness` / `smoothness`(ドラッグ系)、
-`operation`(スイッチ系)の4つ。次点は`edge_profile`のスイッチ化。それ以外は「ギズモ化しない」こと自体が
-上の表で説明がつく状態にしてある。
+`operation`(スイッチ系)、`edge_profile`(スイッチ系・2段)の5つ。全て実機検証済み(2026-10-14)。
+それ以外は「ギズモ化しない」こと自体が上の表で説明がつく状態にしてある。
+
+### Phase G2.5: シェイプ固有パラメータ(p1〜p4)の棚卸し
+
+これまでの5項目(`edge_profile_size`等)は`SDF_ObjectProperties`の共通プロパティで、どのシェイプでも
+同じ名前・同じ意味だった。一方 `constants.py` の `PRIMITIVE_UI_DEFS` を見ると、Torus/Cylinder/Capsule/
+Ellipsoid等の多くのシェイプは `p1`/`p2`/`p3`/`p4` という**汎用スロット**を使っており、その意味は
+シェイプごとに全く異なる(例: `p1`はCylinderでは"Radius"、Pyramidでは"Base Size"、Math Fieldでは"Scale")。
+
+これは2.1節で見た`edge_profile`の使い回し問題と同じ構造であり、「`p1`用の汎用ギズモ」は作れない。
+**シェイプ1つにつき専用のギズモ定義が要る**(ラベル・軸方向・値域が全部シェイプ依存のため)。
+Boxの棚卸しと同じやり方を、シェイプ単位で繰り返していくことになる。
+
+候補の棚卸し(ドラッグ向きの連続値のみ抽出、太字は次に着手する価値が高いと判断したもの):
+
+| シェイプ | 固有パラメータ | 評価 |
+|---|---|---|
+| **Torus** | `p1` Main Radius / `p2` Pipe Radius | 2値とも連続量でドラッグ向き。角が無いので`edge_profile_size`系ギズモと競合しない。ドーナツの外径(+X方向)と管の太さ(+Z方向)は直感的に別軸へ割り当てられる。**最有力候補。** |
+| Cylinder | `p1` Radius / `p2` Height (Half) | 2値。使用頻度が高いプリミティブなので価値は高いが、Torusと機能的に同型(半径+高さの2値)なので、Torusで型を作ってから横展開でもよい。 |
+| Capped Cone | `p1` Bottom Radius / `p2` Top Radius / `p3` Height | 3値。先細り形状の表現力が高く、CAD的な見栄えもする。ただしRadius2つの区別(上端/下端)をギズモの見た目でどう示すかの検討が要る。 |
+| Ellipsoid | `p1`/`p2`/`p3` = Radius X/Y/Z | 3値がそのままローカルX/Y/Z軸に対応するため実装は素直(非一様スケールに近い)。ただしBlenderの標準スケールギズモと見た目の役割が被りやすく、「なぜ標準スケールでなくこちらを使うのか」の説明づけが必要。 |
+| Rounded Cylinder | `p1` Radius / `p2` Edge Radius / `p3` Height (Half) | `p2`(Edge Radius)が`edge_profile_size`と概念的に似ているが別の実体(シェイプ固有スロット)。紛らわしさに注意。 |
+| Capped Torus | `p1` Main Radius / `p2` Pipe Radius / `p3` Angle (rad) | `p3`(弧の角度)はドラッグよりダイヤル(回転)型ギズモの方が自然。新しいギズモ形状が要るので後回し。 |
+| N-gon Prism | `p1` Radius / `ngon_sides`(整数, 辺数) / `p3` Height | `ngon_sides`は整数の刻み値で、ドラッグ系ともスイッチ系(ボタン)とも性質が違う(増減ステッパーが近い)。後回し。 |
+| Pyramid | `p1` Base Size / `p2` Height | 2値。Cylinderと同型なので横展開の範囲。 |
+| Cut Sphere | `p1` Cut Height | 1値のみ。優先度は低いが実装は単純。 |
+| Math Field / Extrude / Lathe | `p1`〜`p4` | これまでの除外方針(2Dプロファイル由来・未検証)を維持し、今回のPhase G2.5でも対象外のままにする。 |
+
+結論: 次に着手するなら **Torus**(`p1` Main Radius / `p2` Pipe Radius)。角が無くエッジ系ギズモと競合せず、
+2値の役割もはっきりしているため、Box同様に「型を1つ作ってから横展開」の起点として最適。
 
 ### Phase G3(任意、要再評価): ブール操作へのギズモ適用
 - Union/Deboss対象の選択や、レイヤー境界のBlend半径など、「2つのSDFの関係」に関わる値への適用。
