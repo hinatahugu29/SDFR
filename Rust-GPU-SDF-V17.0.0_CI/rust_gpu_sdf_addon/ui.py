@@ -608,9 +608,12 @@ class SDF_PT_main(bpy.types.Panel):
                 if shape_key != 'math_field':
                     row_edge = sub.row(align=True)
                     row_edge.prop(props, "edge_profile", text="Edge")
-                    if props.edge_profile != '0':
-                        row_edge.prop(props, "edge_profile_size", text="Size")
-                    
+                    # V17.0.0: engine.py は edge_profile が '0'(Round)でも
+                    # edge_profile_size をそのまま丸め半径として使う。以前はここで
+                    # '0' のときだけ欄を隠していたため、ビューポートのギズモで
+                    # 値を動かしてもパネルに確認できる数値が出ない状態になっていた。
+                    row_edge.prop(props, "edge_profile_size", text="Size")
+
                     if props.edge_profile == '4':
                         row_cs = sub.row(align=True)
                         row_cs.prop(props, "edge_chamfer_smooth", text="Smoothness")
