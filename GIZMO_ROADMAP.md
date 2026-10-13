@@ -123,8 +123,8 @@ Boxの棚卸しと同じやり方を、シェイプ単位で繰り返してい�
 |---|---|---|
 | **Torus** | `p1` Main Radius / `p2` Pipe Radius | 2値とも連続量でドラッグ向き。角が無いので`edge_profile_size`系ギズモと競合しない。**実装済み(V17.0.0)** — `SDF_GGT_torus_main_radius`(+Y・黄)/`SDF_GGT_torus_pipe_radius`(-Y・ティール)。Torusは既に`shell_thickness`(-Z)/`smoothness`(+X)/`operation`(+X buttons)を持つため、未使用だった+Y/-Yを割り当てた。実機検証済み(2026-10-14)。 |
 | Cylinder | `p1` Radius / `p2` Height (Half) | 2値。**実装済み(V17.0.0)** — `SDF_GGT_cylinder_radius`(+Y・インディゴ)/`SDF_GGT_cylinder_height`(-Y・ライム)。Torusと軸(+Y/-Y)を使い回すが、shape_typeが排他なので同時表示されず問題にならない。実機検証済み(2026-10-14)。 |
-| Capped Cone | `p1` Bottom Radius / `p2` Top Radius / `p3` Height | 3値。先細り形状の表現力が高く、CAD的な見栄えもする。ただしRadius2つの区別(上端/下端)をギズモの見た目でどう示すかの検討が要る。 |
-| Ellipsoid | `p1`/`p2`/`p3` = Radius X/Y/Z | 3値がそのままローカルX/Y/Z軸に対応するため実装は素直(非一様スケールに近い)。ただしBlenderの標準スケールギズモと見た目の役割が被りやすく、「なぜ標準スケールでなくこちらを使うのか」の説明づけが必要。 |
+| Capped Cone | `p1` Bottom Radius / `p2` Top Radius / `p3` Height | 3値。**実装済み(V17.0.0)** — `SDF_GGT_capped_cone_bottom_radius`(+Y)/`_top_radius`(-Y)/`_height`(-X)。Bottom/Topは同系色の濃淡(濃い=Bottom/薄い=Top)で区別。実機検証待ち。 |
+| Ellipsoid | `p1`/`p2`/`p3` = Radius X/Y/Z | 3値がそのままローカルX/Y/Z軸に対応。**実装済み(V17.0.0)** — `SDF_GGT_ellipsoid_radius_x/y/z`。Blenderの軸配色(X=赤/Y=緑/Z=青)を踏襲。+Xはsmoothnessに占有されているためRadius Xだけ-X側に出すが、軸自体はX軸のまま(符号が変わるだけ)。実機検証待ち。 |
 | Rounded Cylinder | `p1` Radius / `p2` Edge Radius / `p3` Height (Half) | `p2`(Edge Radius)が`edge_profile_size`と概念的に似ているが別の実体(シェイプ固有スロット)。紛らわしさに注意。 |
 | Capped Torus | `p1` Main Radius / `p2` Pipe Radius / `p3` Angle (rad) | `p3`(弧の角度)はドラッグよりダイヤル(回転)型ギズモの方が自然。新しいギズモ形状が要るので後回し。 |
 | N-gon Prism | `p1` Radius / `ngon_sides`(整数, 辺数) / `p3` Height | `ngon_sides`は整数の刻み値で、ドラッグ系ともスイッチ系(ボタン)とも性質が違う(増減ステッパーが近い)。後回し。 |
