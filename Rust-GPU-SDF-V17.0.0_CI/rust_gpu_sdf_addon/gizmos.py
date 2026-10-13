@@ -71,6 +71,9 @@ _NEG_Y_ROTATION = Matrix.Rotation(math.pi / 2.0, 4, 'X')
 # 「p1用の汎用ギズモ」は作れず、shape_type == 'torus' に限定した専用ギズモにする。
 _TORUS_SHAPES = {'torus'}
 
+# Cylinder固有パラメータ(p1/p2)専用。Torusと同じ理由でshape_type限定にする。
+_CYLINDER_SHAPES = {'cylinder'}
+
 
 def _active_primitive_for(context, allowed_shapes):
     """ギズモの対象にしてよいアクティブオブジェクトを返す。対象外なら None。"""
@@ -420,6 +423,72 @@ class SDF_GGT_torus_pipe_radius(bpy.types.GizmoGroup):
         gz.target_set_prop("offset", obj.sdf_props, "p2")
 
 
+class SDF_GGT_cylinder_radius(bpy.types.GizmoGroup):
+    """Cylinderの p1(Radius)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_cylinder_radius"
+    bl_label = "SDF Cylinder Radius Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _CYLINDER_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        # Torusの+Y(黄)/-Y(ティール)とは別の色にする(Cylinderは同じ+Y/-Y軸を使うが
+        # 同時に表示されることはない=shape_typeが排他なので、軸の使い回し自体は問題ない)。
+        gz.color = 0.3, 0.35, 0.95
+        gz.color_highlight = 0.4, 0.45, 1.0
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.radius_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _CYLINDER_SHAPES)
+        if obj is None:
+            return
+        gz = self.radius_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _POS_Y_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p1")
+
+
+class SDF_GGT_cylinder_height(bpy.types.GizmoGroup):
+    """Cylinderの p2(Height / Half)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_cylinder_height"
+    bl_label = "SDF Cylinder Height Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _CYLINDER_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        gz.color = 0.55, 0.9, 0.2
+        gz.color_highlight = 0.65, 1.0, 0.3
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.height_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _CYLINDER_SHAPES)
+        if obj is None:
+            return
+        gz = self.height_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _NEG_Y_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p2")
+
+
 classes = (
     SDF_GGT_edge_profile_size,
     SDF_GGT_shell_thickness,
@@ -430,6 +499,8 @@ classes = (
     SDF_GGT_edge_profile_switch,
     SDF_GGT_torus_main_radius,
     SDF_GGT_torus_pipe_radius,
+    SDF_GGT_cylinder_radius,
+    SDF_GGT_cylinder_height,
 )
 
 
