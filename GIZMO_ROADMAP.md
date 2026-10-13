@@ -121,7 +121,7 @@ Boxの棚卸しと同じやり方を、シェイプ単位で繰り返してい�
 
 | シェイプ | 固有パラメータ | 評価 |
 |---|---|---|
-| **Torus** | `p1` Main Radius / `p2` Pipe Radius | 2値とも連続量でドラッグ向き。角が無いので`edge_profile_size`系ギズモと競合しない。ドーナツの外径(+X方向)と管の太さ(+Z方向)は直感的に別軸へ割り当てられる。**最有力候補。** |
+| **Torus** | `p1` Main Radius / `p2` Pipe Radius | 2値とも連続量でドラッグ向き。角が無いので`edge_profile_size`系ギズモと競合しない。**実装済み(V17.0.0)** — `SDF_GGT_torus_main_radius`(+Y・黄)/`SDF_GGT_torus_pipe_radius`(-Y・ティール)。Torusは既に`shell_thickness`(-Z)/`smoothness`(+X)/`operation`(+X buttons)を持つため、未使用だった+Y/-Yを割り当てた。実機検証待ち。 |
 | Cylinder | `p1` Radius / `p2` Height (Half) | 2値。使用頻度が高いプリミティブなので価値は高いが、Torusと機能的に同型(半径+高さの2値)なので、Torusで型を作ってから横展開でもよい。 |
 | Capped Cone | `p1` Bottom Radius / `p2` Top Radius / `p3` Height | 3値。先細り形状の表現力が高く、CAD的な見栄えもする。ただしRadius2つの区別(上端/下端)をギズモの見た目でどう示すかの検討が要る。 |
 | Ellipsoid | `p1`/`p2`/`p3` = Radius X/Y/Z | 3値がそのままローカルX/Y/Z軸に対応するため実装は素直(非一様スケールに近い)。ただしBlenderの標準スケールギズモと見た目の役割が被りやすく、「なぜ標準スケールでなくこちらを使うのか」の説明づけが必要。 |
