@@ -24,7 +24,7 @@ Phase G1 で予定している「ドラッグ中は軽量プレビュー」の�
 import math
 
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 # edge_profile_size が見た目の違いとして現れるシェイプだけに絞る。
 # properties.py の shape_type EnumProperty のキーと対応させる。
@@ -185,10 +185,91 @@ class SDF_GGT_smoothness(bpy.types.GizmoGroup):
         gz.target_set_prop("offset", obj.sdf_props, "smoothness")
 
 
+class SDF_OT_gizmo_set_operation(bpy.types.Operator):
+    """ビューポートのボタン型ギズモから sdf_props.operation を設定する。
+
+    ドラッグ系ギズモ(target_set_prop)と違い、列挙値の切り替えは
+    target_set_operator 経由でオペレーターを1回実行する形になる。
+    """
+    bl_idname = "sdf.gizmo_set_operation"
+    bl_label = "Set SDF Operation"
+    bl_description = "Switch this primitive's boolean operation (Union / Subtract / Intersect)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    value: bpy.props.EnumProperty(
+        items=[('0', "Union", ""), ('1', "Subtract", ""), ('2', "Intersect", "")],
+        name="Operation",
+    )
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None or not getattr(obj, "sdf_props", None):
+            return {'CANCELLED'}
+        obj.sdf_props.operation = self.value
+        return {'FINISHED'}
+
+
+# ボタン1個につき (enum値, 色, ローカル座標でのオフセット) を割り当てる。
+# +Xに沿って3個並べる。選択中の値は refresh() で明るい色にする。
+_OPERATION_BUTTONS = (
+    ('0', (0.2, 0.6, 0.9), (0.9, 1.2, 0.0)),   # Union: 青系
+    ('1', (0.9, 0.3, 0.2), (0.9, 1.5, 0.0)),   # Subtract: 赤系
+    ('2', (0.3, 0.8, 0.3), (0.9, 1.8, 0.0)),   # Intersect: 緑系
+)
+
+
+class SDF_GGT_operation_switch(bpy.types.GizmoGroup):
+    """アクティブなSDFプリミティブの operation をビューポートのボタンで切り替える。
+
+    スイッチ的操作の最初のプロトタイプ。ドラッグ系ギズモ(矢印)とは別の仕組みで、
+    GIZMO_GT_button_2d + target_set_operator を使う。見た目は「選択肢の数だけ
+    ボタンを並べる」方式(ユーザー確認済み)。
+    """
+    bl_idname = "SDF_GGT_operation_switch"
+    bl_label = "SDF Operation Switch Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _ALL_PRIMITIVE_SHAPES) is not None
+
+    def setup(self, context):
+        self.buttons = []
+        for value, color, offset in _OPERATION_BUTTONS:
+            gz = self.gizmos.new("GIZMO_GT_button_2d")
+            gz.icon = 'NONE'
+            gz.draw_options = {'BACKDROP', 'OUTLINE'}
+            gz.color = color
+            gz.color_highlight = tuple(min(1.0, c + 0.2) for c in color)
+            gz.alpha = 0.6
+            gz.alpha_highlight = 1.0
+            gz.scale_basis = 0.12
+            props = gz.target_set_operator(SDF_OT_gizmo_set_operation.bl_idname)
+            props.value = value
+            self.buttons.append((gz, value, Vector(offset)))
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _ALL_PRIMITIVE_SHAPES)
+        if obj is None:
+            return
+        current = obj.sdf_props.operation
+        base = obj.matrix_world.normalized()
+        for gz, value, offset in self.buttons:
+            m = base.copy()
+            m.translation = base @ offset
+            gz.matrix_basis = m
+            # 選択中の値だけ不透明度を上げて、今どれが効いているか分かるようにする。
+            gz.alpha = 1.0 if value == current else 0.45
+
+
 classes = (
     SDF_GGT_edge_profile_size,
     SDF_GGT_shell_thickness,
     SDF_GGT_smoothness,
+    SDF_OT_gizmo_set_operation,
+    SDF_GGT_operation_switch,
 )
 
 
