@@ -93,8 +93,8 @@ Box(`shape_type == 'box'`)はシェイプ固有パラメータを持たず(`cons
 | `obj.scale` (X/Y/Z, 幅/奥行き/高さ) | 1. Blender標準で既にカバー | 新規ギズモ不要。BlenderのScale(S)を使う。ドキュメント上「対応済み」と明記するだけで足りる。 |
 | `edge_profile_size`(フィレット/面取り量) | 2. ドラッグ系 — **実装済み(V17.0.0)** | `SDF_GGT_edge_profile_size`。角を持つシェイプのみ対象(Phase G0)。 |
 | `shell_thickness`(肉厚/中空) | 2. ドラッグ系 — **実装済み(V17.0.0)** | `SDF_GGT_shell_thickness`。角の有無に関係なく効くため、対象シェイプは`edge_profile_size`より広い(Sphere/Torus/Capsule/Ellipsoidも含む)。Box実機でドラッグ連動確認済み(2026-10-13)。 |
-| `smoothness`(他プリミティブとのブーリアンブレンド半径) | 2. ドラッグ系 — **実装済み(V17.0.0)** | `SDF_GGT_smoothness`。engine.py にシェイプ別の再割り当てが無いため全シェイプ対象。ただし効果は「他プリミティブと重なる場所」にしか出ないため、単独1個では見た目が変化しない(検証は2プリミティブ以上で)。 |
-| `operation`(Union/Subtract/Intersect) | 3. スイッチ系 — **実装済み(V17.0.0)** | `SDF_GGT_operation_switch`。`GIZMO_GT_button_2d` 3個を+X方向に並べ、`target_set_operator`で`SDF_OT_gizmo_set_operation`を呼ぶ。選択中の値はボタンの不透明度で示す。 |
+| `smoothness`(他プリミティブとのブーリアンブレンド半径) | 2. ドラッグ系 — **実装済み(V17.0.0)** | `SDF_GGT_smoothness`。engine.py にシェイプ別の再割り当てが無いため全シェイプ対象。効果は「他プリミティブと重なる場所」にしか出ないが、2プリミティブ以上の状態で実機でのドラッグ連動をユーザーが確認済み(2026-10-14)。 |
+| `operation`(Union/Subtract/Intersect) | 3. スイッチ系 — **実装・実機検証済み(V17.0.0)** | `SDF_GGT_operation_switch`。`GIZMO_GT_button_2d` 3個を+X方向に並べ、`target_set_operator`で`SDF_OT_gizmo_set_operation`を呼ぶ。選択中の値はボタンの不透明度で示す。クリックでの切り替えをユーザーが実機確認済み(2026-10-14)。 |
 | `edge_profile`(Round/Sharp/Soft/Tight/Chamfer) | 3. スイッチ系(次点候補) | `operation`と同じボタン方式が使えるはず。5択なのでボタンが横に並びきらない可能性があり、レイアウト(2段に分ける等)の検討が要る。 |
 | `edge_chamfer_smooth`(Chamferプロファイル時のみ意味を持つ) | 2. ドラッグ系(条件付き・優先度低) | `edge_profile == '4'`のときだけ意味を持つニッチな値。常設ギズモにすると「Chamfer以外では死んでいるギズモ」が増えるため、`edge_profile`のスイッチ実装後、連動して出し分ける形を検討。 |
 | `color` / `metallic` / `roughness` | 4. パネルに留める | カラーピッカー/スライダーがドラッグ・スイッチどちらのギズモよりも自然。 |
