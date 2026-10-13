@@ -62,9 +62,10 @@ _ALL_PRIMITIVE_SHAPES = {
 }
 
 _DOWN_ROTATION = Matrix.Rotation(math.pi, 4, 'X')
-_SIDE_ROTATION = Matrix.Rotation(math.pi / 2.0, 4, 'Y')
-_POS_Y_ROTATION = Matrix.Rotation(-math.pi / 2.0, 4, 'X')
-_NEG_Y_ROTATION = Matrix.Rotation(math.pi / 2.0, 4, 'X')
+_SIDE_ROTATION = Matrix.Rotation(math.pi / 2.0, 4, 'Y')          # +X
+_NEG_SIDE_ROTATION = Matrix.Rotation(-math.pi / 2.0, 4, 'Y')     # -X
+_POS_Y_ROTATION = Matrix.Rotation(-math.pi / 2.0, 4, 'X')        # +Y
+_NEG_Y_ROTATION = Matrix.Rotation(math.pi / 2.0, 4, 'X')         # -Y
 
 # Torus固有パラメータ(p1/p2)専用。p1/p2 は SDF_ObjectProperties の汎用スロットで、
 # 意味はシェイプごとに違う(Cylinderならp1=Radius/p2=Height(Half)など)ため、
@@ -73,6 +74,12 @@ _TORUS_SHAPES = {'torus'}
 
 # Cylinder固有パラメータ(p1/p2)専用。Torusと同じ理由でshape_type限定にする。
 _CYLINDER_SHAPES = {'cylinder'}
+
+# Capped Cone固有パラメータ(p1/p2/p3)専用。
+_CAPPED_CONE_SHAPES = {'capped_cone'}
+
+# Ellipsoid固有パラメータ(p1/p2/p3 = Radius X/Y/Z)専用。
+_ELLIPSOID_SHAPES = {'ellipsoid'}
 
 
 def _active_primitive_for(context, allowed_shapes):
@@ -489,6 +496,208 @@ class SDF_GGT_cylinder_height(bpy.types.GizmoGroup):
         gz.target_set_prop("offset", obj.sdf_props, "p2")
 
 
+class SDF_GGT_capped_cone_bottom_radius(bpy.types.GizmoGroup):
+    """Capped Coneの p1(Bottom Radius)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_capped_cone_bottom_radius"
+    bl_label = "SDF Capped Cone Bottom Radius Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _CAPPED_CONE_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        # Bottom/Topを同系色の濃淡で区別する(濃い方=Bottom)。+Y/-Y/-Xは
+        # Torus/Cylinder/Ellipsoidが使う軸だが、shape_typeが排他なので衝突しない。
+        gz.color = 0.7, 0.5, 0.3
+        gz.color_highlight = 0.85, 0.65, 0.4
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.bottom_radius_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _CAPPED_CONE_SHAPES)
+        if obj is None:
+            return
+        gz = self.bottom_radius_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _POS_Y_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p1")
+
+
+class SDF_GGT_capped_cone_top_radius(bpy.types.GizmoGroup):
+    """Capped Coneの p2(Top Radius)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_capped_cone_top_radius"
+    bl_label = "SDF Capped Cone Top Radius Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _CAPPED_CONE_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        gz.color = 0.9, 0.78, 0.6   # Bottomより明るい色=Top
+        gz.color_highlight = 1.0, 0.9, 0.75
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.top_radius_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _CAPPED_CONE_SHAPES)
+        if obj is None:
+            return
+        gz = self.top_radius_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _NEG_Y_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p2")
+
+
+class SDF_GGT_capped_cone_height(bpy.types.GizmoGroup):
+    """Capped Coneの p3(Height)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_capped_cone_height"
+    bl_label = "SDF Capped Cone Height Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _CAPPED_CONE_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        # +Xはsmoothness(全シェイプ共通)が使っているため、3本目は-Xにする。
+        gz.color = 0.4, 0.55, 0.65
+        gz.color_highlight = 0.5, 0.68, 0.8
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.height_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _CAPPED_CONE_SHAPES)
+        if obj is None:
+            return
+        gz = self.height_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _NEG_SIDE_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p3")
+
+
+class SDF_GGT_ellipsoid_radius_x(bpy.types.GizmoGroup):
+    """Ellipsoidの p1(Radius X)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_ellipsoid_radius_x"
+    bl_label = "SDF Ellipsoid Radius X Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _ELLIPSOID_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        # Blenderの軸配色(X=赤/Y=緑/Z=青)に合わせる。ローカル軸そのものに
+        # 対応する3値なので、他のギズモの配色慣習より軸の色分けを優先する。
+        # +Xはsmoothnessが占有しているため-X側に出す(値はp1のまま、符号の
+        # 向きが変わるだけ)。
+        gz.color = 0.85, 0.2, 0.2
+        gz.color_highlight = 1.0, 0.3, 0.3
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.radius_x_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _ELLIPSOID_SHAPES)
+        if obj is None:
+            return
+        gz = self.radius_x_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _NEG_SIDE_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p1")
+
+
+class SDF_GGT_ellipsoid_radius_y(bpy.types.GizmoGroup):
+    """Ellipsoidの p2(Radius Y)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_ellipsoid_radius_y"
+    bl_label = "SDF Ellipsoid Radius Y Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _ELLIPSOID_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        gz.color = 0.25, 0.8, 0.25
+        gz.color_highlight = 0.35, 1.0, 0.35
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.radius_y_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _ELLIPSOID_SHAPES)
+        if obj is None:
+            return
+        gz = self.radius_y_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _POS_Y_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p2")
+
+
+class SDF_GGT_ellipsoid_radius_z(bpy.types.GizmoGroup):
+    """Ellipsoidの p3(Radius Z)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_ellipsoid_radius_z"
+    bl_label = "SDF Ellipsoid Radius Z Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _ELLIPSOID_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        gz.color = 0.25, 0.45, 0.9
+        gz.color_highlight = 0.35, 0.55, 1.0
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.radius_z_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _ELLIPSOID_SHAPES)
+        if obj is None:
+            return
+        gz = self.radius_z_gizmo
+        # +Zはedge_profile_sizeが使う軸だが、Ellipsoidはそもそも対象外シェイプなので
+        # 同時表示されず衝突しない。ellipsoidはshell_thicknessで-Zを使っているため、
+        # Radius Zは+Z側(通常のedge_profile_size方向=角丸めの意味は無い)に出す。
+        gz.matrix_basis = obj.matrix_world.normalized()
+        gz.target_set_prop("offset", obj.sdf_props, "p3")
+
+
 classes = (
     SDF_GGT_edge_profile_size,
     SDF_GGT_shell_thickness,
@@ -501,6 +710,12 @@ classes = (
     SDF_GGT_torus_pipe_radius,
     SDF_GGT_cylinder_radius,
     SDF_GGT_cylinder_height,
+    SDF_GGT_capped_cone_bottom_radius,
+    SDF_GGT_capped_cone_top_radius,
+    SDF_GGT_capped_cone_height,
+    SDF_GGT_ellipsoid_radius_x,
+    SDF_GGT_ellipsoid_radius_y,
+    SDF_GGT_ellipsoid_radius_z,
 )
 
 
