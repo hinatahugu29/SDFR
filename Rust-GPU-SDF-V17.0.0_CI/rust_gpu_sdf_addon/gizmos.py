@@ -63,6 +63,13 @@ _ALL_PRIMITIVE_SHAPES = {
 
 _DOWN_ROTATION = Matrix.Rotation(math.pi, 4, 'X')
 _SIDE_ROTATION = Matrix.Rotation(math.pi / 2.0, 4, 'Y')
+_POS_Y_ROTATION = Matrix.Rotation(-math.pi / 2.0, 4, 'X')
+_NEG_Y_ROTATION = Matrix.Rotation(math.pi / 2.0, 4, 'X')
+
+# Torus固有パラメータ(p1/p2)専用。p1/p2 は SDF_ObjectProperties の汎用スロットで、
+# 意味はシェイプごとに違う(Cylinderならp1=Radius/p2=Height(Half)など)ため、
+# 「p1用の汎用ギズモ」は作れず、shape_type == 'torus' に限定した専用ギズモにする。
+_TORUS_SHAPES = {'torus'}
 
 
 def _active_primitive_for(context, allowed_shapes):
@@ -346,6 +353,73 @@ class SDF_GGT_edge_profile_switch(bpy.types.GizmoGroup):
             gz.alpha = 1.0 if value == current else 0.45
 
 
+class SDF_GGT_torus_main_radius(bpy.types.GizmoGroup):
+    """Torusの p1(Main Radius: 輪の大きさ)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_torus_main_radius"
+    bl_label = "SDF Torus Main Radius Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _TORUS_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        # 既存の+Z(edge_profile_size)/-Z(shell_thickness)/+X(smoothness)とは別の
+        # 軸・色にする(+Y・黄色)。これらは同時に出うる組み合わせのため衝突を避ける。
+        gz.color = 0.85, 0.8, 0.15
+        gz.color_highlight = 1.0, 0.95, 0.2
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.main_radius_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _TORUS_SHAPES)
+        if obj is None:
+            return
+        gz = self.main_radius_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _POS_Y_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p1")
+
+
+class SDF_GGT_torus_pipe_radius(bpy.types.GizmoGroup):
+    """Torusの p2(Pipe Radius: 管の太さ)をビューポートでドラッグする。"""
+    bl_idname = "SDF_GGT_torus_pipe_radius"
+    bl_label = "SDF Torus Pipe Radius Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _TORUS_SHAPES) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        # Main Radius(+Y・黄色)と対になる-Y・ティール系にする。
+        gz.color = 0.15, 0.8, 0.55
+        gz.color_highlight = 0.2, 1.0, 0.7
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.pipe_radius_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _TORUS_SHAPES)
+        if obj is None:
+            return
+        gz = self.pipe_radius_gizmo
+        gz.matrix_basis = obj.matrix_world.normalized() @ _NEG_Y_ROTATION
+        gz.target_set_prop("offset", obj.sdf_props, "p2")
+
+
 classes = (
     SDF_GGT_edge_profile_size,
     SDF_GGT_shell_thickness,
@@ -354,6 +428,8 @@ classes = (
     SDF_GGT_operation_switch,
     SDF_OT_gizmo_set_edge_profile,
     SDF_GGT_edge_profile_switch,
+    SDF_GGT_torus_main_radius,
+    SDF_GGT_torus_pipe_radius,
 )
 
 
