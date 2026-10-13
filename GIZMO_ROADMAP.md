@@ -122,7 +122,7 @@ Boxの棚卸しと同じやり方を、シェイプ単位で繰り返してい�
 | シェイプ | 固有パラメータ | 評価 |
 |---|---|---|
 | **Torus** | `p1` Main Radius / `p2` Pipe Radius | 2値とも連続量でドラッグ向き。角が無いので`edge_profile_size`系ギズモと競合しない。**実装済み(V17.0.0)** — `SDF_GGT_torus_main_radius`(+Y・黄)/`SDF_GGT_torus_pipe_radius`(-Y・ティール)。Torusは既に`shell_thickness`(-Z)/`smoothness`(+X)/`operation`(+X buttons)を持つため、未使用だった+Y/-Yを割り当てた。実機検証済み(2026-10-14)。 |
-| Cylinder | `p1` Radius / `p2` Height (Half) | 2値。**実装済み(V17.0.0)** — `SDF_GGT_cylinder_radius`(+Y・インディゴ)/`SDF_GGT_cylinder_height`(-Y・ライム)。Torusと軸(+Y/-Y)を使い回すが、shape_typeが排他なので同時表示されず問題にならない。実機検証待ち。 |
+| Cylinder | `p1` Radius / `p2` Height (Half) | 2値。**実装済み(V17.0.0)** — `SDF_GGT_cylinder_radius`(+Y・インディゴ)/`SDF_GGT_cylinder_height`(-Y・ライム)。Torusと軸(+Y/-Y)を使い回すが、shape_typeが排他なので同時表示されず問題にならない。実機検証済み(2026-10-14)。 |
 | Capped Cone | `p1` Bottom Radius / `p2` Top Radius / `p3` Height | 3値。先細り形状の表現力が高く、CAD的な見栄えもする。ただしRadius2つの区別(上端/下端)をギズモの見た目でどう示すかの検討が要る。 |
 | Ellipsoid | `p1`/`p2`/`p3` = Radius X/Y/Z | 3値がそのままローカルX/Y/Z軸に対応するため実装は素直(非一様スケールに近い)。ただしBlenderの標準スケールギズモと見た目の役割が被りやすく、「なぜ標準スケールでなくこちらを使うのか」の説明づけが必要。 |
 | Rounded Cylinder | `p1` Radius / `p2` Edge Radius / `p3` Height (Half) | `p2`(Edge Radius)が`edge_profile_size`と概念的に似ているが別の実体(シェイプ固有スロット)。紛らわしさに注意。 |
