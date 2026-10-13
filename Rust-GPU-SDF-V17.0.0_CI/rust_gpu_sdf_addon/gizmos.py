@@ -264,12 +264,96 @@ class SDF_GGT_operation_switch(bpy.types.GizmoGroup):
             gz.alpha = 1.0 if value == current else 0.45
 
 
+class SDF_OT_gizmo_set_edge_profile(bpy.types.Operator):
+    """ビューポートのボタン型ギズモから sdf_props.edge_profile を設定する。"""
+    bl_idname = "sdf.gizmo_set_edge_profile"
+    bl_label = "Set SDF Edge Profile"
+    bl_description = "Switch this primitive's edge/corner profile (Round / Sharp / Soft / Tight / Chamfer)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    value: bpy.props.EnumProperty(
+        items=[
+            ('0', "Round", ""), ('1', "Sharp", ""), ('2', "Soft", ""),
+            ('3', "Tight", ""), ('4', "Chamfer", ""),
+        ],
+        name="Edge Profile",
+    )
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None or not getattr(obj, "sdf_props", None):
+            return {'CANCELLED'}
+        obj.sdf_props.edge_profile = self.value
+        return {'FINISHED'}
+
+
+# operation(3択)は+X側に1段で並べたので、edge_profile(5択)は反対の-X側に2段で並べ、
+# 見た目でも重ならないようにする。上段3個・下段2個、上段の隙間の下に下段が来るよう
+# Yをずらして互い違いに配置する。
+# (enum値, 色, ローカル座標でのオフセット)
+_EDGE_PROFILE_BUTTONS = (
+    ('0', (0.75, 0.75, 0.75), (-0.9, 1.2, 0.25)),   # Round:  グレー / 上段
+    ('1', (0.95, 0.85, 0.2), (-0.9, 1.5, 0.25)),    # Sharp:  黄系   / 上段
+    ('2', (0.5, 0.75, 0.95), (-0.9, 1.8, 0.25)),    # Soft:   水色   / 上段
+    ('3', (0.9, 0.55, 0.15), (-0.9, 1.35, -0.25)),  # Tight:  橙系   / 下段
+    ('4', (0.65, 0.35, 0.85), (-0.9, 1.65, -0.25)), # Chamfer: 紫系  / 下段
+)
+
+
+class SDF_GGT_edge_profile_switch(bpy.types.GizmoGroup):
+    """アクティブなSDFプリミティブの edge_profile を、2段に並べたボタンで切り替える。
+
+    operation(3択・1段)と同じ仕組みだが、5択を1段に並べると窮屈になるため
+    上段3個・下段2個の2段レイアウトにしている。対象シェイプは edge_profile_size と
+    同じ許可リスト(角を持つプリミティブのみ)を使う — edge_profile自体が
+    Math Field 等では別目的に流用されているため。
+    """
+    bl_idname = "SDF_GGT_edge_profile_switch"
+    bl_label = "SDF Edge Profile Switch Gizmo"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_options = {'3D', 'PERSISTENT', 'SCALE'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_primitive_for(context, _EDGE_ROUNDABLE_SHAPES) is not None
+
+    def setup(self, context):
+        self.buttons = []
+        for value, color, offset in _EDGE_PROFILE_BUTTONS:
+            gz = self.gizmos.new("GIZMO_GT_button_2d")
+            gz.icon = 'NONE'
+            gz.draw_options = {'BACKDROP', 'OUTLINE'}
+            gz.color = color
+            gz.color_highlight = tuple(min(1.0, c + 0.2) for c in color)
+            gz.alpha = 0.6
+            gz.alpha_highlight = 1.0
+            gz.scale_basis = 0.1
+            props = gz.target_set_operator(SDF_OT_gizmo_set_edge_profile.bl_idname)
+            props.value = value
+            self.buttons.append((gz, value, Vector(offset)))
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, _EDGE_ROUNDABLE_SHAPES)
+        if obj is None:
+            return
+        current = obj.sdf_props.edge_profile
+        base = obj.matrix_world.normalized()
+        for gz, value, offset in self.buttons:
+            m = base.copy()
+            m.translation = base @ offset
+            gz.matrix_basis = m
+            gz.alpha = 1.0 if value == current else 0.45
+
+
 classes = (
     SDF_GGT_edge_profile_size,
     SDF_GGT_shell_thickness,
     SDF_GGT_smoothness,
     SDF_OT_gizmo_set_operation,
     SDF_GGT_operation_switch,
+    SDF_OT_gizmo_set_edge_profile,
+    SDF_GGT_edge_profile_switch,
 )
 
 
