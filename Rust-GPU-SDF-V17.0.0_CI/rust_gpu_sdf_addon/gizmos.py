@@ -15,9 +15,16 @@ V17.0.0: Phase G0 (gizmo roadmap) prototype.
 既存の `SDF_ObjectProperties.edge_profile_size` そのもの。
 
 対象プロパティに `edge_profile_size`（フィレット/面取り量）を選んだ理由:
-- 全プリミティブ共通で、Blender標準のS(スケール)操作とは独立した値のため、
-  既存のトランスフォームギズモと衝突しない。
+- Blender標準のS(スケール)操作とは独立した値のため、既存のトランスフォームギズモと
+  衝突しない。
 - これまでプロパティパネルでしか触れず、ビューポートでの直感的操作の恩恵が大きい。
+
+対象シェイプは「角・エッジを持つプリミティブ」だけに絞る(`_EDGE_ROUNDABLE_SHAPES`)。
+Sphere/Torus/Capsule/Ellipsoidのように元から角が無いシェイプでは、値を変えても
+メッシュに見た目の変化が出ず「ギズモが連動していないように見える」ため除外した。
+Math Field / Extrude / Lathe / Bezier Curve は `edge_profile`(あるいは
+`edge_profile_size` 自体)を別の意味に流用している(`engine.py` 参照)ため、
+誤操作防止のため除外する。
 
 ドラッグ中〜確定後の再計算は、既存の `update_sdf_callback`
 (`properties.py` の各 FloatProperty に付与済み) にそのまま乗る。
@@ -27,6 +34,14 @@ Phase G1 で予定している「ドラッグ中は軽量プレビュー」の�
 
 import bpy
 
+# edge_profile_size が見た目の違いとして現れるシェイプだけに絞る。
+# properties.py の shape_type EnumProperty のキーと対応させる。
+_EDGE_ROUNDABLE_SHAPES = {
+    'box', 'rounded_box', 'cylinder', 'hex_prism', 'pyramid',
+    'capped_cone', 'ngon_prism', 'rounded_cylinder', 'capped_torus',
+    'octahedron', 'cut_sphere',
+}
+
 
 def _active_sdf_primitive(context):
     """ギズモの対象にしてよいアクティブオブジェクトを返す。対象外なら None。"""
@@ -35,6 +50,8 @@ def _active_sdf_primitive(context):
         return None
     props = getattr(obj, "sdf_props", None)
     if props is None or not props.is_primitive:
+        return None
+    if props.shape_type not in _EDGE_ROUNDABLE_SHAPES:
         return None
     return obj
 
