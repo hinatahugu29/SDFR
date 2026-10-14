@@ -125,12 +125,12 @@ Boxの棚卸しと同じやり方を、シェイプ単位で繰り返してい�
 | Cylinder | `p1` Radius / `p2` Height (Half) | 2値。**実装済み(V17.0.0)** — `SDF_GGT_cylinder_radius`(+Y・インディゴ)/`SDF_GGT_cylinder_height`(-Y・ライム)。Torusと軸(+Y/-Y)を使い回すが、shape_typeが排他なので同時表示されず問題にならない。実機検証済み(2026-10-14)。 |
 | Capped Cone | `p1` Bottom Radius / `p2` Top Radius / `p3` Height | 3値。**実装・実機検証済み(V17.0.0)** — `SDF_GGT_capped_cone_bottom_radius`(+Y)/`_top_radius`(-Y)/`_height`(-X)。Bottom/Topは同系色の濃淡(濃い=Bottom/薄い=Top)で区別。2026-10-14確認。 |
 | Ellipsoid | `p1`/`p2`/`p3` = Radius X/Y/Z | 3値がそのままローカルX/Y/Z軸に対応。**実装・実機検証済み(V17.0.0)** — `SDF_GGT_ellipsoid_radius_x/y/z`。Blenderの軸配色(X=赤/Y=緑/Z=青)を踏襲。+Xはsmoothnessに占有されているためRadius Xだけ-X側に出すが、軸自体はX軸のまま(符号が変わるだけ)。2026-10-14確認。 |
-| Rounded Cylinder | `p1` Radius / `p2` Edge Radius / `p3` Height (Half) | **実装済み(V17.0.0)** — `p1`→+Y/`p2`→-Y/`p3`→-X。`p2`(Edge Radius)は`edge_profile_size`と概念的に似ているが別の実体(シェイプ固有スロット)なので紛らわしさに注意。実機検証待ち。 |
-| Pyramid | `p1` Base Size / `p2` Height | **実装済み(V17.0.0)** — `p1`→+Y/`p2`→-Y。実機検証待ち。 |
-| Hex Prism | `p1` Radius / `p2` Height (Half) | **実装済み(V17.0.0)** — `p1`→+Y/`p2`→-Y。実機検証待ち。 |
-| Rounded Box | `p1` Roundness | **実装済み(V17.0.0)** — `p1`→+Y。1値のみで最も単純。実機検証待ち。 |
-| Octahedron | `p1` Size | **実装済み(V17.0.0)** — `p1`→+Y。実機検証待ち。 |
-| Cut Sphere | `p1` Cut Height | **実装済み(V17.0.0)** — `p1`→+Y。実機検証待ち。 |
+| Rounded Cylinder | `p1` Radius / `p2` Edge Radius / `p3` Height (Half) | **実装済み(V17.0.0)** — `p1`→+Y/`p2`→-Y/`p3`→-X。`p2`(Edge Radius)は`edge_profile_size`と概念的に似ているが別の実体(シェイプ固有スロット)なので紛らわしさに注意。実機検証済み(2026-10-14)。 |
+| Pyramid | `p1` Base Size / `p2` Height | **実装済み(V17.0.0)** — `p1`→+Y/`p2`→-Y。実機検証済み(2026-10-14)。 |
+| Hex Prism | `p1` Radius / `p2` Height (Half) | **実装済み(V17.0.0)** — `p1`→+Y/`p2`→-Y。実機検証済み(2026-10-14)。 |
+| Rounded Box | `p1` Roundness | **実装済み(V17.0.0)** — `p1`→+Y。1値のみで最も単純。実機検証済み(2026-10-14)。 |
+| Octahedron | `p1` Size | **実装済み(V17.0.0)** — `p1`→+Y。実機検証済み(2026-10-14)。 |
+| Cut Sphere | `p1` Cut Height | **実装済み(V17.0.0)** — `p1`→+Y。実機検証済み(2026-10-14)。 |
 | Capped Torus | `p1` Main Radius / `p2` Pipe Radius / `p3` Angle (rad) | `p3`(弧の角度)はドラッグよりダイヤル(回転)型ギズモの方が自然。新しいギズモ形状が要るので後回し。 |
 | N-gon Prism | `p1` Radius / `ngon_sides`(整数, 辺数) / `p3` Height | `ngon_sides`は整数の刻み値で、ドラッグ系ともスイッチ系(ボタン)とも性質が違う(増減ステッパーが近い)。後回し。 |
 | Math Field / Extrude / Lathe | `p1`〜`p4` | これまでの除外方針(2Dプロファイル由来・未検証)を維持し、今回のPhase G2.5でも対象外のままにする。 |
