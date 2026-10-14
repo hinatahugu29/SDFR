@@ -95,6 +95,122 @@ def _active_primitive_for(context, allowed_shapes):
     return obj
 
 
+def _make_single_prop_drag_gizmo(idname, label, allowed_shapes, prop_name, rotation, color):
+    """1本の矢印で1つのFloatPropertyをドラッグするGizmoGroupを量産するファクトリ。
+
+    Rounded Box / Octahedron / Cut Sphere / Pyramid / Hex Prism / Rounded Cylinder
+    のように「shape_type を1つに限定した専用ギズモを、property名と軸だけ変えて
+    何個も作る」ケース向け。edge_profile_size 等の既存ギズモ(手書きクラス)は、
+    最初の実機検証を済ませた後にこのファクトリへ寄せるリスクを避けるため、
+    あえて書き換えていない。
+    """
+    def poll(cls, context):
+        return _active_primitive_for(context, allowed_shapes) is not None
+
+    def setup(self, context):
+        gz = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gz.draw_style = 'BOX'
+        gz.color = color
+        gz.color_highlight = tuple(min(1.0, c + 0.15) for c in color)
+        gz.alpha = 0.8
+        gz.alpha_highlight = 1.0
+        gz.length = 1.5
+        gz.use_draw_modal = True
+        self.drag_gizmo = gz
+
+    def refresh(self, context):
+        obj = _active_primitive_for(context, allowed_shapes)
+        if obj is None:
+            return
+        gz = self.drag_gizmo
+        gz.matrix_basis = (
+            obj.matrix_world.normalized() @ rotation
+            if rotation is not None else obj.matrix_world.normalized()
+        )
+        gz.target_set_prop("offset", obj.sdf_props, prop_name)
+
+    return type(idname, (bpy.types.GizmoGroup,), {
+        "bl_idname": idname,
+        "bl_label": label,
+        "bl_space_type": 'VIEW_3D',
+        "bl_region_type": 'WINDOW',
+        "bl_options": {'3D', 'PERSISTENT', 'SCALE'},
+        "poll": classmethod(poll),
+        "setup": setup,
+        "refresh": refresh,
+    })
+
+
+# シェイプ固有のp1/p2/p3を使う残りの単純なケース(矢印1〜3本で済むもの)をここでまとめて
+# 生成する。軸の割り当てはこれまでと同じ規則: p1→+Y, p2→-Y, p3→-X。
+# いずれも shape_type が互いに排他なので、軸・色の使い回しは同時表示の衝突にならない
+# (Torus/Cylinder/Capped Cone で確認済みの前提をそのまま踏襲)。
+_P1_COLOR = (0.2, 0.75, 0.65)   # teal
+_P2_COLOR = (0.9, 0.65, 0.15)   # amber
+_P3_COLOR = (0.55, 0.35, 0.8)   # violet
+
+_ROUNDED_BOX_SHAPES = {'rounded_box'}
+_OCTAHEDRON_SHAPES = {'octahedron'}
+_CUT_SPHERE_SHAPES = {'cut_sphere'}
+_PYRAMID_SHAPES = {'pyramid'}
+_HEX_PRISM_SHAPES = {'hex_prism'}
+_ROUNDED_CYLINDER_SHAPES = {'rounded_cylinder'}
+
+SDF_GGT_rounded_box_roundness = _make_single_prop_drag_gizmo(
+    "SDF_GGT_rounded_box_roundness", "SDF Rounded Box Roundness Gizmo",
+    _ROUNDED_BOX_SHAPES, "p1", _POS_Y_ROTATION, _P1_COLOR,
+)
+SDF_GGT_octahedron_size = _make_single_prop_drag_gizmo(
+    "SDF_GGT_octahedron_size", "SDF Octahedron Size Gizmo",
+    _OCTAHEDRON_SHAPES, "p1", _POS_Y_ROTATION, _P1_COLOR,
+)
+SDF_GGT_cut_sphere_cut_height = _make_single_prop_drag_gizmo(
+    "SDF_GGT_cut_sphere_cut_height", "SDF Cut Sphere Cut Height Gizmo",
+    _CUT_SPHERE_SHAPES, "p1", _POS_Y_ROTATION, _P1_COLOR,
+)
+SDF_GGT_pyramid_base_size = _make_single_prop_drag_gizmo(
+    "SDF_GGT_pyramid_base_size", "SDF Pyramid Base Size Gizmo",
+    _PYRAMID_SHAPES, "p1", _POS_Y_ROTATION, _P1_COLOR,
+)
+SDF_GGT_pyramid_height = _make_single_prop_drag_gizmo(
+    "SDF_GGT_pyramid_height", "SDF Pyramid Height Gizmo",
+    _PYRAMID_SHAPES, "p2", _NEG_Y_ROTATION, _P2_COLOR,
+)
+SDF_GGT_hex_prism_radius = _make_single_prop_drag_gizmo(
+    "SDF_GGT_hex_prism_radius", "SDF Hex Prism Radius Gizmo",
+    _HEX_PRISM_SHAPES, "p1", _POS_Y_ROTATION, _P1_COLOR,
+)
+SDF_GGT_hex_prism_height = _make_single_prop_drag_gizmo(
+    "SDF_GGT_hex_prism_height", "SDF Hex Prism Height Gizmo",
+    _HEX_PRISM_SHAPES, "p2", _NEG_Y_ROTATION, _P2_COLOR,
+)
+SDF_GGT_rounded_cylinder_radius = _make_single_prop_drag_gizmo(
+    "SDF_GGT_rounded_cylinder_radius", "SDF Rounded Cylinder Radius Gizmo",
+    _ROUNDED_CYLINDER_SHAPES, "p1", _POS_Y_ROTATION, _P1_COLOR,
+)
+SDF_GGT_rounded_cylinder_edge_radius = _make_single_prop_drag_gizmo(
+    "SDF_GGT_rounded_cylinder_edge_radius", "SDF Rounded Cylinder Edge Radius Gizmo",
+    _ROUNDED_CYLINDER_SHAPES, "p2", _NEG_Y_ROTATION, _P2_COLOR,
+)
+SDF_GGT_rounded_cylinder_height = _make_single_prop_drag_gizmo(
+    "SDF_GGT_rounded_cylinder_height", "SDF Rounded Cylinder Height Gizmo",
+    _ROUNDED_CYLINDER_SHAPES, "p3", _NEG_SIDE_ROTATION, _P3_COLOR,
+)
+
+_GENERATED_CLASSES = (
+    SDF_GGT_rounded_box_roundness,
+    SDF_GGT_octahedron_size,
+    SDF_GGT_cut_sphere_cut_height,
+    SDF_GGT_pyramid_base_size,
+    SDF_GGT_pyramid_height,
+    SDF_GGT_hex_prism_radius,
+    SDF_GGT_hex_prism_height,
+    SDF_GGT_rounded_cylinder_radius,
+    SDF_GGT_rounded_cylinder_edge_radius,
+    SDF_GGT_rounded_cylinder_height,
+)
+
+
 class SDF_GGT_edge_profile_size(bpy.types.GizmoGroup):
     """アクティブなSDFプリミティブの edge_profile_size をビューポートでドラッグする。"""
     bl_idname = "SDF_GGT_edge_profile_size"
@@ -716,7 +832,7 @@ classes = (
     SDF_GGT_ellipsoid_radius_x,
     SDF_GGT_ellipsoid_radius_y,
     SDF_GGT_ellipsoid_radius_z,
-)
+) + _GENERATED_CLASSES
 
 
 def register():
