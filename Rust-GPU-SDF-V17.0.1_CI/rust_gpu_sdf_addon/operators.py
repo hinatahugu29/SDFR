@@ -86,12 +86,32 @@ def unique_sdf_collection_name():
     return f"SDF_Collection_{idx:03}"
 
 
+def _sdf_output_name_is_free(name):
+    """この出力名を新しいツリーに使い回してよいか。
+
+    V17.0.1: 以前は `bpy.data.objects` にその名前が無ければ空いている扱いにしていた。
+    だが Finalize は出力オブジェクトを `SDF_Result` → `SDF_Result_001` のように
+    リネームするため、その時点で "SDF_Result" という名前自体は一旦空く。次に作る
+    ツリーがそれを拾うと、Setup Material が名前ベースで `SDF_Material_SDF_Result`
+    を検索し、Finalize済みのバックアップがまだ握っている古いマテリアルを
+    そのまま再利用してしまっていた（オブジェクト名は「一度使ったら二度と使わない」
+    扱いにしないと、マテリアル名もそれに引きずられて衝突する）。
+    そのため、オブジェクト名そのものに加えて、対応するマテリアル名が
+    どこかで既に使われていないかも見る。
+    """
+    if name in bpy.data.objects:
+        return False
+    if bpy.data.materials.get(f"SDF_Material_{name}"):
+        return False
+    return True
+
+
 def unique_sdf_output_name():
     """次に作るツリーの出力オブジェクト名（同じく1本目は従来名）。"""
-    if "SDF_Result" not in bpy.data.objects:
+    if _sdf_output_name_is_free("SDF_Result"):
         return "SDF_Result"
     idx = 2
-    while f"SDF_Result_Tree_{idx:03}" in bpy.data.objects:
+    while not _sdf_output_name_is_free(f"SDF_Result_Tree_{idx:03}"):
         idx += 1
     return f"SDF_Result_Tree_{idx:03}"
 
@@ -561,6 +581,20 @@ class SDF_OT_bake_mesh(bpy.types.Operator):
         if not new_mesh.materials and source_obj.data.materials:
             for mat in source_obj.data.materials:
                 new_mesh.materials.append(mat)
+
+        # V17.0.1: ここまでの新しいnew_meshは、各マテリアルスロットが
+        # ライブツリーの出力メッシュと同一のマテリアル実体を指したままになる
+        # （new_from_object はスロットの「割り当て」だけを複製し、マテリアル
+        # データブロック自体は複製しない。上の append 分岐も同様）。そのため、
+        # 後でライブ側の Reset や Apply Material All を押すと、固定したはずの
+        # スナップショットの見た目まで一緒に変わってしまっていた。スナップショットは
+        # 「その時点の見た目を凍結する」ものなので、マテリアルも独立させる。
+        for i, mat in enumerate(list(new_mesh.materials)):
+            if mat is None:
+                continue
+            mat_copy = mat.copy()
+            mat_copy.name = f"{mat.name}_{snap_name}"
+            new_mesh.materials[i] = mat_copy
 
         new_obj = bpy.data.objects.new(name=snap_name, object_data=new_mesh)
         new_obj.matrix_world = source_obj.matrix_world
@@ -1210,7 +1244,19 @@ class SDF_OT_finalize(bpy.types.Operator):
         backup_obj = obj.copy()
         backup_obj.data = obj.data.copy()
         backup_obj.name = f"SDF_Result_{count:03}_Backup"
-        
+
+        # V17.0.1: Mesh.copy() はマテリアルの「割り当て」を複製するだけで、
+        # データブロック自体は元のメッシュと同じものを指したまま。このままだと
+        # バックアップは名ばかりで、ライブ側で後からマテリアルを書き換えると
+        # バックアップの見た目まで一緒に変わってしまう。バックアップは
+        # Finalize実行時点の見た目を凍結するためのものなので、マテリアルも独立させる。
+        for i, mat in enumerate(list(backup_obj.data.materials)):
+            if mat is None:
+                continue
+            mat_copy = mat.copy()
+            mat_copy.name = f"{mat.name}_{backup_obj.name}"
+            backup_obj.data.materials[i] = mat_copy
+
         backup_sub = get_or_create_collection("SDF_Backups", history_root)
         backup_sub.objects.link(backup_obj)
         backup_obj.sdf_props.is_output = False
