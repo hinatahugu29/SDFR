@@ -16,7 +16,7 @@ env:
 
 jobs:
   build-macos:
-    runs-on: macos-14
+    runs-on: macos-15  # macos-14 ランナーは廃止済み(2026-11 時点で起動不可)
     defaults:
       run:
         working-directory: Rust-GPU-SDF-V17.0.2_CI
