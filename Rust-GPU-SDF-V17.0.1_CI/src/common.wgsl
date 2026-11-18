@@ -628,13 +628,7 @@ fn apply_profile_int(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
 }
 
 // Simplified version for primitive edges to prevent driver compiler crashes (too many branches)
-// 呼び出し側は k > 0 のときだけ呼ぶ(k == 0 だと下の Fallback が 0/0 で NaN になる)。
 fn apply_primitive_edge(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
-    if (profile == 0u) { // Round: 半径 k の円形フィレット(外寸は変えずに角だけ削る)
-        // 2面ずつ畳み込むので、Box は XY→Z の2段で角が正確な球面になる
-        let u = vec2<f32>(d1, d2) + vec2<f32>(k);
-        return length(max(u, vec2<f32>(0.0))) + min(max(u.x, u.y), 0.0) - k;
-    }
     if (profile == 4u) { // Chamfer
         let plane = (d1 + d2 + k) * 0.70710678;
         let m = max(d1, d2);
@@ -644,11 +638,6 @@ fn apply_primitive_edge(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 
         let h = max(k - abs(d1 - d2), 0.0) / k; 
         return max(d1, d2) + h * h * h * k * 0.166666;
     }
-}
-
-// Round は半径をシェイプの厚みの半分(lim)で頭打ちにする。超えると外寸ごと縮んでしまうため。
-fn edge_radius(profile: u32, k: f32, lim: f32) -> f32 {
-    return select(k, min(k, lim), profile == 0u);
 }
 
 fn evaluate_layout(p_in: vec3<f32>, prim: Primitive, accum_idx_in: f32) -> vec3<f32> {
@@ -690,30 +679,26 @@ fn evaluate_shape(lp_in: vec3<f32>, prim: Primitive) -> f32 {
     // プレビュー側（shader.py）の sdf_eval_shape と完全同期
     if (shape == 0u) { dp = length(lp_s) - prim.params.x; }
     else if (shape == 1u) { 
-        // Edge Size が 0 なら、どのプロファイルでも素の(正確な)距離場を使う
-        if (edge_k > 0.0) {
+        if (edge_profile > 0u) {
             let q = abs(lp_s) - vec3<f32>(1.0);
-            let ek = edge_radius(edge_profile, edge_k, 1.0);
-            var d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, ek, edge_cs);
-            dp = apply_primitive_edge(d_tmp, q.z, edge_profile, ek, edge_cs);
+            var d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, edge_k, edge_cs);
+            dp = apply_primitive_edge(d_tmp, q.z, edge_profile, edge_k, edge_cs);
         } else {
             dp = sd_box(lp_s, vec3<f32>(1.0)); 
         }
     }
     else if (shape == 2u) { dp = sd_torus(lp_s, prim.extra_params.xy); }
     else if (shape == 3u) { 
-        if (edge_k > 0.0) {
+        if (edge_profile > 0u) {
             let d_cyl = length(lp_s.xy) - prim.extra_params.x;
             let d_slab = abs(lp_s.z) - prim.extra_params.y;
-            let ek = edge_radius(edge_profile, edge_k, min(prim.extra_params.x, prim.extra_params.y));
-            dp = apply_primitive_edge(d_cyl, d_slab, edge_profile, ek, edge_cs);
+            dp = apply_primitive_edge(d_cyl, d_slab, edge_profile, edge_k, edge_cs);
         } else {
             dp = sd_cylinder(lp_s, prim.extra_params.xy); 
         }
     }
-    else if (shape == 4u) {
-        // Round(0) は素の sd_rounded_box が既に円形。半径 extra.x が 0 だと Fallback が NaN になる
-        if (edge_profile > 0u && prim.extra_params.x > 0.0) {
+    else if (shape == 4u) { 
+        if (edge_profile > 0u) {
             let q = abs(lp_s) - vec3<f32>(1.0);
             var d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, prim.extra_params.x, edge_cs);
             dp = apply_primitive_edge(d_tmp, q.z, edge_profile, prim.extra_params.x, edge_cs);
@@ -723,7 +708,7 @@ fn evaluate_shape(lp_in: vec3<f32>, prim: Primitive) -> f32 {
     }
     else if (shape == 5u) { dp = sd_capsule(lp_s, prim.extra_params.y, prim.extra_params.x); }
     else if (shape == 6u) { 
-        if (edge_k > 0.0) {
+        if (edge_profile > 0u) {
             let k_hex = vec3<f32>(-0.866025404, 0.5, 0.577350269);
             let h_radius = prim.extra_params.x * 0.8660254; 
             let rx = 0.8660254 * lp_s.x - 0.5 * lp_s.y;
@@ -734,8 +719,7 @@ fn evaluate_shape(lp_in: vec3<f32>, prim: Primitive) -> f32 {
             pp.y -= 2.0 * min(d_dot, 0.0) * k_hex.y;
             let d_xy = length(pp.xy - vec2<f32>(clamp(pp.x, -k_hex.z * h_radius, k_hex.z * h_radius), h_radius)) * sign(pp.y - h_radius);
             let d_slab = pp.z - prim.extra_params.y;
-            let ek = edge_radius(edge_profile, edge_k, min(h_radius, prim.extra_params.y));
-            dp = apply_primitive_edge(d_xy, d_slab, edge_profile, ek, edge_cs);
+            dp = apply_primitive_edge(d_xy, d_slab, edge_profile, edge_k, edge_cs);
         } else {
             dp = sd_hex_prism(lp_s, prim.extra_params.xy); 
         }
@@ -743,7 +727,7 @@ fn evaluate_shape(lp_in: vec3<f32>, prim: Primitive) -> f32 {
     else if (shape == 7u) { dp = sd_pyramid(lp_s, prim.extra_params.xy); }
     else if (shape == 8u) { dp = sd_capped_cone(lp_s, prim.extra_params.z, prim.extra_params.x, prim.extra_params.y); }
     else if (shape == 9u) { 
-        if (edge_k > 0.0) {
+        if (edge_profile > 0u) {
             let an = 3.14159265 / prim.extra_params.y;
             let cosan = cos(an); let sinan = sin(an);
             var a = atan2(lp_s.y, lp_s.x) + an;
@@ -753,8 +737,7 @@ fn evaluate_shape(lp_in: vec3<f32>, prim: Primitive) -> f32 {
             let py = -s_tr * lp_s.x + c * lp_s.y;
             let d_xy = px - prim.extra_params.x * cosan;
             let d_slab = abs(lp_s.z) - prim.extra_params.z;
-            let ek = edge_radius(edge_profile, edge_k, min(prim.extra_params.x * cosan, prim.extra_params.z));
-            dp = apply_primitive_edge(d_xy, d_slab, edge_profile, ek, edge_cs);
+            dp = apply_primitive_edge(d_xy, d_slab, edge_profile, edge_k, edge_cs);
         } else {
             dp = sd_ngon_prism(lp_s, prim.extra_params.x, prim.extra_params.y, prim.extra_params.z); 
         }

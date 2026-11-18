@@ -335,20 +335,17 @@ fn calculate_primitive_sdf(local_p: Vector3<f32>, primitive: &SdfPrimitive, bvh:
             p.norm() - primitive.radius
         }
         "box" => {
-            // Edge Size が 0 なら、どのプロファイルでも素の(正確な)距離場を使う
-            if edge_k > 0.0 {
+            if edge_profile > 0 {
                 let q = p.abs() - Vector3::new(1.0, 1.0, 1.0);
-                let ek = edge_radius(edge_profile, edge_k, 1.0);
-                let d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, ek, edge_cs);
-                apply_primitive_edge(d_tmp, q.z, edge_profile, ek, edge_cs)
+                let d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, edge_k, edge_cs);
+                apply_primitive_edge(d_tmp, q.z, edge_profile, edge_k, edge_cs)
             } else {
                 let q = p.abs() - Vector3::new(1.0, 1.0, 1.0);
                 q.x.max(0.0).hypot(q.y.max(0.0).hypot(q.z.max(0.0))) + q.x.max(q.y.max(q.z)).min(0.0)
             }
         }
         "rounded_box" => {
-            // Round(0) は素の rounded box が既に円形。半径 extra_params[0] が 0 だと Fallback が NaN になる
-            if edge_profile > 0 && primitive.extra_params[0] > 0.0 {
+            if edge_profile > 0 {
                 let q = p.abs() - Vector3::new(1.0, 1.0, 1.0);
                 let d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, primitive.extra_params[0], edge_cs);
                 apply_primitive_edge(d_tmp, q.z, edge_profile, primitive.extra_params[0], edge_cs)
@@ -365,11 +362,10 @@ fn calculate_primitive_sdf(local_p: Vector3<f32>, primitive: &SdfPrimitive, bvh:
             Vector2::new(q_torus, p.z).norm() - r2
         }
         "cylinder" => {
-            if edge_k > 0.0 {
+            if edge_profile > 0 {
                 let d_cyl = Vector2::new(p.x, p.y).norm() - primitive.extra_params[0];
                 let d_slab = p.z.abs() - primitive.extra_params[1];
-                let ek = edge_radius(edge_profile, edge_k, primitive.extra_params[0].min(primitive.extra_params[1]));
-                apply_primitive_edge(d_cyl, d_slab, edge_profile, ek, edge_cs)
+                apply_primitive_edge(d_cyl, d_slab, edge_profile, edge_k, edge_cs)
             } else {
                 let r = primitive.extra_params[0];
                 let h = primitive.extra_params[1];
@@ -386,7 +382,7 @@ fn calculate_primitive_sdf(local_p: Vector3<f32>, primitive: &SdfPrimitive, bvh:
             (pa - ba * h_val).norm() - r
         }
         "hex_prism" => {
-            if edge_k > 0.0 {
+            if edge_profile > 0 {
                 let k_hex = Vector3::new(-0.8660254f32, 0.5f32, 0.57735027f32);
                 let h_radius = primitive.extra_params[0] * 0.8660254f32;
                 let rx = 0.8660254f32 * p.x - 0.5f32 * p.y;
@@ -398,8 +394,7 @@ fn calculate_primitive_sdf(local_p: Vector3<f32>, primitive: &SdfPrimitive, bvh:
                 let clamped_px = pp.x.clamp(-k_hex.z * h_radius, k_hex.z * h_radius);
                 let d_xy = (pp.x - clamped_px).hypot(pp.y - h_radius) * (pp.y - h_radius).signum();
                 let d_slab = pp.z.abs() - primitive.extra_params[1];
-                let ek = edge_radius(edge_profile, edge_k, h_radius.min(primitive.extra_params[1]));
-                apply_primitive_edge(d_xy, d_slab, edge_profile, ek, edge_cs)
+                apply_primitive_edge(d_xy, d_slab, edge_profile, edge_k, edge_cs)
             } else {
                 let h_radius = primitive.extra_params[0] * 0.8660254f32;
                 let h_half_height = primitive.extra_params[1];
@@ -455,7 +450,7 @@ fn calculate_primitive_sdf(local_p: Vector3<f32>, primitive: &SdfPrimitive, bvh:
             s * Vector2::new(ca_x, ca_y).norm().min(cb.norm())
         }
         "ngon_prism" => {
-            if edge_k > 0.0 {
+            if edge_profile > 0 {
                 let r = primitive.extra_params[0];
                 let n = primitive.extra_params[1];
                 let an = 3.14159265 / n;
@@ -465,8 +460,7 @@ fn calculate_primitive_sdf(local_p: Vector3<f32>, primitive: &SdfPrimitive, bvh:
                 let px = a.cos() * p.x + a.sin() * p.y;
                 let d_xy = px - r * cosan;
                 let d_slab = p.z.abs() - primitive.extra_params[2];
-                let ek = edge_radius(edge_profile, edge_k, (r * cosan).min(primitive.extra_params[2]));
-                apply_primitive_edge(d_xy, d_slab, edge_profile, ek, edge_cs)
+                apply_primitive_edge(d_xy, d_slab, edge_profile, edge_k, edge_cs)
             } else {
                 let r = primitive.extra_params[0];
                 let n = primitive.extra_params[1];
@@ -1203,13 +1197,7 @@ fn apply_profile_int_cpu(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32
 }
 
 // プリミティブエッジ（面取り）用の軽量版関数
-// 呼び出し側は k > 0 のときだけ呼ぶ(k == 0 だと下の Fallback が 0/0 で NaN になる)。
 fn apply_primitive_edge(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 {
-    if profile == 0 { // Round: 半径 k の円形フィレット(外寸は変えずに角だけ削る)
-        // 2面ずつ畳み込むので、Box は XY→Z の2段で角が正確な球面になる
-        let (u, v) = (d1 + k, d2 + k);
-        return u.max(0.0).hypot(v.max(0.0)) + u.max(v).min(0.0) - k;
-    }
     if profile == 4 { // Chamfer
         let plane = (d1 + d2 + k) * 0.70710678;
         let m = d1.max(d2);
@@ -1219,11 +1207,6 @@ fn apply_primitive_edge(d1: f32, d2: f32, profile: u32, k: f32, cs: f32) -> f32 
         let h = (k - (d1 - d2).abs()).max(0.0) / k; 
         d1.max(d2) + h * h * h * k * 0.166666
     }
-}
-
-// Round は半径をシェイプの厚みの半分(lim)で頭打ちにする。超えると外寸ごと縮んでしまうため。
-fn edge_radius(profile: u32, k: f32, lim: f32) -> f32 {
-    if profile == 0 { k.min(lim) } else { k }
 }
 
 
