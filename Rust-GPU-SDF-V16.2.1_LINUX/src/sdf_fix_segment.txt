@@ -1,0 +1,69 @@
+        // --- get_scene_sdf 内部のループ部分を完全に修復 ---
+    for (var i = 0u; i < config.num_primitives; i = i + 1u) {
+        let prim = primitives[i];
+        let shape = u32(prim.center_and_shape.w);
+        var p_final = q_rotate(p_sym - prim.center_and_shape.xyz, q_conj(prim.rotation));
+        let size = prim.size_and_op.xyz;
+        let op = u32(prim.size_and_op.w);
+        
+        // V12: Layout Stacking System (Advanced Packing)
+        let combined = u32(prim.layout_data1.x);
+        let flags = combined & 0xFFu;
+        let mask = (combined >> 8) & 0xFu;
+        let axis = (combined >> 12) & 0xFu;
+        
+        // 1. Jitter
+        if ((flags & 32u) != 0u) {
+            let seed = prim.layout_data2.y;
+            let strength = prim.layout_data2.z;
+            p_final.x += (hash3(p_final + seed) - 0.5) * strength;
+            p_final.y += (hash3(p_final + seed + 1.0) - 0.5) * strength;
+            p_final.z += (hash3(p_final + seed + 2.0) - 0.5) * strength;
+        }
+        
+        // 2. Patterns (Radial/Spiral)
+        if ((flags & 2u) != 0u || (flags & 4u) != 0u) {
+            let count = max(prim.layout_data1.z, 1.0);
+            let angle = 6.2831853 / count;
+            let radius = prim.layout_data1.w;
+            
+            var px: f32; var py: f32;
+            if (axis == 0u) { px = p_final.y; py = p_final.z; }
+            else if (axis == 1u) { px = p_final.x; py = p_final.z; }
+            else { px = p_final.x; py = p_final.y; }
+            
+            let a_raw = atan2(py, px) + angle * 0.5;
+            let step_idx = floor(a_raw / angle);
+            let a = step_idx * angle;
+            let s = sin(a); let c = cos(a);
+            let nx = c * px + s * py;
+            let ny = -s * px + c * py;
+            
+            if ((flags & 4u) != 0u) {
+                let pitch = prim.layout_data2.x;
+                let z_off = step_idx * pitch;
+                if (axis == 0u) { p_final.x -= z_off; }
+                else if (axis == 1u) { p_final.y -= z_off; }
+                else { p_final.z -= z_off; }
+            }
+            
+            if (axis == 0u) { p_final.y = nx - radius; p_final.z = ny; }
+            else if (axis == 1u) { p_final.x = nx - radius; p_final.z = ny; }
+            else { p_final.x = nx - radius; p_final.y = ny; }
+        }
+        
+        // 3. Mirror
+        if ((flags & 1u) != 0u) {
+            let offset = prim.layout_data1.y;
+            if ((mask & 1u) != 0u) { p_final.x = abs(p_final.x) - offset; }
+            if ((mask & 2u) != 0u) { p_final.y = abs(p_final.y) - offset; }
+            if ((mask & 4u) != 0u) { p_final.z = abs(p_final.z) - offset; }
+        }
+
+        var dp = 0.0;
+        if (shape == 0u) { dp = sd_sphere(p_final, prim.params.x); }
+        else if (shape == 1u) { dp = sd_box(p_final, size); }
+        else if (shape == 2u) { dp = sd_torus(p_final, size.xy); }
+        else if (shape == 3u) { dp = sd_cylinder(p_final, size.xy); }
+        
+        if (prim.noise_params.x > 0.0) { dp += noise3(p_final * prim.noise_params.y) * prim.noise_params.x; }

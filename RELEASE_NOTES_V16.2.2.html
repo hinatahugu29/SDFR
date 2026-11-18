@@ -1,0 +1,180 @@
+<div style="font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:#333; line-height:1.7; max-width:820px; margin:auto; padding:10px;">
+
+  <h1 style="color:#222; font-weight:bold; font-size:2em; margin-bottom:4px;">SDF.R V16.2.2 Release Notes</h1>
+  <p style="font-size:1.2em; color:#555; margin-top:0; font-style:italic;">The Mirror Blend preview moves with the mesh</p>
+  <p style="font-size:0.9em; color:#888; margin-top:0;">Released 2026-09-12</p>
+
+  <p style="font-size:1.05em; margin:24px 0 30px 0;">
+    V16.2.1 added <strong>Mirror Blend</strong>, which rounds off the hard crease that Layout Mirror
+    leaves down the middle of a mirrored shape. The final mesh has been correct since that release.
+    <strong>The ghost preview was not</strong>: raising Mirror Blend made the shape in the preview
+    thinner rather than thicker, and past a certain point the shape vanished from the preview
+    altogether. This release fixes the preview, and adds a warning for a setting that surprises
+    people.
+  </p>
+
+  <div style="margin-bottom:28px; padding:16px 20px; background:#f3f8f3; border-radius:8px; border:1px solid #dbe8db;">
+    <p style="font-size:0.97em; color:#3a5a3a; margin:0;">
+      <strong>Nothing about your meshes or your files changes.</strong> Meshing never used the
+      preview's code, so every mesh you generated on V16.2.1 was already correct, and so is every
+      file you saved. If you have never touched Mirror Blend, this release changes nothing you can
+      see &#8212; at 0, the preview takes exactly the path it always did.
+    </p>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🐛 The ghost preview drew Mirror Blend backwards</h2>
+
+  <h3 style="color:#222; font-weight:bold; font-size:1.15em; margin-top:22px;">What you saw</h3>
+
+  <p style="font-size:0.97em; color:#444;">
+    On V16.2.1, with Layout Mirror on a primitive and Mirror Blend above 0:
+  </p>
+
+  <ul style="font-size:0.97em; color:#444;">
+    <li>Raising Mirror Blend made the preview <strong>thinner</strong>, while the generated mesh got
+      <strong>thicker</strong>.</li>
+    <li>Past roughly twice the sum of Offset and the shape's own size, <strong>the shape disappeared
+      from the preview entirely</strong> &#8212; on a sphere of radius 0.15 at offset 0.25, that
+      happened at Blend 0.8.</li>
+    <li>The mesh was unaffected throughout, so the preview and the result disagreed, and the
+      disagreement grew as you raised the value.</li>
+  </ul>
+
+  <p style="font-size:0.97em; color:#444;">
+    The most likely way to meet this was to raise Mirror Blend looking for a rounder seam, watch the
+    preview shrink or empty out, and conclude the feature was broken. It was the preview that was
+    wrong.
+  </p>
+
+  <h3 style="color:#222; font-weight:bold; font-size:1.15em; margin-top:22px;">Why it happened</h3>
+
+  <p style="font-size:0.97em; color:#444;">
+    The final mesh evaluates the two mirrored halves separately and joins them with a smooth union,
+    which pushes the surface <strong>outward</strong> near the seam. The preview cannot do that: it
+    evaluates each shape once per frame, and there is only one shape inside folded space to evaluate.
+  </p>
+
+  <p style="font-size:0.97em; color:#444;">
+    V16.2.1's preview approximated the rounding by softening the fold itself &#8212; replacing the
+    sharp <code>abs()</code> at the mirror plane with a smoothed version. That does round the seam,
+    but it rounds it <strong>inward</strong>, eating into the shape instead of adding to it. The two
+    went in opposite directions, and at large values the inward cut consumed the shape completely.
+  </p>
+
+  <h3 style="color:#222; font-weight:bold; font-size:1.15em; margin-top:22px;">What it does now</h3>
+
+  <p style="font-size:0.97em; color:#444;">
+    The fold is sharp again, and the rounding is applied to the distance instead, reproducing the
+    same correction term the smooth union uses. The preview now swells as you raise Blend, in the
+    same direction and by a similar amount as the mesh.
+  </p>
+
+  <p style="font-size:0.97em; color:#444;">
+    It is still an approximation &#8212; one evaluation cannot reproduce two exactly &#8212; so the
+    two do not round identically. Measured on a mirrored sphere at radius 0.15 and offset 0.25:
+  </p>
+
+  <table style="width:100%; border-collapse:collapse; font-size:0.94em; color:#444; margin:10px 0 24px 0;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">Mirror Blend</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">V16.2.1 preview</th>
+        <th style="text-align:left; padding:8px 10px; border:1px solid #e0e0e0;">V16.2.2 preview</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.4</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.110 off</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.005 off</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.8</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">shape gone</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.010 off</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">2.0</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">shape gone</td>
+        <td style="padding:8px 10px; border:1px solid #e0e0e0;">0.003 off</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="font-size:0.97em; color:#444;">
+    The seam itself is exact: at the mirror plane the preview lands on the same value the smooth
+    union does. On a single mirror axis the rest of the shape now tracks the mesh to within about
+    0.01 across the whole Blend range. Two axes stay within about 0.06. Three axes is the loosest,
+    drifting to roughly 0.29 at Blend 2.0, because the per-axis roundings are summed rather than
+    solved together. <strong>The preview no longer creases</strong> &#8212; both the mirror plane and
+    the outer edge of the rounding are smooth, so the shading runs unbroken the way the generated
+    mesh does. <strong>Mirror Blend at 0 is bit-for-bit the path it was before.</strong> If you do
+    not use the feature, nothing in the preview has moved.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">🪞 A warning when Blend goes past twice the Offset</h2>
+
+  <div style="margin-bottom:24px; padding:16px 20px; background:#fdf4ec; border-radius:8px; border:1px solid #f0ddc9;">
+    <p style="font-size:0.97em; color:#6b4a2a; margin:0;">
+      <strong>Raising Mirror Blend past twice the Offset thickens the whole shape, not just the
+      seam.</strong> This is not a defect and it is not new &#8212; it is what joining two halves
+      smoothly does.
+    </p>
+  </div>
+
+  <p style="font-size:0.97em; color:#444;">
+    Once the blend radius reaches across the gap between the two halves, no part of the shape is far
+    enough from the seam to be left alone, and the surface inflates everywhere. On a mirrored sphere
+    it shows up as the axis <em>across</em> the mirror growing, which is not a direction Mirror Blend
+    looks like it should touch.
+  </p>
+
+  <p style="font-size:0.97em; color:#444;">
+    The panel now says so when your settings cross that line:
+  </p>
+
+  <pre style="background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:14px; font-size:0.9em; color:#333; overflow-x:auto;">Blend over 2x Offset swells the whole shape,
+not just the seam. Raise Offset to keep the size.</pre>
+
+  <p style="font-size:0.97em; color:#444;">
+    If you want a rounder seam without a heavier shape, <strong>raise Offset rather than Blend</strong>.
+  </p>
+
+  <p style="font-size:0.97em; color:#444;">
+    Mirror Blend stops at 2.0, so whether you can reach this at all depends on your Offset. Below an
+    Offset of 1.0 the warning is reachable and worth heeding. At an Offset of 1.0 or more, twice the
+    Offset is already past the top of the slider, so the shape cannot be pushed into swelling and the
+    warning never appears.
+  </p>
+
+  <hr style="border:0; border-top:1px solid #eee; margin:32px 0;">
+
+  <h2 style="color:#222; font-weight:bold; font-size:1.5em; border-left:5px solid #222; padding-left:12px;">Upgrading</h2>
+
+  <p style="font-size:0.97em; color:#444;">
+    Install over V16.2.1 as usual. Existing files need no migration and are not changed by opening
+    them.
+  </p>
+
+  <p style="font-size:0.97em; color:#444;">
+    Nothing in this release touches the meshing engine, so <strong>there is no shader cache rebuild
+    and no slow first start</strong>. The compute pipelines are byte for byte what V16.2.1 built, and
+    the cache on disk is reused as it is. Only the viewport preview shader and the panel changed, and
+    Blender compiles that one from source every session anyway.
+  </p>
+
+  <p style="font-size:0.97em; color:#444;">
+    Clearing the shader cache by hand is not required. If you keep several versions side by side, use
+    the V16.2.2 build rather than mixing folders. Windows, macOS and Linux builds are all available.
+  </p>
+
+  <p style="font-size:0.97em; color:#444; margin-top:24px;">
+    Thank you to the owner who asked whether Mirror Blend and the mesh were really connected. The
+    original report turned out to be about something else, but measuring it is what turned this up.
+  </p>
+
+</div>

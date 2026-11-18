@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SDF.R V16.2.1 — Update Announcement</title>
+  <style>
+    body {
+      margin: 0;
+      background: #f5f5f5;
+      color: #222;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.65;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 16px 64px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.3;
+    }
+    h2 {
+      margin-top: 36px;
+      padding-top: 8px;
+      border-top: 1px solid #ddd;
+      font-size: 22px;
+    }
+    h3 {
+      margin-top: 30px;
+      font-size: 18px;
+    }
+    p {
+      margin: 0 0 16px;
+    }
+    ul, ol {
+      padding-left: 24px;
+    }
+    li {
+      margin-bottom: 9px;
+    }
+    code {
+      font-family: Consolas, Monaco, monospace;
+      background: #f2f2f2;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+    .lead {
+      font-size: 17px;
+    }
+    .note {
+      background: #fafafa;
+      border-left: 4px solid #999;
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+    .subject {
+      background: #f7f7f7;
+      border: 1px solid #ddd;
+      padding: 12px 14px;
+      border-radius: 6px;
+      font-weight: bold;
+      margin: 10px 0 18px;
+    }
+    .muted {
+      color: #666;
+      font-size: 14px;
+    }
+    .lang {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #777;
+      margin-bottom: 6px;
+    }
+    strong {
+      font-weight: 700;
+    }
+    @media (max-width: 600px) {
+      .card {
+        padding: 20px;
+      }
+      h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <h1>SDF.R V16.2.1 — Update Announcement</h1>
+    <p class="muted">Simple HTML version for email / web use.</p>
+
+    <h2>Subject line options</h2>
+    <ol>
+      <li>SDF.R V16.2.1 — one add-on, separate objects</li>
+      <li>SDF.R V16.2.1 is out (free update) — a scene can now hold several SDF trees</li>
+      <li>[SDF.R] V16.2.1 released — the parts of your model can be separate meshes now</li>
+      <li><strong>SDF.R V16.2.1 — separate objects, and a ghost preview fix for V16.2.0 users</strong></li>
+    </ol>
+
+    <div class="subject">Japanese subject: SDF.R V16.2.1 公開 — パーツを別オブジェクトに / V16.2.0 のプレビュー不具合を修正</div>
+  </div>
+
+  <div class="card">
+    <div class="lang">English</div>
+    <h1>SDF.R V16.2.1</h1>
+
+    <p>Hi, and thank you for supporting SDF.R.</p>
+
+    <p class="lead"><strong>V16.2.1 is now available as a free update for all owners.</strong></p>
+
+    <div class="note">
+      <strong>If you are on V16.2.0, this one is worth taking now.</strong>
+      That release had a fault that switches the ghost preview off entirely once a tree holds more than sixteen parts — counted after layout expansion, so a Collection Divider set to a grid can reach it with only a few parts placed. Your meshes were never affected and nothing in your files was damaged; it is the live preview that stops drawing. It is fixed in this release.
+    </div>
+
+    <p>Until now, an SDF.R scene held exactly one SDF tree, and that tree produced exactly one mesh. If you wanted a model's parts as separate objects, the answer was always "build a second SDF output" — and there was no way to actually do that from inside the add-on.</p>
+
+    <p><strong>That is what this release is.</strong></p>
+
+    <h3>🌳 A scene can hold as many SDF trees as you like</h3>
+
+    <p>Each tree has its own parts collection, its own settings, and its own result mesh. They are separate objects from the moment they are built, so there is nothing to split afterwards.</p>
+
+    <p>The panel opens with a <strong>Tree</strong> row. The dropdown picks which tree you are editing, <strong>+</strong> adds a new one, and everything below that row follows your selection. You can also just click a part in the viewport — the panel jumps to whichever tree that part belongs to.</p>
+
+    <p><strong>Finalize applies to the active tree only.</strong> Baking one leaves the others live and editable.</p>
+
+    <p>This matters because shapes in the same tree always form one connected solid where they overlap. Layer Boundary (V16.2.0) stops them blending, but the merge is still a Union. Shapes in different trees never meet at all.</p>
+
+    <p>It is also <strong>faster</strong>, not slower. Splitting a model means each request carries fewer primitives, and sparse block detection has less to search. A 216-sphere model at resolution 128 took 5053 ms as one tree, 1904 ms across four, and 1215 ms across eight. There is no cap on the number of trees.</p>
+
+    <h3>🔗 Tree Reference — for parts that have to fit</h3>
+
+    <p>One tree can read another tree's shape. Select a part, press <strong>Add Tree Reference</strong>, point it at another tree, and choose <strong>Blend</strong> or <strong>Subtract</strong>.</p>
+
+    <p>Subtract is the one for a fit: carve the lid's cavity out of the jar and the two meet exactly. Edit the lid, and the cavity follows.</p>
+
+    <p>Blend is exact. Subtract is exact as long as the referenced tree is built from Union alone — if it uses Subtract or Intersect internally, the carve is approximate there, and the panel tells you so.</p>
+
+    <h3>🪞 Mirror Blend — the mirror seam can finally be rounded</h3>
+
+    <p>Per-primitive <strong>Mirror</strong> repeats a shape by folding space, so the two halves have always met at a hard minimum. <strong>Smoothness could never touch that seam</strong> — inside folded space there is only one shape, and nothing to blend it against.</p>
+
+    <p>That crease was real geometry, not shading. On a mirrored sphere it measured 44 creased edges at up to 84°.</p>
+
+    <p><strong>Mirror Blend</strong> evaluates the two sides separately and joins them with the primitive's own blend shape: 0 creased edges at 8.5°, vertex for vertex identical to building two spheres and joining them with a smooth union. It works on two axes at once.</p>
+
+    <p>It <strong>defaults to 0</strong>, which takes exactly the path it always did, so your existing files are unchanged until you decide otherwise.</p>
+
+    <p>Two honest limits: the ghost preview shows this as an approximation, and <strong>Radial and Grid still crease</strong> — blending across cell boundaries needs the neighbouring cells, which is a bigger change.</p>
+
+    <h3>🐛 Also fixed</h3>
+    <ul>
+      <li><strong>The ghost preview works again above sixteen parts.</strong> V16.2.0 added one value per part to the preview texture but left the row size it divides by at the old number, so from the seventeenth part the texture no longer matched its data and Blender refused to build it. Meshing runs on a separate path and was never involved.</li>
+      <li><strong>All Clear</strong> no longer leaves a hidden result object behind, and no longer deletes objects of your own whose names happen to contain <code>SDF_Result_</code> or <code>SDF_Backup</code>.</li>
+      <li>A <strong>Dual Contouring error saved into a .blend</strong> no longer reappears on a machine where DC is fine.</li>
+      <li><strong>Undo</strong> after adding a part now returns to a clean state.</li>
+      <li>A 3D view in a <strong>second window</strong> repaints when a mesh finishes.</li>
+      <li><strong>Show Result Mesh</strong> now clears the mesh when switched off, instead of only hiding the result.</li>
+      <li><strong>Auto Domain</strong> and <strong>Use Live Normals</strong> re-mesh when toggled.</li>
+      <li>The panel no longer unlocks while shaders are still compiling. The GPU-ready flag was being saved into your .blend, so a file saved after start-up looked ready on the next launch before the engine actually was.</li>
+    </ul>
+
+    <h3>Upgrading</h3>
+
+    <p>Install over your current version as usual. Existing files need no migration.</p>
+
+    <div class="note">
+      <strong>The first start after updating takes longer than usual.</strong>
+      The GPU shader code changed, so the cached pipeline no longer matches and is rebuilt once. On a discrete GPU that is the usual 15–45 seconds. <strong>On integrated graphics it can take several minutes</strong> — an Intel Iris Xe measured 194 seconds. The console prints <code>Compiling MC Pipeline...</code> while it works and <code>GPU Engine Ready!</code> when it is done. Later starts take a second or two.
+    </div>
+
+    <p>Windows, macOS and Linux builds are all available.</p>
+
+    <p>Thanks as always for the reports and suggestions — the tree work in this release came directly from people asking for their parts as separate objects.</p>
+  </div>
+
+  <div class="card">
+    <div class="lang">日本語</div>
+    <h1>SDF.R V16.2.1</h1>
+
+    <p>いつも SDF.R をご利用いただきありがとうございます。</p>
+
+    <p class="lead"><strong>V16.2.1 を公開しました。既存ユーザーの方は無償アップデートです。</strong></p>
+
+    <div class="note">
+      <strong>V16.2.0 をお使いの方は、早めの更新をおすすめします。</strong>
+      V16.2.0 には、1本のツリーの要素が16個を超えるとゴーストプレビューが表示されなくなる不具合がありました。数えるのはレイアウト展開後の要素数なので、仕切り（Collection Divider）で配列を効かせていれば、配置した部品が少なくても到達します。<strong>メッシュ生成には影響がなく、ファイルが壊れることもありません</strong>。止まるのはリアルタイムのプレビュー表示だけで、本アップデートで修正済みです。
+    </div>
+
+    <p>これまで SDF.R のシーンが持てる SDF ツリーは1本だけで、出力されるメッシュも1つでした。モデルのパーツを別オブジェクトにしたい場合、答えはいつも「SDF 出力をもう1つ作ってください」でしたが、<strong>アドオンの中からそれを行う手段がありませんでした</strong>。</p>
+
+    <p><strong>今回のアップデートは、その手段そのものです。</strong></p>
+
+    <h3>🌳 1つのシーンに複数の SDF ツリー</h3>
+
+    <p>各ツリーが自分のパーツ用コレクション、自分の設定、自分の結果メッシュを持ちます。<strong>作った時点で別オブジェクト</strong>なので、後から分割する作業は要りません。</p>
+
+    <p>パネルの一番上に <strong>Tree</strong> 行が出ます。ドロップダウンで編集するツリーを選び、<strong>+</strong> で追加します。ビューポートでパーツをクリックするだけでも、そのパーツが属するツリーに切り替わります。</p>
+
+    <p><strong>Finalize は選択中のツリーだけに効きます。</strong> 1本を確定しても、残りは編集可能なままです。</p>
+
+    <p>同じツリーの中では、重なった形は必ず1つの繋がったソリッドになります。Layer Boundary（V16.2.0）はブレンドを止めますが、合流自体は Union のままです。<strong>別のツリー同士は、そもそも一切干渉しません。</strong></p>
+
+    <p>しかも<strong>遅くなるどころか速くなります</strong>。1リクエストあたりのプリミティブ数が減り、疎ブロック検出も効きやすくなるためです。216個の球・解像度128のモデルで、1本 5053ms → 4本 1904ms → 8本 1215ms。ツリー数に上限はありません。</p>
+
+    <h3>🔗 Tree Reference — はめ合いを作る</h3>
+
+    <p>あるツリーが別のツリーの形を読み取れます。パーツを選んで <strong>Add Tree Reference</strong> を押し、参照先のツリーと <strong>Blend</strong> / <strong>Subtract</strong> を選びます。</p>
+
+    <p>はめ合いに使うのは Subtract です。瓶から蓋のくぼみを削り出せば、両者はぴったり合います。蓋を編集すれば、くぼみも追従します。</p>
+
+    <p>Blend は厳密です。Subtract は、<strong>参照先が Union だけで構成されていれば厳密</strong>です。内部で Subtract や Intersect を使っている場合はその箇所が近似になり、パネルにその旨が表示されます。</p>
+
+    <h3>🪞 Mirror Blend — ミラーの継ぎ目を丸められるようになりました</h3>
+
+    <p>プリミティブの <strong>Mirror</strong> は空間を折り返して複製するため、2つの半分は常にハードな最小値で接合されていました。<strong>Smoothness はこの継ぎ目に一切効きません</strong> — 折り畳まれた空間の中には形が1つしかなく、ブレンドする相手が存在しないためです。</p>
+
+    <p>これは陰影の問題ではなく、<strong>形そのものの折れ目</strong>でした。ミラーした球で、44本の辺が最大84°。</p>
+
+    <p><strong>Mirror Blend</strong> は両側を別々に評価し、プリミティブ自身のブレンド形状で結合します。結果は折れ目0本・8.5°で、<strong>実体の球を2つ作って Smooth Union で繋いだ場合と頂点単位で一致</strong>します。2軸同時にも対応しています。</p>
+
+    <p><strong>既定値は 0</strong> で、その場合は従来とまったく同じ経路を通ります。既存ファイルの見た目は変わりません。</p>
+
+    <p>正直に2点。ゴーストプレビューでは近似表示になります。また <strong>Radial と Grid には引き続き折れ目が出ます</strong> — セル境界をまたぐブレンドには隣のセルの評価が必要で、ミラーより大きな変更になるためです。</p>
+
+    <h3>🐛 その他の修正</h3>
+    <ul>
+      <li><strong>要素が16個を超えてもゴーストプレビューが出るようになりました。</strong> V16.2.0 でプレビュー用テクスチャの1行に値を1つ追加した際、行の大きさを求める割り算だけが旧値のままでした。そのため17個目からテクスチャとデータの大きさが食い違い、Blender が生成を拒否していました。メッシュ生成は別経路のため影響していません。</li>
+      <li><strong>All Clear</strong> が、非表示になっている結果オブジェクトを消し残さなくなりました。あわせて、名前に <code>SDF_Result_</code> や <code>SDF_Backup</code> を含むだけのご自身のオブジェクトを巻き込んで削除しなくなりました。</li>
+      <li>.blend に保存された <strong>Dual Contouring のエラー表示</strong>が、DC が正常な環境で開いても残り続ける問題を修正しました。</li>
+      <li>部品を追加した直後の <strong>Undo</strong> が、中途半端な状態に戻らなくなりました。</li>
+      <li><strong>別ウィンドウ</strong>に開いた3Dビューが、メッシュ完成時に再描画されるようになりました。</li>
+      <li><strong>Show Result Mesh</strong> を OFF にしたとき、結果を隠すだけでなくメッシュを空にするようになりました。</li>
+      <li><strong>Auto Domain</strong> と <strong>Use Live Normals</strong> の切り替えで再メッシュされるようになりました。</li>
+      <li>シェーダーのコンパイル中にパネルが操作可能になる問題を修正しました。GPU準備完了フラグが .blend に保存されていたため、初期化後に保存したファイルを開くと、次回起動時に準備完了に見えていました。</li>
+    </ul>
+
+    <h3>アップデート方法</h3>
+
+    <p>通常どおり上書きインストールしてください。既存ファイルの移行作業は不要です。</p>
+
+    <div class="note">
+      <strong>更新後の初回起動は通常より時間がかかります。</strong>
+      GPU シェーダーのコードが変わったため、キャッシュ済みのパイプラインが一致せず、1度だけ再構築が走ります。ディスクリート GPU で通常どおり15〜45秒、<strong>内蔵GPUでは数分かかることがあります</strong>（Intel Iris Xe で194秒を実測）。処理中はコンソールに <code>Compiling MC Pipeline...</code>、完了時に <code>GPU Engine Ready!</code> と表示されます。2回目以降は1〜2秒です。
+    </div>
+
+    <p>Windows / macOS / Linux 版すべて公開済みです。</p>
+
+    <p>ご報告・ご要望をいつもありがとうございます。今回のツリー機能は、パーツを別オブジェクトにしたいというお声から直接生まれたものです。</p>
+  </div>
+
+</div>
+</body>
+</html>
