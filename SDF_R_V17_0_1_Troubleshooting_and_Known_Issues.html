@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>SDF.R V17.0.1 インストール・運用上の注意点と既知の問題（トラブルシューティング集）</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif;
+      line-height: 1.7;
+      color: #24292e;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 36px 24px 80px;
+      background: #fafafa;
+    }
+    h1, h2, h3, h4 { line-height: 1.3; color: #1a202c; }
+    h1 { font-size: 2.1rem; margin-bottom: 0.25rem; border-bottom: 3px solid #e53e3e; padding-bottom: 12px; }
+    h2 {
+      margin-top: 52px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #333;
+      font-size: 1.45rem;
+    }
+    h3 {
+      margin-top: 32px;
+      font-size: 1.15rem;
+      color: #742a2a;
+      background: #fff5f5;
+      padding: 8px 14px;
+      border-left: 5px solid #e53e3e;
+      border-radius: 4px;
+    }
+    .meta {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin: 20px 0 32px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    .warning {
+      background: #fffaf0;
+      border-left: 5px solid #dd6b20;
+      padding: 14px 18px;
+      border-radius: 6px;
+      margin: 18px 0;
+      font-size: 0.95rem;
+    }
+    .danger {
+      background: #fff5f5;
+      border-left: 5px solid #e53e3e;
+      padding: 14px 18px;
+      border-radius: 6px;
+      margin: 18px 0;
+      font-size: 0.95rem;
+    }
+    .tip {
+      background: #ebf8ff;
+      border-left: 5px solid #3182ce;
+      padding: 14px 18px;
+      border-radius: 6px;
+      margin: 18px 0;
+      font-size: 0.95rem;
+    }
+    .ok {
+      background: #f0fff4;
+      border-left: 5px solid #38a169;
+      padding: 14px 18px;
+      border-radius: 6px;
+      margin: 18px 0;
+      font-size: 0.95rem;
+    }
+    ol, ul {
+      margin: 10px 0;
+      padding-left: 24px;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      margin: 16px 0 24px;
+      font-size: 0.94rem;
+    }
+    th, td {
+      border: 1px solid #cbd5e0;
+      padding: 10px 14px;
+      vertical-align: top;
+    }
+    th {
+      background: #edf2f7;
+      text-align: left;
+      font-weight: 600;
+    }
+    code {
+      font-family: "Cascadia Mono", Consolas, monospace;
+      background: #edf2f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #c53030;
+    }
+    pre {
+      background: #2d3748;
+      color: #f7fafc;
+      padding: 14px 18px;
+      border-radius: 6px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      margin: 14px 0;
+    }
+    .faq-q {
+      font-weight: bold;
+      color: #2b6cb0;
+      font-size: 1.05rem;
+      margin-top: 18px;
+      margin-bottom: 6px;
+    }
+    .faq-a {
+      margin-left: 8px;
+      margin-bottom: 20px;
+    }
+    .toc {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px 28px;
+      margin: 24px 0 36px;
+    }
+    .toc ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+      column-count: 2;
+      column-gap: 32px;
+    }
+    .toc li {
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+
+<h1>SDF.R V17.0.1 インストール・運用上の注意点と既知の問題（トラブルシューティング集）</h1>
+<div class="meta">
+  対象バージョン: <strong>Rust-GPU-SDF / SDF.R V17.0.1</strong> | 基準ベース: V17.0.0 / V16.2.2 | 作成日: 2026-10-25<br>
+  用途: インストール時の注意点、OS別要件、初回起動の挙動、作業中の注意点、既知の制限・問題およびFAQ
+</div>
+
+<div class="toc">
+  <strong>目次</strong>
+  <ul>
+    <li><a href="#sec-1">1. 対応環境とOS別の前提条件</a></li>
+    <li><a href="#sec-2">2. インストール手順と初回起動の重要注意</a></li>
+    <li><a href="#sec-3">3. アップデート・キャッシュ管理の注意点</a></li>
+    <li><a href="#sec-4">4. 作業中の落とし穴・注意点（SDFモデリング特有）</a></li>
+    <li><a href="#sec-5">5. V17.0.0 / V17.0.1 特有の既知の問題と制限</a></li>
+    <li><a href="#sec-6">6. トラブルシューティング Q&amp;A（逆引きFAQ）</a></li>
+  </ul>
+</div>
+
+<h2 id="sec-1">1. 対応環境とOS別の前提条件</h2>
+<div class="card">
+  <p><strong>対応Blenderバージョン:</strong> 推奨 Blender 4.2 LTS / 4.3 / 5.x 系（下限: Blender 3.6 LTS 以上、Python 3.10〜3.13対応）</p>
+
+  <table>
+    <thead>
+      <tr><th>OS</th><th>アーキテクチャ</th><th>状態</th><th>必須要件・特有の注意点</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Windows</strong></td>
+        <td>x86_64</td>
+        <td><strong>標準パッケージ</strong></td>
+        <td>・Vulkan 1.2+ または DirectX 12 対応GPU<br>・最新のGPUディスプレイドライバ<br>・Visual C++ 再頒布可能パッケージ</td>
+      </tr>
+      <tr>
+        <td><strong>macOS</strong></td>
+        <td>Apple Silicon (arm64)</td>
+        <td>テストビルド提供</td>
+        <td>・<strong>Apple Silicon（M1/M2/M3/M4等）専用</strong>。Intel Mac非対応。<br>・Metalバックエンド。<br>・<strong>Gatekeeper（セキュリティ）警告の回避が必要</strong>（下記参照）。</td>
+      </tr>
+      <tr>
+        <td><strong>Linux</strong></td>
+        <td>x86_64</td>
+        <td>テストビルド提供</td>
+        <td>・glibc 2.31 以上<br>・Vulkan対応ドライバ（mesa-vulkan-drivers または NVIDIA公式ドライバ）<br>・WSL2（Windows Subsystem for Linux）でのGUI動作検証済み。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="warning">
+    <strong>⚠️ macOSでの重要注意（Gatekeeperブロックの解除手順）:</strong><br>
+    macOS版のバイナリ（<code>librust_gpu_sdf.dylib</code>）は未署名のため、Blenderでアドオンを有効化しようとした際に「開発元を検証できないため開けません」というセキュリティ警告が出ることがあります。
+    <ol>
+      <li>警告が出たら一度「キャンセル」をクリックします。</li>
+      <li>macOSの「システム設定」&gt;「プライバシーとセキュリティ」を開きます。</li>
+      <li>画面下部に「<code>librust_gpu_sdf.dylib</code> は開発元を確認できないため使用がブロックされました」と表示されている箇所の <strong>「このまま開く」</strong> をクリックします。</li>
+      <li>Blenderに戻り、再度アドオンのチェックボックスをONにすると正常に有効化されます。</li>
+    </ol>
+  </div>
+</div>
+
+<h2 id="sec-2">2. インストール手順と初回起動の重要注意</h2>
+<div class="card">
+  <h3>インストール手順</h3>
+  <ol>
+    <li>配布パッケージZIPファイル（例: <code>SDF_R_V17_0_1.zip</code> 等）を用意します（ZIPを展開・解凍しないでください）。</li>
+    <li>Blenderを起動し、メニューの <code>編集 (Edit)</code> &gt; <code>プリファレンス (Preferences)</code> を開きます。</li>
+    <li><code>アドオン (Add-ons)</code> タブを選択し、右上の <code>インストール... (Install...)</code> ボタンをクリックします。</li>
+    <li>ZIPファイルを選択してインストールします。</li>
+    <li>リストに表示された <code>SDF.R</code>（または <code>Rust-GPU-SDF</code>）にチェックを入れて有効化します。</li>
+    <li>3Dビューポートで <code>N</code> キーを押し、サイドバーの <code>SDF.R</code> タブが表示されることを確認します。</li>
+  </ol>
+
+  <div class="danger">
+    <strong>⚠️ 超重要: 初回起動時の「ウォームアップ時間（Shaderコンパイル）」について</strong><br>
+    初めてアドオンを有効化し、<code>Initialize SDF System</code> を実行した直後、またはキャッシュクリア直後は、<strong>GPUシェーダー（WGSL）のコンパイルとコンピュートパイプラインの構築</strong>がバックグラウンドで実行されます。<br><br>
+    この間、<strong>Blenderが一見フリーズ・応答停止したように見えますが、内部で正常にコンパイルが進行しています。絶対にBlenderを強制終了しないでください。</strong>
+    <ul>
+      <li><strong>ディスクリートGPU（NVIDIA GeForce RTX, AMD Radeon 等）:</strong> <strong>15秒 〜 45秒程度</strong> で完了します。</li>
+      <li><strong>内蔵GPU（Intel Iris Xe, UHD Graphics, AMD Radeon 680M/780M 等）:</strong> <strong>2分 〜 3分以上（実測194秒など）</strong> かかる場合があります。</li>
+    </ul>
+    <strong>コンソールでの進行確認:</strong> Blenderのメニュー <code>ウィンドウ (Window)</code> &gt; <code>システムコンソール切り替え (Toggle System Console)</code>（Windowsの場合）を開いておくと、<code>Compiling MC Pipeline...</code> → <code>GPU Engine Ready!</code> と進捗ログが確認できます。
+  </div>
+</div>
+
+<h2 id="sec-3">3. アップデート・キャッシュ管理の注意点</h2>
+<div class="card">
+  <p>過去バージョンから更新した場合や、PCのGPU・ディスプレイドライバを更新した直後、<code>Initializing...</code> から進まなくなったり、起動時にクラッシュすることがあります。その場合はシェーダーキャッシュを手動で削除してください。</p>
+
+  <p><strong>キャッシュファイルの保存場所:</strong></p>
+  <ul>
+    <li><strong>Windows:</strong> <code>%APPDATA%\Blender Foundation\Blender\&lt;バージョン&gt;\datafiles\rust_gpu_sdf\shader_cache.bin</code></li>
+    <li><strong>macOS:</strong> <code>~/Library/Application Support/Blender/&lt;バージョン&gt;/datafiles/rust_gpu_sdf/shader_cache.bin</code></li>
+    <li><strong>Linux:</strong> <code>~/.config/blender/&lt;バージョン&gt;/datafiles/rust_gpu_sdf/shader_cache.bin</code></li>
+  </ul>
+  <div class="tip">※ キャッシュファイルを削除しても、次回Blender起動時に自動的に最新のキャッシュが再生成されます。</div>
+</div>
+
+<h2 id="sec-4">4. 作業中の落とし穴・注意点（SDFモデリング特有）</h2>
+<div class="card">
+  <h3>① プリミティブの順序と「Subtractが効かない」問題</h3>
+  <p><strong>現象:</strong> <code>Cylinder</code> を追加して <code>Subtract</code>（くり抜き）にしたのに、穴が開かない。<br>
+  <strong>原因:</strong> SDF.Rの <code>The Stack</code> は <strong>「上から下へ」</strong> 順番に評価されます。削る対象となる本体（<code>Union</code>）よりもスタックの上（手前）に <code>Subtract</code> を置いても、削るべき形状がまだ存在しないため何も起きません。<br>
+  <strong>対策:</strong> <code>The Stack</code> 上で、<code>Subtract</code> プリミティブを削りたい形状より <strong>「下」</strong> に移動（▼ボタン）させてください。</p>
+
+  <h3>② 意図しないパーツまで削れてしまう「誤爆貫通」</h3>
+  <p><strong>現象:</strong> 腕のパーツに開けたネジ穴（Subtract）が、遠く離れた胴体まで突き抜けて削ってしまう。<br>
+  <strong>原因:</strong> スタック上で平坦に積まれていると、Subtractは自分より上にあるすべての形状に作用します。<br>
+  <strong>対策:</strong>
+    1. <strong><code>Collection Divider</code> を使う:</strong> 腕パーツ群の直前にDividerを置き、グループ化・カプセル化します。<br>
+    2. <strong><code>マルチツリー（Add Tree）</code> を使う:</strong> 胴体と腕を別ツリーとして作成し、<code>Tree Reference</code> で合体させるとブーリアンが完全に分離されます。
+  </p>
+
+  <h3>③ BBox（バウンディングボックス）の端切れ</h3>
+  <p><strong>現象:</strong> 大きく引き伸ばした形状や、大きなSmoothnessで広がった部分の端が、透明な壁にぶつかったようにスパッと平らに切れてしまう。<br>
+  <strong>原因:</strong> SDFのGPU計算領域（Bounding Box）の外側に形状がはみ出しているためです。<br>
+  <strong>対策:</strong> <code>Output &amp; Quality</code> セクションの <code>BBox Padding</code>（余白倍率）を <code>1.2</code> 〜 <code>1.5</code> 程度に引き上げるか、<code>Bounding Box Mode</code> を <code>Manual</code> にして手動でボックスを拡大してください。</p>
+
+  <h3>④ Radial Array（放射状配列）の端が欠ける</h3>
+  <p><strong>現象:</strong> <code>Radial Array Count</code> を増やした際、回転角度を大きくするとパーツの端が削ぎ落とされる。<br>
+  <strong>原因:</strong> SDF.Rのラジアル配列は空間をピザのような扇形スライス（<code>360° / Count</code>）に折りたたんで計算するため、パーツの大きさがスライスの角度幅（目安 <code>180° / Count</code>）をはみ出すとクリッピングされます。<br>
+  <strong>対策:</strong> パーツの回転量を抑える、<code>Count</code> を適切に調整する、または別ツリーとして作成してBlender側のオブジェクト複製で並べてください。</p>
+
+  <h3>⑤ プレビューの負荷とFPS低下</h3>
+  <p><strong>現象:</strong> プリミティブ数が増えると、視点回転や移動が重くなる。<br>
+  <strong>対策:</strong> 造形中は <code>Output &amp; Quality</code> の Resolution Preset を <strong><code>Low</code></strong> または <strong><code>Medium</code></strong> に設定してください。また、大量に移動・変形を行う作業中は一時的に <strong><code>Live Update</code> を OFF</strong> にし、位置が決まってから <code>Force Update</code> を押す運用が効果的です。</p>
+</div>
+
+<h2 id="sec-5">5. V17.0.0 / V17.0.1 特有の既知の問題と制限</h2>
+<div class="card">
+  <h3>① ギズモ未対応（パネル専用）のパラメータ</h3>
+  <p>V17.0.0で多くのパラメータがビューポートギズモに対応しましたが、以下の項目は依然として <strong>サイドパネル専用</strong> となっています。</p>
+  <ul>
+    <li><strong>Capped Torus の Arc Angle:</strong> 回転角度パラメータのため、矢印ではなく将来的なダイヤル型ギズモ（Dial 3D）の実装待ち。</li>
+    <li><strong>N-gon Prism の辺数（Sides）:</strong> 整数ステップ値のため、矢印ではなく将来的なステッパーボタン型ギズモの実装待ち。</li>
+    <li><strong>Deform Stack の各項目（Elongate / Twist / Bend / Taper 等）:</strong> リスト構造およびモード依存スロットのため、ギズモ未対応。サイドパネルから数値調整してください。</li>
+    <li><strong>個別プリミティブ間のブール関係値:</strong> 2つのオブジェクト間の個別ブレンド半径などはパネル設定のみ。</li>
+  </ul>
+
+  <h3>② ギズモ矢印をドラッグしても見た目が変化しないケース</h3>
+  <p><strong>Smoothness（マゼンタ矢印）:</strong> 他のプリミティブと接触・重複していない「孤立したパーツ」では、矢印をドラッグして数値を変更しても、ブレンドする相手がいないため外観は変化しません（パーツが他と交差した瞬間にブレンドが反映されます）。</p>
+
+  <h3>③ 多数ギズモ表示時の負荷（Phase G1スロットリング検証中）</h3>
+  <p>1つのプリミティブに対して最大5〜6本のギズモが同時に出現するため、超高解像度（Ultra）かつ数百パーツのツリーでギズモを連続ドラッグすると、GPUの再計算キューが連続して走りFPSが低下することがあります。ギズモドラッグ時は解像度を <code>Medium</code> 以下にしておくことを推奨します。</p>
+
+  <h3>④ 旧バージョンで保存されたファイルとのマテリアル互換性（V17.0.1）</h3>
+  <p><strong>V17.0.1の改善:</strong> <code>Snapshot Mesh</code> および <code>Finalize (Bake All)</code> 実行時にマテリアルが独立複製されるようになりました。<br>
+  <strong>注意点:</strong> <strong>V17.0.0以前に作成・保存されたBlenderファイル</strong> の中に残っている既存のスナップショットメッシュは、過去の仕様（ライブツリーと同一マテリアルを共有）のままです。これらを独立化させたい場合は、最新のV17.0.1上で再度 <code>Snapshot Mesh</code> を実行してください。</p>
+</div>
+
+<h2 id="sec-6">6. トラブルシューティング Q&amp;A（逆引きFAQ）</h2>
+<div class="card">
+  <div class="faq-q">Q1. アドオン有効化時にエラー（ImportError / DLL load failed）が出る</div>
+  <div class="faq-a">
+    <strong>Windows:</strong> Visual C++ 再頒布可能パッケージ（最新版）がインストールされているか確認してください。また、GPUディスプレイドライバを最新にアップデートしてください。<br>
+    <strong>macOS:</strong> Apple Silicon Mac（M1〜M4）であることを確認し、上記「Gatekeeperブロック解除手順」を行ってください。<br>
+    <strong>Linux:</strong> glibcのバージョンが2.31以上か、およびVulkanドライバが正常に動作しているか（<code>vulkaninfo</code> コマンド等）を確認してください。
+  </div>
+
+  <div class="faq-q">Q2. 画面が真っ暗のまま進まない、または GPU: Updating のまま止まる</div>
+  <div class="faq-a">
+    初回起動またはキャッシュ削除直後の <strong>Shader Compile中</strong> です。特に内蔵GPUの場合は2〜3分待機してください。<br>
+    5分以上待っても変化がない場合は、一度Blenderを閉じ、上記の手順で <code>shader_cache.bin</code> を削除してから再起動してください。
+  </div>
+
+  <div class="faq-q">Q3. Transmission（透過ガラス）を設定したのに透けない</div>
+  <div class="faq-a">
+    以下の3点を確認してください:<br>
+    1. 3Dビューポートのシェーディングが <strong>「マテリアルプレビュー」または「レンダー」</strong> になっているか（ソリッド表示では透過しません）。<br>
+    2. <code>6. Material</code> セクションの <code>Setup Material</code> ボタンが押されているか。<br>
+    3. Transmissionはプリミティブ個別ではなく、<strong>マテリアル全体で1つの共通値</strong>です。
+  </div>
+
+  <div class="faq-q">Q4. 生成されたメッシュの角に細かいギザギザ・ジャギーが出る</div>
+  <div class="faq-a">
+    <code>3. Output &amp; Quality</code> の解像度を上げるか、<code>4. Post-Process (Smoothing)</code> の <strong><code>Enable Smoothing</code> を ON</strong> にしてください。ラプラシアンスムージングにより微細な段差が滑らかに平滑化されます。<br>
+    さらに <code>7. Finalize / Output</code> の <strong><code>Fix Normals</code></strong> を押すと、数学的勾配による最高品質の法線が適用され、シェーディングが極めて美しくなります。
+  </div>
+
+  <div class="faq-q">Q5. Finalizeした後に元のSDF編集に戻したい</div>
+  <div class="faq-a">
+    <code>Finalize (Bake All)</code> を実行すると、元となったSDFプリミティブ群は <strong>非表示の履歴コレクション（<code>SDF_History_...</code>）</strong> に自動退避されています。<br>
+    完全に元のライブSDF状態へ復元したい場合は、Blenderのアウトライナーで履歴コレクションを表示状態に戻すか、作業途中で必ず <strong><code>Snapshot Mesh</code></strong> を使って節目節目でバックアップを残す運用を行ってください。
+  </div>
+</div>
+
+</body>
+</html>

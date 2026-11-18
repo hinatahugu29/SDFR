@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>SDF.R V17.0.1 UI / Command Inventory</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif;
+      line-height: 1.65;
+      color: #222;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+      background: #fafafa;
+    }
+    h1, h2, h3, h4 { line-height: 1.25; }
+    h1 { font-size: 2.1rem; margin-bottom: 0.25rem; color: #111; }
+    h2 {
+      margin-top: 48px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #222;
+      font-size: 1.35rem;
+    }
+    h3 {
+      margin-top: 28px;
+      font-size: 1.1rem;
+      color: #2b3a4a;
+    }
+    .meta {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 20px;
+    }
+    .note {
+      background: #fff8dc;
+      border-left: 5px solid #e0b100;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 18px 0;
+    }
+    .ok {
+      background: #edf8f0;
+      border-left: 5px solid #40a060;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 18px 0;
+    }
+    .new-feature {
+      background: #eef6ff;
+      border-left: 5px solid #2b7de9;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 18px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      margin: 14px 0 28px;
+      font-size: 0.94rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 9px 12px;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f3f5;
+      text-align: left;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    code {
+      font-family: "Cascadia Mono", Consolas, monospace;
+      background: #f1f1f1;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.82em;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .mesh { background: #e8f1ff; color: #174a8b; }
+    .light { background: #eaf8ef; color: #22613a; }
+    .none { background: #f3f3f3; color: #555; }
+    .danger { background: #fff0f0; color: #9b1c1c; }
+    .gizmo-tag { background: #fdf2e9; color: #af5700; border: 1px solid #f0b37e; }
+    .small { font-size: 0.88rem; color: #555; }
+    .toc {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 18px 24px;
+      margin: 24px 0 32px;
+    }
+    .toc ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+      column-count: 2;
+      column-gap: 32px;
+    }
+    .toc li {
+      margin: 4px 0;
+    }
+    .gizmo-color {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+
+<h1>SDF.R V17.0.1 UI / Command Inventory</h1>
+<div class="meta">
+  対象バージョン: <strong>Rust-GPU-SDF / SDF.R V17.0.1</strong> | 基準ベース: V17.0.0 / V16.2.2 | 作成日: 2026-10-25<br>
+  用途: UIに表出している全パネル・コントロール・ビューポートギズモ・オペレーターの棚卸し資料（マニュアル執筆用リファレンス）
+</div>
+
+<div class="new-feature">
+  <strong>🚀 V17.0.0 〜 V17.0.1 の主要ハイライト</strong><br>
+  <ul>
+    <li><strong>3Dビューポート・ギズモ（Viewport Gizmos）の新規導入（V17.0.0）:</strong>
+      3Dビューポート上で選択したSDFプリミティブの周囲に、直接操作できるカラー矢印（Arrow Gizmo）やボタンスイッチ（Button Gizmo）が表示されます。サイドパネルの数値スライダーに触れずに、フィレット、中空の厚み、スムーズ半径、演算種別、プロファイル、各形状固有サイズを直感的にドラッグ＆クリック操作できるようになりました。
+    </li>
+    <li><strong>Snapshot Mesh / Finalize のマテリアル完全分離（V17.0.1）:</strong>
+      <code>Snapshot Mesh</code>（静的メッシュ複製）や <code>Finalize (Bake All)</code>（通常メッシュ化確定）を実行した際、メッシュだけでなくマテリアル自身も独立複製されるよう改善されました。ライブSDFツリーのカラー変更やリセットを行っても、作成済みフリーズモデルの外観が変わってしまう問題が完全に解消されています。
+    </li>
+  </ul>
+</div>
+
+<div class="note">
+  <strong>再計算区分の見方:</strong><br>
+  <span class="tag mesh">Mesh再計算</span>: SDF評価を行い、GPU上で結果メッシュを再生成する操作。<br>
+  <span class="tag light">軽量更新</span>: メッシュ自体は作り直さず、マテリアル属性や表示モードのみを更新する軽量操作。<br>
+  <span class="tag none">表示/管理</span>: UI上の選択切り替え、階層操作、ツリー管理などの非描画操作。
+</div>
+
+<div class="toc">
+  <strong>目次</strong>
+  <ul>
+    <li><a href="#sec-0">0. Tree（マルチツリー管理）</a></li>
+    <li><a href="#sec-1">1. Header / Status</a></li>
+    <li><a href="#sec-2">2. Engine Diagnostics</a></li>
+    <li><a href="#sec-3">3. Output &amp; Quality</a></li>
+    <li><a href="#sec-4">4. Post-Process (Smoothing)</a></li>
+    <li><a href="#sec-5">5. The Stack</a></li>
+    <li><a href="#sec-6">6. Material</a></li>
+    <li><a href="#sec-7">7. Finalize / Output (V17.0.1更新)</a></li>
+    <li><a href="#sec-8">8. Group Settings: Collection Divider</a></li>
+    <li><a href="#sec-8b">8-B. Tree Reference（ツリー参照）</a></li>
+    <li><a href="#sec-9">9. Primitive Settings</a></li>
+    <li><a href="#sec-10">10. Viewport Gizmos（V17新機能）</a></li>
+    <li><a href="#sec-11">11. Math Field 専用コマンド</a></li>
+    <li><a href="#sec-12">12. Layout (Instancing)</a></li>
+    <li><a href="#sec-13">13. Deform (Stack)</a></li>
+    <li><a href="#sec-14">14. Add New Primitives</a></li>
+    <li><a href="#sec-15">15. Object Utilities / Cleanup</a></li>
+    <li><a href="#sec-16">16. Operator ID 一覧</a></li>
+  </ul>
+</div>
+
+<h2 id="sec-0">0. Tree（マルチツリー管理）</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Tree</td>
+      <td>ドロップダウン <code>sdf_scene_props.active_tree_index</code></td>
+      <td>編集対象のSDFツリーを選ぶ。以下のパネル全体（Parts / Stack / Quality / Material）が選択ツリー専用の内容に切り替わる。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>ビューポートでパーツを選ぶだけでも、そのパーツが属するツリーへ自動的に切り替わる。</td>
+    </tr>
+    <tr>
+      <td>＋（新規ツリー追加）</td>
+      <td>ボタン <code>sdf.add_tree</code></td>
+      <td>空の新規SDFツリー（コレクションと結果メッシュ）を作成し、アクティブにする。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>背景や別パーツを独立したツリーとして作るときに使う。</td>
+    </tr>
+    <tr>
+      <td>−（ツリー削除）</td>
+      <td>ボタン <code>sdf.delete_tree</code></td>
+      <td>アクティブなツリーを削除する。</td>
+      <td><span class="tag danger">表示/管理</span></td>
+      <td>ツリーが1つしかない場合は削除不可。元に戻す場合はUndo。</td>
+    </tr>
+    <tr>
+      <td>Tree Name</td>
+      <td>テキスト <code>tree.name</code></td>
+      <td>アクティブツリーの表示名・コレクション名を変更する。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>結果メッシュや参照Emptyの名前にも反映される。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-1">1. Header / Status</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Initialize SDF System</td>
+      <td>ボタン <code>sdf.init_scene</code></td>
+      <td>初期SDFツリー（コレクション、Sphere、結果メッシュ）を作成して利用準備を整える。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>シーンにSDF環境がまだ存在しないときに大きく表示される。</td>
+    </tr>
+    <tr>
+      <td>GPU: Ready / Updating</td>
+      <td>ステータス表示</td>
+      <td>GPUバックエンド（Rust / WGPU）の稼働状態を表示。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>非同期更新中は Updating 表示となる。</td>
+    </tr>
+    <tr>
+      <td>Live Update</td>
+      <td>トグル <code>props.live_update</code></td>
+      <td>パラメータやTransform変更を結果メッシュへ自動反映するかを切り替える。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>ON時は編集ごとに自動でMesh再計算が走る。重いシーンでは一時的にOFF推奨。</td>
+    </tr>
+    <tr>
+      <td>Auto Wireframe</td>
+      <td>トグル <code>props.auto_wireframe</code></td>
+      <td>プリミティブ選択時にワイヤーフレームを自動表示するか制御。</td>
+      <td><span class="tag light">軽量更新</span></td>
+      <td>形状の配置や境界の確認に便利。</td>
+    </tr>
+    <tr>
+      <td>Stats / Info</td>
+      <td>情報ラベル</td>
+      <td>プリミティブ数、グリッド解像度、頂点数、GPU処理時間などを表示。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>パフォーマンスのボトルネック特定に活用。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-2">2. Engine Diagnostics</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Run GPU Benchmark</td>
+      <td>ボタン <code>sdf.benchmark</code></td>
+      <td>現在のSDFツリーに対してGPUベンチマークを実行し、平均処理時間を計測。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>グリッド解像度やプリミティブ数に応じた負荷テスト用。</td>
+    </tr>
+    <tr>
+      <td>Backend Info</td>
+      <td>テキスト</td>
+      <td>使用中のGPUアダプタ名、Backend API（Vulkan / Metal / DX12等）を表示。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>ネイティブDLLの読み込み確認用。</td>
+    </tr>
+    <tr>
+      <td>Engine Log Level</td>
+      <td>選択 <code>props.log_level</code></td>
+      <td>コンソール出力のログ詳細度（Error / Warn / Info / Debug / Trace）を設定。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>トラブルシューティング時に使用。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-3">3. Output &amp; Quality</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Resolution Preset</td>
+      <td>選択 <code>props.resolution_preset</code></td>
+      <td>解像度プリセット（Low / Medium / High / Ultra / Custom）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>作業中はMedium、最終確認時はHigh/Ultra等へワンクリックで切り替え。</td>
+    </tr>
+    <tr>
+      <td>Grid Resolution</td>
+      <td>数値 <code>props.grid_resolution</code></td>
+      <td>Customプリセット時のボクセル解像度（各軸の分割数）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>数値を上げると細部が精密になるがGPUメモリと計算時間が増加。</td>
+    </tr>
+    <tr>
+      <td>Adaptive Mesh</td>
+      <td>トグル <code>props.use_adaptive</code></td>
+      <td>平坦部のポリゴンを間引き、曲面に密度を集中させる適応型メッシュを有効化。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>ポリゴン数を抑えつつシャープなエッジを保つ。</td>
+    </tr>
+    <tr>
+      <td>Bounding Box Mode</td>
+      <td>選択 <code>props.bbox_mode</code></td>
+      <td>バウンディングボックスの計算方式（Auto / Manual / Tight）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>通常はAuto推奨。余白不足で端が切れる場合はManualやPaddingを調整。</td>
+    </tr>
+    <tr>
+      <td>BBox Padding</td>
+      <td>数値 <code>props.bbox_padding</code></td>
+      <td>Auto BBox計算時の余白マージン倍率。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>変形やスムーズブレンドで外側に広がる形状の端切れを防止。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-4">4. Post-Process (Smoothing)</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Enable Smoothing</td>
+      <td>トグル <code>props.enable_smoothing</code></td>
+      <td>生成メッシュに対する事後スムージング処理（Laplacian / Taubin）を有効化。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>マーチングキューブ特有の微細な段差やジャギーを軽減。</td>
+    </tr>
+    <tr>
+      <td>Smoothing Iterations</td>
+      <td>数値 <code>props.smoothing_iterations</code></td>
+      <td>スムージングの反復適用回数。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>回数を増やすと滑らかになるが、エッジが丸まり体積がわずかに縮む傾向がある。</td>
+    </tr>
+    <tr>
+      <td>Smoothing Factor</td>
+      <td>数値 <code>props.smoothing_factor</code></td>
+      <td>1ステップあたりのスムージング強度。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>微調整用。通常は0.2〜0.5程度。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-5">5. The Stack</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Stack UIList</td>
+      <td>リスト <code>tree.stack_items</code></td>
+      <td>現在のSDFツリーを構成するプリミティブおよびCollection Dividerの階層順一覧。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>上から下へ順番にブーリアン評価される。ドラッグや上下ボタンで順序変更可能。</td>
+    </tr>
+    <tr>
+      <td>▲ / ▼（移動ボタン）</td>
+      <td>ボタン <code>sdf.stack_move</code></td>
+      <td>選択アイテムのスタック内実行順序を上下に移動する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>ブーリアン演算の適用順が変わるため形状が変化する。</td>
+    </tr>
+    <tr>
+      <td>＋（Divider追加）</td>
+      <td>ボタン <code>sdf.add_collection_divider</code></td>
+      <td>グループ境界となるCollection Dividerを追加する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>パーツ群をサブツリーとしてカプセル化し、局所的なブレンドを可能にする。</td>
+    </tr>
+    <tr>
+      <td>−（アイテム削除）</td>
+      <td>ボタン <code>sdf.remove_stack_item</code></td>
+      <td>選択中のプリミティブまたはDividerをスタックから削除する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>3Dビューポート上のオブジェクトも連動して削除される。</td>
+    </tr>
+    <tr>
+      <td>Active Item Indicator</td>
+      <td>ラジオ/選択</td>
+      <td>ビューポートでの選択とStack上での選択を双方向同期。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>クリックしたアイテムのパラメータがPrimitive Settingsに即座に表示。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-6">6. Material</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Setup Material</td>
+      <td>ボタン <code>sdf.setup_material</code></td>
+      <td>頂点カラー（Color Attribute）を反映する標準PBRシェーダーノードを構築する。</td>
+      <td><span class="tag light">軽量更新</span></td>
+      <td>マテリアルが存在しない場合やリセット時にワンクリックで作成。</td>
+    </tr>
+    <tr>
+      <td>Reset Shader Nodes</td>
+      <td>ボタン <code>sdf.reset_material</code></td>
+      <td>シェーダーノードを初期のクリーンな状態に初期化する。</td>
+      <td><span class="tag light">軽量更新</span></td>
+      <td>独自ノード追加後に標準状態に戻したい場合に使用。</td>
+    </tr>
+    <tr>
+      <td>Apply Color To All</td>
+      <td>ボタン <code>sdf.apply_color_all</code></td>
+      <td>指定した単一カラーをツリー内の全プリミティブへ一括適用する。</td>
+      <td><span class="tag light">軽量更新</span></td>
+      <td>全体の色味を統一する際に便利。全体一色化のため軽量更新で済む。</td>
+    </tr>
+    <tr>
+      <td>Apply Material To All</td>
+      <td>ボタン <code>sdf.apply_material_all</code></td>
+      <td>指定したMetallic / Roughnessをツリー内の全プリミティブへ一括適用する。</td>
+      <td><span class="tag light">軽量更新</span></td>
+      <td>全体の質感を統一する。</td>
+    </tr>
+    <tr>
+      <td>Transmission Warning</td>
+      <td>警告表示</td>
+      <td>Transmissionはプリミティブ個別ではなくマテリアル全体（Whole-material）の値である旨の注記。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>個別プリミティブごとの透過率分けは非対応。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-7">7. Finalize / Output (V17.0.1 更新)</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Fix Normals</td>
+      <td>ボタン <code>sdf.update_normals</code></td>
+      <td>SDF勾配から計算した高品質法線を結果メッシュに再計算して適用する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>レンダリング前の法線シェーディング仕上げ確認用。</td>
+    </tr>
+    <tr>
+      <td>Force Update</td>
+      <td>ボタン <code>sdf.generate_mesh</code></td>
+      <td>Live Update OFF時などに、手動でSDF結果メッシュを強制再計算する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>重い編集を行った後の反映に使用。</td>
+    </tr>
+    <tr>
+      <td>Snapshot Mesh</td>
+      <td>ボタン <code>sdf.bake_mesh</code></td>
+      <td>現在のSDF結果から静的なメッシュコピーを複製作成する（Live編集環境はそのまま保持）。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td><strong>V17.0.1改善:</strong> メッシュ複製と同時に<strong>マテリアル自身も独立複製</strong>されるようになり、フリーズ後のモデル色がLiveツリーの編集によって変化しない。</td>
+    </tr>
+    <tr>
+      <td>Finalize (Bake All)</td>
+      <td>ボタン <code>sdf.finalize</code></td>
+      <td>SDF結果を独立した通常メッシュとして確定し、元プリミティブを履歴コレクションへ退避する。</td>
+      <td><span class="tag danger">Mesh再計算/確定</span></td>
+      <td><strong>V17.0.1改善:</strong> バックアップマテリアルが独立複製され、<code>SDF_Result</code> オブジェクト名が安全に管理される。対象はアクティブツリー1本のみ。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-8">8. Group Settings: Collection Divider</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Name</td>
+      <td>テキスト <code>item.name_override</code></td>
+      <td>Stack上のCollection Divider表示名を変更する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>グループの識別用（頭部、胴体、腕など）。</td>
+    </tr>
+    <tr>
+      <td>Operation</td>
+      <td>選択 <code>item.operation</code></td>
+      <td>グループ全体をメインツリーへ結合するブーリアン演算（Union / Subtract / Intersect）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>グループ内の複数パーツを合成した結果をメインツリーに対してどう演算するかを指定。</td>
+    </tr>
+    <tr>
+      <td>Blend Profile</td>
+      <td>選択 <code>item.blend_profile</code></td>
+      <td>グループ境界のブレンドスタイル（Round / Sharp / Soft / Tight / Chamfer）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>グループ全体と外側との接合部の丸み形状を決定。</td>
+    </tr>
+    <tr>
+      <td>Smoothness</td>
+      <td>数値 <code>item.smoothness</code></td>
+      <td>グループ境界のブレンド半径。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>グループ全体を大きな単位で滑らかに馴染ませる。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-8b">8-B. Tree Reference（ツリー参照）</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Add Tree Reference</td>
+      <td>ボタン <code>sdf.add_tree_ref</code></td>
+      <td>別ツリーを取り込む参照Emptyをアクティブツリー内に作成する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>作成されたEmptyはTransform（位置・回転・拡縮）可能。</td>
+    </tr>
+    <tr>
+      <td>Referenced Tree</td>
+      <td>ドロップダウン <code>obj.sdf_ref_tree</code></td>
+      <td>参照先となるSDFツリーを指定する。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>共通パーツ（タイヤ、手足、ボルト等）を複数箇所から再利用できる。</td>
+    </tr>
+    <tr>
+      <td>Operation / Smoothness</td>
+      <td>各設定</td>
+      <td>参照ツリーをメインツリーへ結合する際のブーリアン演算とスムーズ量。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>通常のプリミティブと同様に結合挙動をカスタマイズ可能。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-9">9. Primitive Settings</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Shape</td>
+      <td>ドロップダウン <code>obj.sdf_shape_type</code></td>
+      <td>選択プリミティブの形状タイプを変更する（Sphere, Box, Cylinder等）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>既存のTransformや階層順序を保ったまま別の幾何形状へ即座に変更可能。</td>
+    </tr>
+    <tr>
+      <td>Operation</td>
+      <td>ボタン切替 <code>obj.sdf_operation</code></td>
+      <td>ブーリアン演算を指定（Union / Subtract / Intersect）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td><span class="tag gizmo-tag">ギズモ対応</span> 3Dビューポート上のボタンスイッチでもワンクリック切替可能。</td>
+    </tr>
+    <tr>
+      <td>Blend Profile</td>
+      <td>選択 <code>obj.sdf_blend_profile</code></td>
+      <td>エッジ・接合部の丸み形状（Round / Sharp / Soft / Tight / Chamfer）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td><span class="tag gizmo-tag">ギズモ対応</span> 3Dビューポート上のボタンスイッチでも切替可能。</td>
+    </tr>
+    <tr>
+      <td>Chamfer Factor</td>
+      <td>数値 <code>obj.sdf_chamfer_factor</code></td>
+      <td>Blend ProfileがChamferの場合の面取り比率。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>機械的なテーパー・面取り接合を作成する。</td>
+    </tr>
+    <tr>
+      <td>Smoothness</td>
+      <td>数値 <code>obj.sdf_smoothness</code></td>
+      <td>隣接プリミティブとのブレンド半径（滑らかさ）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td><span class="tag gizmo-tag">ギズモ対応</span> ビューポート上のマゼンタ矢印ドラッグでも直接調整可能。</td>
+    </tr>
+    <tr>
+      <td>Fillet / Edge Size</td>
+      <td>数値 <code>obj.sdf_edge_profile_size</code></td>
+      <td>プリミティブ固有の角丸め・フィレット幅。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td><span class="tag gizmo-tag">ギズモ対応</span> ビューポート上のオレンジ矢印ドラッグでも直接調整可能。</td>
+    </tr>
+    <tr>
+      <td>Shell Thickness</td>
+      <td>数値 <code>obj.sdf_shell_thickness</code></td>
+      <td>中空（シェル）構造の肉厚。0の場合は完全なソリッド。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td><span class="tag gizmo-tag">ギズモ対応</span> ビューポート上のシアン矢印ドラッグでも直接調整可能。</td>
+    </tr>
+    <tr>
+      <td>Shape Specific Parameters (p1〜p4)</td>
+      <td>数値スライダー</td>
+      <td>半径、高さ、内径、外径など形状ごとの固有寸法パラメータ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td><span class="tag gizmo-tag">ギズモ対応</span> 主要10シェイプはビューポート上の専用矢印で直接ドラッグ可能。</td>
+    </tr>
+    <tr>
+      <td>Color</td>
+      <td>カラーピッカー <code>obj.sdf_color</code></td>
+      <td>個別プリミティブの表面カラー。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>パーツ同士が重なり合う部分はブレンド半径に応じてグラデーション混色される。</td>
+    </tr>
+    <tr>
+      <td>Metallic / Roughness</td>
+      <td>数値 <code>obj.sdf_metallic</code> / <code>sdf_roughness</code></td>
+      <td>個別プリミティブの金属感および表面の粗さ。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>PBRマテリアル属性として頂点属性にベイクされる。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-10">10. Viewport Gizmos（V17 新機能）</h2>
+<div class="ok">
+  <strong>3Dビューポート直接操作インターフェース:</strong><br>
+  V17.0.0より、3DビューポートでSDFプリミティブを選択すると、周囲に色分けされた矢印やボタンが表示されます。マウスドラッグまたはクリックするだけで、サイドパネルの数値フィールドと連動して即座に値が更新・再計算されます。
+</div>
+
+<h3>共通ギズモ（全プリミティブまたは全ソリッド共通）</h3>
+<table>
+  <thead>
+    <tr><th>ギズモ表示</th><th>操作方式</th><th>対応パラメータ</th><th>対象シェイプ</th><th>詳細挙動・役割</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="gizmo-color" style="background:#ff8c00;"></span><strong>Fillet / Edge Size</strong></td>
+      <td>オレンジ矢印ドラッグ</td>
+      <td><code>sdf_edge_profile_size</code></td>
+      <td>角を持つ10種（Box, Cylinder, Hex Prism, Pyramid, Tapered Cylinder, N-gon Prism, Rounded Cylinder, Capped Torus, Octahedron, Cut Sphere）</td>
+      <td>角の丸め・面取り幅を直感調整。球やトーラスなど角のない滑らかな形状では非表示。</td>
+    </tr>
+    <tr>
+      <td><span class="gizmo-color" style="background:#00d2d3;"></span><strong>Shell Thickness</strong></td>
+      <td>シアン矢印ドラッグ</td>
+      <td><code>sdf_shell_thickness</code></td>
+      <td>全ソリッドプリミティブ</td>
+      <td>中空シェルの肉厚を内側方向へドラッグ調整。</td>
+    </tr>
+    <tr>
+      <td><span class="gizmo-color" style="background:#ff007f;"></span><strong>Smoothness</strong></td>
+      <td>マゼンタ矢印ドラッグ</td>
+      <td><code>sdf_smoothness</code></td>
+      <td>全プリミティブ</td>
+      <td>他パーツとのブレンド結合半径をドラッグ調整。単体で重なりがない場合も数値は変化。</td>
+    </tr>
+    <tr>
+      <td><strong>Operation Switch</strong></td>
+      <td>3つのボタンクリック</td>
+      <td><code>sdf_operation</code></td>
+      <td>全プリミティブ</td>
+      <td><strong>Union / Subtract / Intersect</strong> を切替。アクティブな演算は強調表示、他は薄暗く表示。</td>
+    </tr>
+    <tr>
+      <td><strong>Edge Profile Switch</strong></td>
+      <td>5つのボタンクリック</td>
+      <td><code>sdf_blend_profile</code></td>
+      <td>フィレット対応シェイプ</td>
+      <td><strong>Round / Sharp / Soft / Tight / Chamfer</strong> の5種を2行配置でワンクリック切替。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>シェイプ固有の矢印ギズモ（主要10種）</h3>
+<table>
+  <thead>
+    <tr><th>形状タイプ</th><th>ギズモ矢印（色・軸）</th><th>対応パラメータ</th><th>詳細挙動</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Torus</strong></td>
+      <td>矢印2本</td>
+      <td>Main Radius / Pipe Radius</td>
+      <td>ドーナツ全体の主半径と、チューブの太さをそれぞれ独立してドラッグ。</td>
+    </tr>
+    <tr>
+      <td><strong>Cylinder</strong></td>
+      <td>矢印2本</td>
+      <td>Radius / Height</td>
+      <td>円柱の底面半径と高さをドラッグ調整。</td>
+    </tr>
+    <tr>
+      <td><strong>Capped Cone</strong></td>
+      <td>矢印3本</td>
+      <td>Bottom Radius / Top Radius / Height</td>
+      <td>円錐台の底面半径、上面半径、全高を直感的に変形。</td>
+    </tr>
+    <tr>
+      <td><strong>Ellipsoid</strong></td>
+      <td>赤・緑・青の3軸矢印</td>
+      <td>Radius X / Radius Y / Radius Z</td>
+      <td>楕円体の各軸方向の半径をローカルXYZ軸矢印で個別ストレッチ。</td>
+    </tr>
+    <tr>
+      <td><strong>Rounded Cylinder</strong></td>
+      <td>矢印3本</td>
+      <td>Radius / Edge Radius / Height</td>
+      <td>円柱の半径、上下角の丸み半径、全高を調整。</td>
+    </tr>
+    <tr>
+      <td><strong>Pyramid</strong></td>
+      <td>矢印2本</td>
+      <td>Base Size / Height</td>
+      <td>四角錐の底面サイズと高さを調整。</td>
+    </tr>
+    <tr>
+      <td><strong>Hex Prism</strong></td>
+      <td>矢印2本</td>
+      <td>Radius / Height</td>
+      <td>正六角柱の半径と高さをドラッグ調整。</td>
+    </tr>
+    <tr>
+      <td><strong>Rounded Box</strong></td>
+      <td>矢印1本</td>
+      <td>Roundness</td>
+      <td>角丸立方体の全体的な丸み係数を調整。</td>
+    </tr>
+    <tr>
+      <td><strong>Octahedron</strong></td>
+      <td>矢印1本</td>
+      <td>Size</td>
+      <td>正八面体の全体寸法をスケール調整。</td>
+    </tr>
+    <tr>
+      <td><strong>Cut Sphere</strong></td>
+      <td>矢印1本</td>
+      <td>Cut Height</td>
+      <td>球を水平に切り落とすカット位置をドラッグ。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>ギズモ未対応（サイドパネル専用）の項目:</strong><br>
+  ・<strong>Capped Torus の Arc Angle</strong>（回転角度パラメータのため矢印ではなくダイヤル型ギズモを要検討）<br>
+  ・<strong>N-gon Prism の辺数</strong>（整数ステップ値のため増減ボタンスタイルが要検討）<br>
+  ・<strong>Deform Stack の各項目</strong>（Elongate, Bend, Twist, Taper はリスト構造のためパネル操作）<br>
+  ・<strong>ブール関係パラメータ</strong>（2オブジェクト間の個別交差ブレンド設定）
+</div>
+
+<h2 id="sec-11">11. Math Field 専用コマンド</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Expression</td>
+      <td>テキスト <code>obj.sdf_math_expr</code></td>
+      <td>数式SDFを記述するテキスト入力（例: <code>length(p) - 1.0</code>）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>GLSL風の数式で任意の陰関数曲面を生成可能。</td>
+    </tr>
+    <tr>
+      <td>Compile Math Expression</td>
+      <td>ボタン <code>sdf.compile_math_expr</code></td>
+      <td>入力した数式をパース・バイトコード化してRustエンジンへ転送。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>構文エラーがある場合はUI上にエラー箇所を表示。</td>
+    </tr>
+    <tr>
+      <td>Math Preset</td>
+      <td>選択</td>
+      <td>Gyroid, Schwarz P, Neovius, Clebsch等の数学的プリセット数式を読込。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>複雑な周期曲面や多項式曲面をワンクリックで実験できる。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-12">12. Layout (Instancing)</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Mirror Mode</td>
+      <td>トグル/選択 <code>obj.sdf_mirror_mode</code></td>
+      <td>ローカルまたはグローバル軸（X / Y / Z）に対するリアルタイムミラー複製。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>左右対称キャラクターやメカのモデリングに必須。メッシュポリゴンを増やさずSDF内で折り返す。</td>
+    </tr>
+    <tr>
+      <td>Radial Array Count</td>
+      <td>数値 <code>obj.sdf_radial_count</code></td>
+      <td>円周方向への回転配列コピー数。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>ギア、スポーク、花弁などの放射状配置を生成。</td>
+    </tr>
+    <tr>
+      <td>Linear Repeat</td>
+      <td>数値 <code>obj.sdf_repeat_count</code> / <code>offset</code></td>
+      <td>直線方向への反復周期配置。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>格子、リブ、ルーバー形状を効率的に生成。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-13">13. Deform (Stack)</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Add Deform Modifier</td>
+      <td>メニュー <code>sdf.add_deform</code></td>
+      <td>選択プリミティブに変形オペレーターを追加（Elongate / Twist / Bend / Taper / Noise）。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>複数の変形をスタック順に重ねがけ可能。</td>
+    </tr>
+    <tr>
+      <td>Twist Angle</td>
+      <td>数値</td>
+      <td>軸に沿ったねじれ回転角度。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>ドリル、ロープ、螺旋形状の作成。</td>
+    </tr>
+    <tr>
+      <td>Bend Curvature</td>
+      <td>数値</td>
+      <td>曲げ変形の曲率半径。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>パイプの曲がり、角の湾曲など。</td>
+    </tr>
+    <tr>
+      <td>Taper Factor</td>
+      <td>数値</td>
+      <td>先端に向かう先細り比率。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>爪、角、コーン状への段階的変形。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-14">14. Add New Primitives</h2>
+<table>
+  <thead>
+    <tr><th>ボタン表示</th><th>shape_type</th><th>主な固有パラメータ</th><th>再計算</th><th>形状の特徴・用途</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Sphere</strong></td><td><code>sphere</code></td><td>Radius</td><td><span class="tag mesh">Mesh再計算</span></td><td>完全な球体。基本形状。</td></tr>
+    <tr><td><strong>Box</strong></td><td><code>box</code></td><td>Size X, Y, Z, Fillet</td><td><span class="tag mesh">Mesh再計算</span></td><td>直方体。エッジ丸め・フィレット対応。</td></tr>
+    <tr><td><strong>Cylinder</strong></td><td><code>cylinder</code></td><td>Radius, Height, Fillet</td><td><span class="tag mesh">Mesh再計算</span></td><td>円柱。上下端のフィレット対応。</td></tr>
+    <tr><td><strong>Torus</strong></td><td><code>torus</code></td><td>Main Radius, Pipe Radius</td><td><span class="tag mesh">Mesh再計算</span></td><td>ドーナツ形状。リング・パイプ用。</td></tr>
+    <tr><td><strong>Capsule</strong></td><td><code>capsule</code></td><td>Radius, Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>丸薬形状。骨格や手足のベース。</td></tr>
+    <tr><td><strong>Cone</strong></td><td><code>cone</code></td><td>Radius, Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>円錐。先端が尖ったパーツ。</td></tr>
+    <tr><td><strong>Capped Cone</strong></td><td><code>capped_cone</code></td><td>Bottom Radius, Top Radius, Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>上面が平坦な円錐台。テーパー軸。</td></tr>
+    <tr><td><strong>Rounded Box</strong></td><td><code>rounded_box</code></td><td>Size, Roundness</td><td><span class="tag mesh">Mesh再計算</span></td><td>全体がなめらかに丸まった直方体。</td></tr>
+    <tr><td><strong>Hex Prism</strong></td><td><code>hex_prism</code></td><td>Radius, Height, Fillet</td><td><span class="tag mesh">Mesh再計算</span></td><td>正六角柱。ボルト頭やハニカム構造。</td></tr>
+    <tr><td><strong>Octahedron</strong></td><td><code>octahedron</code></td><td>Size, Fillet</td><td><span class="tag mesh">Mesh再計算</span></td><td>正八面体。結晶や宝石形状。</td></tr>
+    <tr><td><strong>Pyramid</strong></td><td><code>pyramid</code></td><td>Base Size, Height, Fillet</td><td><span class="tag mesh">Mesh再計算</span></td><td>四角錐。ピラミッド形状。</td></tr>
+    <tr><td><strong>Ellipsoid</strong></td><td><code>ellipsoid</code></td><td>Radius X, Y, Z</td><td><span class="tag mesh">Mesh再計算</span></td><td>3軸楕円体。オーガニック形状の素体。</td></tr>
+    <tr><td><strong>Rounded Cylinder</strong></td><td><code>rounded_cylinder</code></td><td>Radius, Edge Radius, Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>端面が丸い円柱。</td></tr>
+    <tr><td><strong>Capped Torus</strong></td><td><code>capped_torus</code></td><td>Main Radius, Pipe Radius, Arc Angle</td><td><span class="tag mesh">Mesh再計算</span></td><td>円弧状に切り取られたトーラス（ハンドル等）。</td></tr>
+    <tr><td><strong>Cut Sphere</strong></td><td><code>cut_sphere</code></td><td>Radius, Cut Height</td><td><span class="tag mesh">Mesh再計算</span></td><td>平らに切り落とされた半球・カット球。</td></tr>
+    <tr><td><strong>N-gon Prism</strong></td><td><code>ngon_prism</code></td><td>Radius, Height, Sides, Fillet</td><td><span class="tag mesh">Mesh再計算</span></td><td>任意の多角柱（3角形〜12角形等）。</td></tr>
+    <tr><td><strong>Math Field</strong></td><td><code>math_field</code></td><td>Math Expression</td><td><span class="tag mesh">Mesh再計算</span></td><td>数式入力によるプロシージャル陰関数曲面。</td></tr>
+  </tbody>
+</table>
+
+<h2 id="sec-15">15. Object Utilities / Cleanup</h2>
+<table>
+  <thead>
+    <tr><th>表示名</th><th>種別</th><th>内容</th><th>再計算</th><th>補足</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Move to SDF Collection</td>
+      <td>ボタン <code>sdf.move_to_sdf_collection</code></td>
+      <td>選択したBlenderオブジェクトを現在のアクティブSDFツリーのコレクションへ移動。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>外部からインポートしたオブジェクトをSDFツリーへ組み込む。</td>
+    </tr>
+    <tr>
+      <td>Sync Curve to SDF</td>
+      <td>ボタン <code>sdf.sync_curve</code></td>
+      <td>Blenderのベジェカーブ/パスの制御点からSDFパイプ・カプセル列を自動生成・同期。</td>
+      <td><span class="tag mesh">Mesh再計算</span></td>
+      <td>ケーブル、パイピング、触手などのカーブベースモデリング用。</td>
+    </tr>
+    <tr>
+      <td>Purge Orphan SDF Data</td>
+      <td>ボタン <code>sdf.purge_orphans</code></td>
+      <td>削除されたプリミティブの残骸や不要なSDFカスタムプロパティをクリーンアップ。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>ファイルサイズの軽量化とエラー予防。</td>
+    </tr>
+    <tr>
+      <td>Reload Native DLL</td>
+      <td>ボタン <code>sdf.reload_dll</code></td>
+      <td>バックエンドのRustネイティブバイナリ（DLL / dylib / so）を再ロード。</td>
+      <td><span class="tag none">表示/管理</span></td>
+      <td>クラッシュ復旧や開発中の動作確認用。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sec-16">16. Operator ID 一覧</h2>
+<table>
+  <thead>
+    <tr><th>Operator ID</th><th>UI表示ラベル</th><th>概要・役割</th><th>最新版補足</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>sdf.init_scene</code></td><td>Initialize SDF System</td><td>初期SDFコレクションと結果メッシュの生成</td><td>シーン初期化</td></tr>
+    <tr><td><code>sdf.add_primitive</code></td><td>Add SDF Primitive</td><td>プリミティブをツリーへ追加</td><td>Undo完全対応</td></tr>
+    <tr><td><code>sdf.add_tree</code></td><td>Add SDF Tree</td><td>新しい独立SDFツリーを追加</td><td>マルチツリー</td></tr>
+    <tr><td><code>sdf.delete_tree</code></td><td>Delete SDF Tree</td><td>アクティブツリーを削除</td><td>マルチツリー</td></tr>
+    <tr><td><code>sdf.set_active_tree</code></td><td>Set Active SDF Tree</td><td>編集ツリーを切り替え</td><td>自動切替連動</td></tr>
+    <tr><td><code>sdf.add_tree_ref</code></td><td>Add Tree Reference</td><td>別ツリーの参照Emptyを追加</td><td>インスタンス合成</td></tr>
+    <tr><td><code>sdf.stack_move</code></td><td>Move Stack Item</td><td>スタック内での順序を上下移動</td><td>評価順変更</td></tr>
+    <tr><td><code>sdf.add_collection_divider</code></td><td>Add Collection Divider</td><td>グループ境界Dividerを追加</td><td>局所ブレンド</td></tr>
+    <tr><td><code>sdf.remove_stack_item</code></td><td>Remove Stack Item</td><td>スタック項目およびオブジェクトを削除</td><td>クリーン連動</td></tr>
+    <tr><td><code>sdf.bake_mesh</code></td><td>Snapshot Mesh</td><td>静的メッシュコピーの作成</td><td><strong>V17.0.1: マテリアル独立複製</strong></td></tr>
+    <tr><td><code>sdf.finalize</code></td><td>Finalize (Bake All)</td><td>SDF結果のメッシュ確定と履歴退避</td><td><strong>V17.0.1: マテリアル独立複製</strong></td></tr>
+    <tr><td><code>sdf.update_normals</code></td><td>Fix Normals</td><td>高品質法線の再計算適用</td><td>法線最適化</td></tr>
+    <tr><td><code>sdf.generate_mesh</code></td><td>Force Update</td><td>SDF結果メッシュの手動強制生成</td><td>Live OFF時反映</td></tr>
+    <tr><td><code>sdf.setup_material</code></td><td>Setup Material</td><td>標準PBRシェーダーノードの構築</td><td>頂点カラー連携</td></tr>
+    <tr><td><code>sdf.reset_material</code></td><td>Reset Shader Nodes</td><td>シェーダーノードの標準状態リセット</td><td>クリーン化</td></tr>
+    <tr><td><code>sdf.apply_color_all</code></td><td>Apply Color To All</td><td>全体色の一括適用</td><td>軽量更新</td></tr>
+    <tr><td><code>sdf.apply_material_all</code></td><td>Apply Material To All</td><td>Metallic / Roughnessの一括適用</td><td>軽量更新</td></tr>
+    <tr><td><code>sdf.gizmo_set_operation</code></td><td>Set Operation (Gizmo)</td><td>ビューポート上のボタングリッドから演算切替</td><td><strong>V17.0.0新規</strong></td></tr>
+    <tr><td><code>sdf.gizmo_set_edge_profile</code></td><td>Set Edge Profile (Gizmo)</td><td>ビューポート上のボタンからプロファイル切替</td><td><strong>V17.0.0新規</strong></td></tr>
+    <tr><td><code>sdf.compile_math_expr</code></td><td>Compile Math Expression</td><td>数式SDFのコンパイルとエンジン転送</td><td>Math Field</td></tr>
+    <tr><td><code>sdf.add_deform</code></td><td>Add Deform Modifier</td><td>Elongate / Twist / Bend 等の変形追加</td><td>Deform Stack</td></tr>
+    <tr><td><code>sdf.move_to_sdf_collection</code></td><td>Move to SDF Collection</td><td>オブジェクトをSDFコレクションへ編入</td><td>編入機能</td></tr>
+    <tr><td><code>sdf.sync_curve</code></td><td>Sync Curve to SDF</td><td>BlenderカーブからのSDFパイプ生成</td><td>カーブ同期</td></tr>
+    <tr><td><code>sdf.purge_orphans</code></td><td>Purge Orphan SDF Data</td><td>孤立プロパティと不要データのパージ</td><td>クリーンアップ</td></tr>
+    <tr><td><code>sdf.reload_dll</code></td><td>Reload Native DLL</td><td>Rustネイティブバイナリの再読み込み</td><td>開発・デバッグ</td></tr>
+    <tr><td><code>sdf.benchmark</code></td><td>Run GPU Benchmark</td><td>GPUメッシュ生成のベンチマーク計測</td><td>性能診断</td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

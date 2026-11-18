@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>SDF.R V17.0.1 作業マニュアル・実践手順書（基礎・応用パターン集）</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif;
+      line-height: 1.7;
+      color: #24292e;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 36px 24px 80px;
+      background: #fafafa;
+    }
+    h1, h2, h3, h4 { line-height: 1.3; color: #1a202c; }
+    h1 { font-size: 2.1rem; margin-bottom: 0.25rem; border-bottom: 3px solid #2b7de9; padding-bottom: 12px; }
+    h2 {
+      margin-top: 52px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #333;
+      font-size: 1.45rem;
+    }
+    h3 {
+      margin-top: 32px;
+      font-size: 1.15rem;
+      color: #1a365d;
+      background: #eef4fc;
+      padding: 8px 14px;
+      border-left: 5px solid #2b7de9;
+      border-radius: 4px;
+    }
+    .meta {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin: 20px 0 32px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    .note {
+      background: #fff8dc;
+      border-left: 5px solid #e0b100;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 16px 0;
+      font-size: 0.95rem;
+    }
+    .ok {
+      background: #edf8f0;
+      border-left: 5px solid #38a169;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 16px 0;
+      font-size: 0.95rem;
+    }
+    .tip {
+      background: #ebf8ff;
+      border-left: 5px solid #3182ce;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 16px 0;
+      font-size: 0.95rem;
+    }
+    ol {
+      margin: 12px 0;
+      padding-left: 24px;
+    }
+    ol li {
+      margin-bottom: 10px;
+    }
+    ul {
+      margin: 8px 0;
+      padding-left: 22px;
+    }
+    ul li {
+      margin-bottom: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      margin: 16px 0 24px;
+      font-size: 0.94rem;
+    }
+    th, td {
+      border: 1px solid #cbd5e0;
+      padding: 10px 14px;
+      vertical-align: top;
+    }
+    th {
+      background: #edf2f7;
+      text-align: left;
+      font-weight: 600;
+    }
+    code {
+      font-family: "Cascadia Mono", Consolas, monospace;
+      background: #edf2f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #c53030;
+    }
+    .flow-box {
+      background: #2d3748;
+      color: #f7fafc;
+      padding: 14px 18px;
+      border-radius: 6px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      margin: 14px 0;
+      white-space: pre;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.8em;
+      font-weight: bold;
+      margin-right: 6px;
+    }
+    .badge-basic { background: #e2e8f0; color: #2d3748; }
+    .badge-adv { background: #feebc8; color: #7b341e; }
+    .toc {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px 28px;
+      margin: 24px 0 36px;
+    }
+    .toc ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+      column-count: 2;
+      column-gap: 32px;
+    }
+    .toc li {
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+
+<h1>SDF.R V17.0.1 作業マニュアル・実践手順書（基礎・応用パターン集）</h1>
+<div class="meta">
+  対象バージョン: <strong>Rust-GPU-SDF / SDF.R V17.0.1</strong> | 基準ベース: V17.0.0 / V16.2.2 | 作成日: 2026-10-25<br>
+  用途: 基本操作から高度な複合造形までのステップ・バイ・ステップ手順書（基礎4パターン / 応用5パターン網羅）
+</div>
+
+<div class="card">
+  <h2>0. SDF.R モデリングの基本原則と作業フロー</h2>
+  <p>
+    SDF.R（Signed Distance Field Renderer）は、従来のポリゴン押し出しモデリングとは異なり、<strong>「プリミティブを配置し、ブーリアンで足し引きし、滑らかに繋ぐ（Smooth Blend）」</strong> という数学的・直感的なモデリング手法を採用しています。
+  </p>
+
+  <div class="flow-box">[1. ラフ造形] ───> [2. 接続・プロファイル] ───> [3. 階層・変形・配置] ───> [4. 質感・仕上げ] ───> [5. 保存・確定]
+  基本形状の配置       ギズモで角丸/スムーズ         Divider/参照/Mirror/Deform     色・Roughness統一       Snapshot / Finalize</div>
+
+  <div class="tip">
+    <strong>💡 V17.0.1 の操作の核: 「ビューポートギズモ」と「サイドパネル」の役割分担</strong><br>
+    ・<strong>3Dビューポート・ギズモ（直感操作）</strong>: プリミティブを選択すると矢印ギズモやボタンスイッチが表示されます。寸法（半径・高さ）、角丸め（Fillet）、肉厚（Shell）、ブレンド半径（Smoothness）、ブーリアン演算（Union/Subtract/Intersect）、エッジプロファイル（Round/Chamfer等）は、<strong>画面を見ながら直接ドラッグ＆クリック</strong>で素早く調整できます。<br>
+    ・<strong>サイドパネル（詳細・全体設定）</strong>: 階層管理（The Stack）、解像度・ボクセル設定（Output &amp; Quality）、事後スムージング、マルチツリー管理、マテリアル全体適用などはサイドパネルから操作します。
+  </div>
+</div>
+
+<div class="toc">
+  <strong>目次</strong>
+  <ul>
+    <li><a href="#pat-1"><span class="badge badge-basic">基礎1</span> 超速入門・直感モデリング</a></li>
+    <li><a href="#pat-2"><span class="badge badge-basic">基礎2</span> 有機体・クリーチャー造形</a></li>
+    <li><a href="#pat-3"><span class="badge badge-basic">基礎3</span> ハードサーフェス・メカ部品</a></li>
+    <li><a href="#pat-4"><span class="badge badge-basic">基礎4</span> 対称・幾何学レイアウト</a></li>
+    <li><a href="#pat-5"><span class="badge badge-adv">応用5</span> マルチツリー＆ツリー参照</a></li>
+    <li><a href="#pat-6"><span class="badge badge-adv">応用6</span> Collection Divider階層制御</a></li>
+    <li><a href="#pat-7"><span class="badge badge-adv">応用7</span> Math Field幾何学装飾</a></li>
+    <li><a href="#pat-8"><span class="badge badge-adv">応用8</span> Deform Stackプロシージャル変形</a></li>
+    <li><a href="#pat-9"><span class="badge badge-adv">応用9</span> イテレーション＆プロダクション確定</a></li>
+    <li><a href="#checklist">制作フェーズ別 クイックチェックリスト</a></li>
+  </ul>
+</div>
+
+<h2 id="basic-section">【基礎編】基本作業パターン</h2>
+
+<div class="card" id="pat-1">
+  <h3>パターン1: 【超速入門】ギズモで操る直感モデリング（結合・穴あけ・フィレット）</h3>
+  <p><strong>目的:</strong> 最短でSDFの基本原理（足す・引く・繋ぐ）と、V17ビューポートギズモの快適な操作感を体得する。<br>
+  <strong>想定成果物:</strong> 角が丸められ、滑らかな貫通穴が開いた機械的ブロックパーツ。</p>
+
+  <div class="flow-box">[初期Box] ──(橙矢印ドラッグ)──> [角丸Box] ──(Cylinder重ね+減算ボタン)──> [穴あきブロック] ──(紫矢印ドラッグ)──> [なめらかな穴の完成]</div>
+
+  <ol>
+    <li><strong>シーン初期化:</strong> 3DビューポートのNパネル <code>SDF.R</code> タブを開き、<code>Initialize SDF System</code> ボタンをクリックします。デフォルトの球体が配置され、ライブメッシュが表示されます。</li>
+    <li><strong>直方体の配置:</strong> パネルの <code>Add New Primitives</code> から <code>Box</code> をクリックします。初期球体が不要な場合はStackリストでSphereを選んで <code>−</code> ボタンで削除します。</li>
+    <li><strong>ギズモで寸法とフィレット（角丸）を直感調整:</strong> 選択中のBoxの周囲に<strong>オレンジ色の矢印ギズモ</strong>が表示されます。オレンジ矢印を外側にドラッグすると、直方体の角が滑らかなフィレット（角丸）に変化します。</li>
+    <li><strong>円柱による穴あけ（Subtract）:</strong> <code>Add New Primitives</code> から <code>Cylinder</code> を追加します。Blenderの移動（<code>G</code> キー）でBoxの中央を貫通するように配置します。ビューポート上に表示されている **Operationボタン** から <code>Subtract</code> をクリックすると、瞬時に穴が開きます。</li>
+    <li><strong>ギズモで穴の馴染みを調整:</strong> Cylinderの周囲にある**マゼンタ色矢印ギズモ（Smoothness）** を外側に少しドラッグすると、穴の境界が柔らかくブレンドされ、工業製品の鋳造・プレス加工のような自然なエッジが生まれます。</li>
+  </ol>
+  <div class="ok"><strong>ポイント:</strong> サイドパネルの数値スライダーを行き来することなく、ビューポート上のドラッグ＆クリックだけでモデリングが完結します。</div>
+</div>
+
+<div class="card" id="pat-2">
+  <h3>パターン2: 【有機体・クリーチャー造形】スムーズブレンドとカラー混色</h3>
+  <p><strong>目的:</strong> スカルプトのように滑らかに溶け合う有機的なキャラクター、頭部、液体、筋肉などの素体を作る。<br>
+  <strong>想定成果物:</strong> 複数パーツが有機的に融着し、部位ごとに美しいグラデーション混色を持つクリーチャーヘッド素体。</p>
+
+  <ol>
+    <li><strong>中心核の配置:</strong> <code>Sphere</code> を配置し、中心の核とします。</li>
+    <li><strong>手足・突起の追加と引き伸ばし:</strong> <code>Ellipsoid</code>（楕円体）を追加します。選択すると現れる <strong>赤・緑・青の3軸矢印ギズモ</strong> を個別にドラッグして、前後や上下に引き伸ばし、頭部や顎の形状を作ります。同様に <code>Capsule</code> を追加し、首や角のベースとして配置します。</li>
+    <li><strong>Smoothnessを大きく引き上げて有機的に融着:</strong> すべてのプリミティブの Operation を <code>Union</code> のままにし、各パーツの <strong>マゼンタ矢印ギズモ（Smoothness）</strong> を大きく（<code>0.4</code> 〜 <code>0.8</code> 程度）ドラッグします。パーツ同士の境界線が完全に消え、筋肉や粘土のように滑らかに融着します。</li>
+    <li><strong>部位ごとのカラー設定とグラデーション混色の確認:</strong> サイドパネルの <code>Primitive Settings</code> &gt; <code>Color</code> で、頭部をブルー、突起部をオレンジなど個別に指定します。GPUエンジンがブレンド幅に応じて2色を自動的にグラデーション混色（カラーブレンディング）します。</li>
+    <li><strong>全体の質感統一（仕上げ）:</strong> 形状が決まったら、サイドパネルの <code>Material</code> &gt; <code>Apply Color To All</code> や <code>Apply Material To All</code> を実行し、作品全体に統一したトーンと光沢を与えます。</li>
+  </ol>
+</div>
+
+<div class="card" id="pat-3">
+  <h3>パターン3: 【ハードサーフェス・メカ部品】面取りプロファイルと中空シェル</h3>
+  <p><strong>目的:</strong> 工業デザイン、メカ外装、電子機器ケースなど、シャープな角・面取り（Chamfer）と中空（Shell）を持つハードサーフェスパーツを作る。<br>
+  <strong>想定成果物:</strong> 外側が面取りされ、内部が均一な肉厚で中空化されたメカニカルカバー。</p>
+
+  <ol>
+    <li><strong>外装ベース形状の作成:</strong> <code>Hex Prism</code>（六角柱）または <code>Box</code> を追加します。</li>
+    <li><strong>エッジプロファイルの切り替え（面取り Chamfer）:</strong> ビューポート上の <strong>Edge Profileボタン</strong> から <code>Chamfer</code> をクリックします。オレンジ色の矢印ギズモ（Fillet）をドラッグすると、直線的な45度C面取りとして斜めに削り落とされます。</li>
+    <li><strong>シアン矢印ギズモで中空（シェル）構造にする:</strong> プリミティブの周囲にある <strong>シアン色の矢印ギズモ（Shell Thickness）</strong> を内側方向へドラッグします。ソリッドな塊だったHex Prismの内部がくり抜かれ、指定した肉厚（例: 2mm）の薄肉中空ケースに変化します。</li>
+    <li><strong>内部ボス（ネジ受け柱）の配置:</strong> <code>Cylinder</code> を追加し、ケースの底面内側に立てるように配置します。Operationは <code>Union</code>、Smoothnessを極小（<code>0.05</code> 程度）にすると、ケース内壁とわずかなフィレットで強固に接合されます。</li>
+    <li><strong>通気スリットの削り出し:</strong> 薄い <code>Box</code> を追加し、Operationを <code>Subtract</code> に設定してケース側面に配置すれば、シャープな通気口スリットが開孔されます。</li>
+  </ol>
+</div>
+
+<div class="card" id="pat-4">
+  <h3>パターン4: 【対称・幾何学レイアウト】ミラー対称とラジアル配列</h3>
+  <p><strong>目的:</strong> キャラクターや乗り物の完全な左右対称配置、およびホイールやファン、装飾などの円周パターンを効率よく作成する。<br>
+  <strong>想定成果物:</strong> 左右対称のビークルボディと、放射状に等間隔配置されたホイールスポーク。</p>
+
+  <ol>
+    <li><strong>左右対称モデリング（Mirror Mode）:</strong> パーツ（例: 腕やジェットエンジン用のCylinder）を作成し、X軸のプラス側（右手側）へ配置します。サイドパネルの <code>Layout (Instancing)</code> で <code>Mirror Mode</code> を <code>X</code> に設定します。反対側にリアルタイムで完全な対称パーツが出現し、元のパーツの編集に完全追従します。</li>
+    <li><strong>ホイール・ギアの円周配置（Radial Array）:</strong> 別のCylinderを中心 <code>(0, 0, 0)</code> に配置し、スポーク（棒状パーツ）として細長いBoxを配置します。Boxを選択し、<code>Radial Array Count</code> を <code>6</code>（または8）に設定すると、中心軸の周りに6本のスポークが60度間隔で放射状に複製配置されます。</li>
+    <li><strong>親パーツのTransformによる全体の微調整:</strong> 親Boxをスケールまたは回転させると、6本のスポーク全体が連動して変形・回転します。</li>
+  </ol>
+  <div class="tip"><strong>💡 メリット:</strong> SDFの空間座標を数学的に折り返すため、メッシュポリゴンを増やさず極めて軽量・高精度です。</div>
+</div>
+
+<h2 id="adv-section">【応用編】アドバンスド制作パターン</h2>
+
+<div class="card" id="pat-5">
+  <h3>パターン5: 【マルチツリー＆ツリー参照】部品の独立管理とアセンブリ構築</h3>
+  <p><strong>目的:</strong> 互いに溶け合わない独立パーツ（ロボットの手足、車両のタイヤ、眼球とまぶた等）を別ツリーとして制作し、メインモデルに参照配置して組み立てる。<br>
+  <strong>想定成果物:</strong> ボディ、タイヤ、関節がそれぞれ独立したメッシュとして存在し、干渉部が溶け合わない高精度メカアセンブリ。</p>
+
+  <div class="flow-box">[Tree 0: Body (メイン車体)] 
+         ▲
+         └── [Tree Reference Empty] ──(参照)──> [Tree 1: Tire (独立したタイヤツリー)]</div>
+
+  <ol>
+    <li><strong>メインツリー（車体）の制作:</strong> 初期ツリー（<code>Tree_0</code>）で車体のメインフレームをモデリングします。</li>
+    <li><strong>新規SDFツリー（タイヤ）の立ち上げ:</strong> パネル最上部 <code>0. Tree</code> の <code>＋</code> ボタン（Add Tree）をクリックし、新しい独立ツリー（<code>Tree_1</code>）を作成します。ここでタイヤ専用のモデリング（ホイール、ハブ、トレッド等）を作り込みます。</li>
+    <li><strong>Tree Reference（ツリー参照）によるアセンブリ配置:</strong> <code>Tree</code> ドロップダウンを <code>Tree_0</code> に戻し、<code>8-B. Tree Reference</code> の <code>Add Tree Reference</code> をクリックします。車体ツリー内に参照Emptyが作成され、プロパティ <code>Referenced Tree</code> で <code>Tree_1</code> を選択します。</li>
+    <li><strong>参照Emptyの配置・拡縮・複製:</strong> 通常のBlenderオブジェクトと同様に <code>G</code>（移動）、<code>R</code>（回転）、<code>S</code>（拡縮）で前輪位置へ移動させ、さらに <code>Shift + D</code> で複製して後輪位置へ配置します。</li>
+    <li><strong>溶け合わない独立メッシュとしての利点:</strong> 通常のSDFでは車体とタイヤが近接すると勝手に溶け合ってしまいますが、別ツリーとして管理されているため、<strong>境界が溶け合わずシャープな隙間を保ったまま同居</strong>します。</li>
+  </ol>
+</div>
+
+<div class="card" id="pat-6">
+  <h3>パターン6: 【Collection Divider】局所ブーリアンと階層カプセル化</h3>
+  <p><strong>目的:</strong> 複雑なモデルにおいて、「あるグループ内だけでブーリアン完結させ、他の部分に影響を与えない（局所演算）」設計を行う。<br>
+  <strong>想定成果物:</strong> 胴体に干渉することなく、腕パーツの内部だけでくり抜きやブレンドが完結する階層モデリング。</p>
+
+  <ol>
+    <li><strong>スタックの構造理解:</strong> SDF.Rの <code>The Stack</code> は上から下へと順番にブーリアン評価されます。そのままだと下部にあるSubtractプリミティブが上部の胴体まで削ってしまう事故が起こり得ます。</li>
+    <li><strong>Collection Divider（境界線）の挿入:</strong> 腕パーツ群を作成する直前の位置で、<code>The Stack</code> の <code>＋</code>（Add Collection Divider）をクリックします。スタック内にフォルダアイコンのDivider項目が挿入され、名前を <code>Arm_Group</code> に変更します。</li>
+    <li><strong>グループ内のパーツ構築:</strong> 腕用パーツを追加し、スタック上でDividerの下に配置します。このグループ内で行われる <code>Subtract</code> や大きな <code>Smoothness</code> は、<strong>Dividerの内側だけで評価</strong>されます。</li>
+    <li><strong>グループ全体のメインツリーへの結合設定:</strong> Divider自体の <code>Operation</code>（通常は <code>Union</code>）や <code>Smoothness</code> を設定することで、完成した腕グループが胴体に対して指定のスムーズ量で一体化します。</li>
+  </ol>
+</div>
+
+<div class="card" id="pat-7">
+  <h3>パターン7: 【Math Field幾何学装飾】多孔質構造と幾何学パターンのくり抜き</h3>
+  <p><strong>目的:</strong> 通常のポリゴン操作では不可能な数学的陰関数（Gyroid曲面、Clebsch曲面など）を呼び出し、モデルの表面や内部に複雑な格子・装飾パターンを埋め込む。<br>
+  <strong>想定成果物:</strong> 外殻の一部がジャイロイド（多孔質ラティス構造）で軽量化・装飾されたSF風ドローンパーツ。</p>
+
+  <ol>
+    <li><strong>ベース形状の用意:</strong> ベースとなる <code>Box</code> または <code>Sphere</code> を配置します。</li>
+    <li><strong>Math Fieldの追加とプリセット選択:</strong> <code>Add New Primitives</code> から <code>Math Field</code> を追加し、<code>11. Math Field 専用コマンド</code> で <code>Math Preset</code> から <code>Gyroid</code> を選択して <code>Compile Math Expression</code> をクリックします。</li>
+    <li><strong>交差演算（Intersect）によるくり抜き:</strong> Math FieldのOperationを <code>Intersect</code>（交差）に切り替えると、ベース形状の体積内部だけに美しい周期的な波状多孔質構造が生成されます。</li>
+    <li><strong>外枠（リム）との組み合わせ:</strong> 同じサイズのBoxをもう1つ用意し、中空シェル化（Shell Thicknessを適用）して <code>Union</code> で重ねると、「外周はソリッドフレーム、内部はジャイロイド格子」という3Dプリント実用品のような高機能パーツが完成します。</li>
+  </ol>
+</div>
+
+<div class="card" id="pat-8">
+  <h3>パターン8: 【Deform Stack変形】プロシージャルなねじれ・曲げ・先細り</h3>
+  <p><strong>目的:</strong> プリミティブに対して非破壊な変形モディファイア（Elongate / Twist / Bend / Taper / Noise）を複数重ねがけし、ドリル、ツノ、爪、触手などの複雑な歪み形状を作成する。<br>
+  <strong>想定成果物:</strong> 螺旋状にねじれながら先端に向かって鋭利に先細るクリーチャーのツノ／ドリルパーツ。</p>
+
+  <ol>
+    <li><strong>原型の用意:</strong> <code>Cylinder</code> または <code>Hex Prism</code> を追加します。</li>
+    <li><strong>Deform 1: 先細り（Taper）の追加:</strong> サイドパネルの <code>13. Deform (Stack)</code> から <code>Add Deform: Taper</code> を選び、<code>Taper Factor</code> を調整して上端に向かって鋭角に細くします。</li>
+    <li><strong>Deform 2: ねじれ回転（Twist）の重ねがけ:</strong> 続いて <code>Add Deform: Twist</code> を追加し、<code>Twist Angle</code> を大きく設定すると、軸に沿ってドリル状に激しくねじれます。</li>
+    <li><strong>Deform 3: 全体の曲げ（Bend）の適用:</strong> さらに <code>Add Deform: Bend</code> を追加し、<code>Bend Curvature</code> を調整して角全体を三日月状に大きく湾曲させます。</li>
+    <li><strong>非破壊編集の確認:</strong> 3つの変形はすべてスタックとして保持されているため、後から元の形状パラメータやねじれ角度だけをいつでも微調整できます。</li>
+  </ol>
+</div>
+
+<div class="card" id="pat-9">
+  <h3>パターン9: 【イテレーション＆プロダクション確定】Snapshotマテリアル分離とFinalize</h3>
+  <p><strong>目的:</strong> 試行錯誤の過程で複数のデザインバリエーション（案A・案B）を安全にフリーズ保存し、最終的にゲームエンジンや3Dプリント用の通常メッシュとして安全に確定出力する。<br>
+  <strong>想定成果物:</strong> 互いに干渉しないカラーバリエーション保存モデルと、クリーンな確定メッシュ。</p>
+
+  <ol>
+    <li><strong>デザイン案Aの制作とスナップショット保存:</strong> ライブツリー上で形状を作り込み、マテリアル色をレッドに設定します。<code>7. Finalize / Output</code> の <code>Snapshot Mesh</code> ボタンをクリックすると、ライブ編集環境を維持したまま静的な確定メッシュが複製生成されます。</li>
+    <li><strong>★V17.0.1 の安全仕様: 案Bへの移行とカラー独立性の確認:</strong> ライブツリーに戻り、形状を変更してマテリアル色をブルーに変えて「案B」を作ります。<strong>V17.0.1ではマテリアル自体が独立複製されているため、案Aは赤い色のまま完全に保持されます。</strong>案Aと案Bを並べて安全に比較検討できます。</li>
+    <li><strong>法線シェーディングの仕上げ（Fix Normals）:</strong> 最終案が決定したら、確定前に <code>Fix Normals</code> ボタンをクリックします。SDFの数学的勾配から計算された高品質法線が頂点に書き込まれ、ポリゴン境界のシェーディング乱れが完璧に解消されます。</li>
+    <li><strong>プロダクション確定（Finalize / Bake All）:</strong> <code>Finalize (Bake All)</code> ボタンをクリックします。ライブ結果メッシュがBlender標準メッシュとして確定され、元プリミティブ群は自動的に非表示の履歴コレクションへ退避されます。通常のBlenderスカルプトやエクスポートへスムーズに移行できます。</li>
+  </ol>
+</div>
+
+<div class="card" id="checklist">
+  <h2>制作フェーズ別 クイックチェックリスト</h2>
+  <table>
+    <thead>
+      <tr><th>フェーズ</th><th>チェック項目</th><th>推奨アクション</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>造形初期</strong></td><td>画面が重く感じないか？</td><td><code>Output &amp; Quality</code> の Preset を <code>Low</code> または <code>Medium</code> にしておく。</td></tr>
+      <tr><td><strong>形状結合時</strong></td><td>接合部が不自然に溶けすぎていないか？</td><td>マゼンタ矢印ギズモで <code>Smoothness</code> を絞るか、必要に応じて <code>Collection Divider</code> を挟む。</td></tr>
+      <tr><td><strong>ハードサーフェス時</strong></td><td>角が丸まりすぎて機械感が出ていないか？</td><td>ビューポート上のボタンで <code>Edge Profile</code> を <code>Chamfer</code> または <code>Tight</code> に切り替える。</td></tr>
+      <tr><td><strong>パーツ近接時</strong></td><td>別パーツとして並べたいのに溶け合ってしまう</td><td><code>Add SDF Tree</code> で別ツリーにし、<code>Tree Reference</code> で配置する。</td></tr>
+      <tr><td><strong>確定前</strong></td><td>シェーディングに違和感がないか？</td><td><code>Fix Normals</code> を実行し、法線ベクトルを最高品質に更新する。</td></tr>
+      <tr><td><strong>試作保存時</strong></td><td>過去の試作案の色が巻き込まれて変化しないか？</td><td><strong>V17.0.1対応済み</strong>。安心して <code>Snapshot Mesh</code> を活用可能。</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>
