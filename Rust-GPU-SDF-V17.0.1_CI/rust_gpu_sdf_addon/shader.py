@@ -29,7 +29,13 @@ vec4 q_from_euler(vec3 e){
     );
 }
 
+// 呼び出し側は k > 0 のときだけ呼ぶ(k == 0 だと下の Fallback が 0/0 で NaN になる)。
 float apply_primitive_edge(float d1, float d2, uint profile, float k, float cs) {
+    if (profile == 0u) { // Round: 半径 k の円形フィレット(外寸は変えずに角だけ削る)
+        // 2面ずつ畳み込むので、Box は XY→Z の2段で角が正確な球面になる
+        vec2 u = vec2(d1, d2) + k;
+        return length(max(u, 0.0)) + min(max(u.x, u.y), 0.0) - k;
+    }
     if (profile == 4u) { // Chamfer
         float plane = (d1 + d2 + k) * 0.70710678;
         float m = max(d1, d2);
@@ -39,6 +45,11 @@ float apply_primitive_edge(float d1, float d2, uint profile, float k, float cs) 
         float h = max(k - abs(d1 - d2), 0.0) / k; 
         return max(d1, d2) + h * h * h * k * 0.166666;
     }
+}
+
+// Round は半径をシェイプの厚みの半分(lim)で頭打ちにする。超えると外寸ごと縮んでしまうため。
+float edge_radius(uint profile, float k, float lim) {
+    return (profile == 0u) ? min(k, lim) : k;
 }
 
 float sdf_eval_shape(vec3 p_in, float t, vec3 size, float r, vec4 extra, vec4 mod_p, vec4 gyro_p){
@@ -56,27 +67,31 @@ float sdf_eval_shape(vec3 p_in, float t, vec3 size, float r, vec4 extra, vec4 mo
 
     if(t<0.5) { res_d = length(p_s) - r; } // Sphere
     else if(t<1.5){ // Box
-        if(edge_profile > 0u){
+        // Edge Size が 0 なら、どのプロファイルでも素の(正確な)距離場を使う
+        if(edge_k > 0.0){
             vec3 q = abs(p_s) - unit_size;
-            float d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, edge_k, edge_cs);
-            res_d = apply_primitive_edge(d_tmp, q.z, edge_profile, edge_k, edge_cs);
+            float ek = edge_radius(edge_profile, edge_k, 1.0);
+            float d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, ek, edge_cs);
+            res_d = apply_primitive_edge(d_tmp, q.z, edge_profile, ek, edge_cs);
         } else {
             vec3 q = abs(p_s) - unit_size; res_d = length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0); 
         }
     }
     else if(t<2.5){ vec2 q = vec2(length(p_s.xy) - extra.x, p_s.z); res_d = length(q) - extra.y; } // Torus
     else if(t<3.5){ // Cylinder
-        if (edge_profile > 0u) {
+        if (edge_k > 0.0) {
             float d_cyl = length(p_s.xy) - extra.x;
             float d_slab = abs(p_s.z) - extra.y;
-            res_d = apply_primitive_edge(d_cyl, d_slab, edge_profile, edge_k, edge_cs);
+            float ek = edge_radius(edge_profile, edge_k, min(extra.x, extra.y));
+            res_d = apply_primitive_edge(d_cyl, d_slab, edge_profile, ek, edge_cs);
         } else {
             vec2 q = abs(vec2(length(p_s.xy), p_s.z)) - extra.xy;
             res_d = min(max(q.x, q.y), 0.0) + length(max(q, 0.0));
         }
     }
     else if(t<4.5){ // Rounded Box
-        if (edge_profile > 0u) {
+        // Round(0) は素の sd_rounded_box が既に円形。半径 extra.x が 0 だと Fallback が NaN になる
+        if (edge_profile > 0u && extra.x > 0.0) {
             vec3 q = abs(p_s) - unit_size;
             float d_tmp = apply_primitive_edge(q.x, q.y, edge_profile, extra.x, edge_cs);
             res_d = apply_primitive_edge(d_tmp, q.z, edge_profile, extra.x, edge_cs);
@@ -90,7 +105,7 @@ float sdf_eval_shape(vec3 p_in, float t, vec3 size, float r, vec4 extra, vec4 mo
         res_d = length(pp) - extra.x;
     }
     else if(t<6.5){ // Hex Prism
-        if (edge_profile > 0u) {
+        if (edge_k > 0.0) {
             vec3 k_hex = vec3(-0.866025404, 0.5, 0.577350269);
             float h_radius = extra.x * 0.8660254; 
             float rx = 0.8660254 * p_s.x - 0.5 * p_s.y;
@@ -101,7 +116,8 @@ float sdf_eval_shape(vec3 p_in, float t, vec3 size, float r, vec4 extra, vec4 mo
             pp.y -= 2.0 * min(d_dot, 0.0) * k_hex.y;
             float d_xy = length(pp.xy - vec2(clamp(pp.x, -k_hex.z * h_radius, k_hex.z * h_radius), h_radius)) * sign(pp.y - h_radius);
             float d_slab = pp.z - extra.y;
-            res_d = apply_primitive_edge(d_xy, d_slab, edge_profile, edge_k, edge_cs);
+            float ek = edge_radius(edge_profile, edge_k, min(h_radius, extra.y));
+            res_d = apply_primitive_edge(d_xy, d_slab, edge_profile, ek, edge_cs);
         } else {
             vec3 k = vec3(-0.866025404, 0.5, 0.577350269);
             float h_radius = extra.x * 0.8660254; 
@@ -143,7 +159,7 @@ float sdf_eval_shape(vec3 p_in, float t, vec3 size, float r, vec4 extra, vec4 mo
         res_d = s * sqrt(min(dot(ca, ca), dot(cb, cb)));
     }
     else if(t<9.5){ // Ngon Prism
-        if (edge_profile > 0u) {
+        if (edge_k > 0.0) {
             float r = extra.x; float n = extra.y; float h = extra.z;
             float an = 3.14159265 / n;
             float cosan = cos(an);
@@ -154,7 +170,8 @@ float sdf_eval_shape(vec3 p_in, float t, vec3 size, float r, vec4 extra, vec4 mo
             float py = -s_tr * p_s.x + c * p_s.y;
             float d_xy = px - r * cosan;
             float d_z = abs(p_s.z) - h;
-            res_d = apply_primitive_edge(d_xy, d_z, edge_profile, edge_k, edge_cs);
+            float ek = edge_radius(edge_profile, edge_k, min(r * cosan, h));
+            res_d = apply_primitive_edge(d_xy, d_z, edge_profile, ek, edge_cs);
         } else {
             float r = extra.x; float n = extra.y; float h = extra.z;
             float an = 3.14159265 / n;

@@ -474,7 +474,11 @@ class SDF_ObjectProperties(bpy.types.PropertyGroup):
         ],
         name="Edge Profile", default='0', update=update_sdf_callback
     )
-    edge_profile_size: bpy.props.FloatProperty(name="Edge Size", default=0.1, min=0.0, max=100.0, update=update_sdf_callback)
+    # V17.0.2: 既定値を 0.1 → 0.0 に変更。Round(既定の edge_profile)が V17.0.1 までは
+    # Size を無視していたため、0.1 のままだと「一度も触っていない」既存プリミティブまで
+    # 修正後に一斉に丸まってしまう。未設定のプロパティは .blend に保存されず読み込み時に
+    # 既定値になるので、既定値を 0 にすれば旧ファイルの見た目(角あり)が保たれる。
+    edge_profile_size: bpy.props.FloatProperty(name="Edge Size", default=0.0, min=0.0, max=100.0, update=update_sdf_callback)
     edge_chamfer_smooth: bpy.props.FloatProperty(name="Edge Chamfer Smooth", default=0.0, min=0.0, max=2.0, update=update_sdf_callback)
     shell_thickness: bpy.props.FloatProperty(name="Shell Thickness", default=0.0, min=0.0, max=100.0, update=update_sdf_callback)
     

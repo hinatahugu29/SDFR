@@ -608,10 +608,10 @@ class SDF_PT_main(bpy.types.Panel):
                 if shape_key != 'math_field':
                     row_edge = sub.row(align=True)
                     row_edge.prop(props, "edge_profile", text="Edge")
-                    # V17.0.0: engine.py は edge_profile が '0'(Round)でも
-                    # edge_profile_size をそのまま丸め半径として使う。以前はここで
-                    # '0' のときだけ欄を隠していたため、ビューポートのギズモで
-                    # 値を動かしてもパネルに確認できる数値が出ない状態になっていた。
+                    # Size はどのプロファイルでも常に表示する。Round(0)は Size を
+                    # 半径とする円形フィレット、Size 0 はどのプロファイルでも角なし。
+                    # (V17.0.1 までは Round がシェーダー側で素通りされ Size が効いて
+                    # いなかった。V17.0.2 で shader.py / common.wgsl / lib.rs を修正)
                     row_edge.prop(props, "edge_profile_size", text="Size")
 
                     if props.edge_profile == '4':
