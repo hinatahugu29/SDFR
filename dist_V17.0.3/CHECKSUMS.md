@@ -1,11 +1,14 @@
 SDF.R V17.0.3 - distribution packages
-built 2026-11-21 / local Windows build (build_sdf_addon.ps1) from the Rust-GPU-SDF-V17.0.3_CI tree / macOS and Linux pending CI
+built 2026-11-21 / commit c05260d / Windows: local build (build_sdf_addon.ps1), macOS and Linux: CI run 44852168079
 
 | Platform | File | Size | SHA-256 |
 |---|---|---:|---|
 | Windows | SDF_R_17_0_3.zip | 14,657,412 | c908a21009e3d6adfffb3d786881e57184c329a399651d6e3eaa4a336757921a |
-| macOS (Apple Silicon) | SDF_R_17_0_3_Darwin.zip | - | pending (build-sdf-r-v17-0-3-cross-platform.yml) |
-| Linux (x86-64) | SDF_R_17_0_3_Linux.zip | - | pending (build-sdf-r-v17-0-3-cross-platform.yml) |
+| macOS (Apple Silicon) | SDF_R_17_0_3_Darwin.zip | 13,768,955 | 94028b8839965bbe9b7a77d4476a8875672f6891e0da4a5df9681cd6c3d30d38 |
+| Linux (x86-64) | SDF_R_17_0_3_Linux.zip | 14,936,725 | f441adabea6048e393b4be66b4a81f1cce8f5447a66be11c50b9024ab0f45d00 |
+
+All three carry byte-identical Python sources; only the native module differs. Each native module reports __version__ 17.0.3.
+macOS is arm64 only (macos-15 runner) and does not run on Intel Macs.
 
 V17.0.3 fixes the black spots that appeared with Weld (Merge) ON:
 - Weld now flips "cap" triangles (apex > 175 deg, three nearly collinear vertices) that Marching Cubes emits where the surface runs along a grid line. Welded into the mesh, their flipped normals were dragging Blender's angle-weighted vertex normals into wedge-shaped dark spots.
