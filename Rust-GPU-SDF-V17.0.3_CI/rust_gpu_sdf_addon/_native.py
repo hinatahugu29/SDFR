@@ -74,6 +74,8 @@ def _load_native_module():
             # ここで止めず、残りの候補を試す。
             failures.append((candidate, f"{type(exc).__name__}: {exc}"))
             continue
+        global LOADED_PATH
+        LOADED_PATH = candidate
         return module
 
     detail = ""
@@ -86,6 +88,34 @@ def _load_native_module():
         f"Python {platform.python_version()}\n"
         "Checked paths:\n - " + "\n - ".join(attempted) + detail
     )
+
+
+# 実際に読み込んだバイナリのパス
+LOADED_PATH = None
+# 版の食い違いがあれば、その説明 (無ければ空文字)。register() で設定し UI が表示する。
+VERSION_WARNING = ""
+
+
+def check_native_version(expected):
+    """読み込んだバイナリの版が Python 側 (bl_info) と一致するか確かめる。
+
+    V17.0.3: Windows ではアドオンを有効にしたまま ZIP で上書きインストールすると、
+    読み込み中の bin/win/rust_gpu_sdf.pyd が使用中で書き換えられず、旧版のまま残る。
+    有効なまま再起動しても起動時に読み込まれるので、無効化→再起動→インストールの順が要る。
+    Python だけ新しく Rust が古い組み合わせは、起動ログの Loader Marker も新しい版を
+    表示するので気付けない (実例: V17.0.3 の Python + V17.0.2 のバイナリで、Weld の
+    しきい値の単位が食い違い DC に黒点が出た)。ここで検出して知らせる。
+    """
+    global VERSION_WARNING
+    want = ".".join(str(x) for x in expected)
+    got = getattr(rust_gpu_sdf, "__version__", None)
+    if got == want:
+        VERSION_WARNING = ""
+    else:
+        VERSION_WARNING = f"Add-on {want} / engine {got or 'older than 17.0.3'}"
+        print(f"SDF.R WARNING: native engine version mismatch ({VERSION_WARNING}, "
+              f"loaded: {LOADED_PATH}). Disable the add-on, restart Blender, then install the zip again and enable it.")
+    return VERSION_WARNING
 
 
 rust_gpu_sdf = _load_native_module()

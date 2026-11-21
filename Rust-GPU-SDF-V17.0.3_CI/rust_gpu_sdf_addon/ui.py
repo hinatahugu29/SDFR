@@ -1,4 +1,5 @@
 import bpy
+from . import _native
 from ._native import rust_gpu_sdf
 from .constants import PRIMITIVE_UI_DEFS
 from .engine import _resolve_curve_sync_target, iter_sdf_outputs, resolve_active_output
@@ -191,6 +192,15 @@ class SDF_PT_main(bpy.types.Panel):
         except Exception:
             pass
         layout.label(text="GPU: Updating" if updating else "GPU: Ready", icon='TIME' if updating else 'NODE_COMPOSITING')
+        # V17.0.3: Python とネイティブエンジンの版が食い違っている (上書きインストール失敗)
+        if _native.VERSION_WARNING:
+            warn = layout.box()
+            warn.alert = True
+            col = warn.column(align=True)
+            col.label(text="Engine version mismatch", icon='ERROR')
+            col.label(text=_native.VERSION_WARNING)
+            col.label(text="Disable the add-on, restart Blender,")
+            col.label(text="then install the zip again and enable it.")
         self._draw_engine_diagnostics(layout, scene, output_obj, updating)
 
         # V15.9.9.1: DCシェーダーのコンパイル失敗が検出された場合の案内表示

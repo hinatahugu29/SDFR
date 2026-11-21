@@ -125,7 +125,14 @@ with zipfile.ZipFile(zip_path) as zf:
         raise SystemExit("Package contains Python cache files: " + ", ".join(sorted(bad)))
 
 sys.path.insert(0, addon)
-importlib.import_module("rust_gpu_sdf")
+mod = importlib.import_module("rust_gpu_sdf")
+import re
+init_src = open(os.path.join(addon, "__init__.py"), encoding="utf-8").read()
+m = re.search(r'"version":\s*\((\d+),\s*(\d+),\s*(\d+)\)', init_src)
+want = ".".join(m.groups())
+got = getattr(mod, "__version__", None)
+if got != want:
+    raise SystemExit(f"Native version {got} does not match bl_info {want} (update SDF_R_NATIVE_VERSION in src/lib.rs)")
 print("Validation Complete")
 '@
 $validateScript = $validateScript.Replace("__ADDON_DIR__", $addonDir).Replace("__ZIP_FILE__", $zipFile)

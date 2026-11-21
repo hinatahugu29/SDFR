@@ -230,8 +230,9 @@ def register():
     import os
     import threading
     import time
-    from ._native import rust_gpu_sdf
+    from ._native import rust_gpu_sdf, check_native_version
     print("SDF.R: --- Initializing GPU Engine (V17.0.3) ---")
+    check_native_version(bl_info["version"])
     
     cache_dir = os.path.join(bpy.utils.user_resource('DATAFILES'), "rust_gpu_sdf")
     os.makedirs(cache_dir, exist_ok=True)

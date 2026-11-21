@@ -2749,8 +2749,14 @@ fn get_log_path() -> Option<String> {
     log_util::get_log_path()
 }
 
+/// アドオン本体 (bl_info["version"]) と同じ版番号。
+const SDF_R_NATIVE_VERSION: &str = "17.0.3";
+
 #[pymodule]
 fn rust_gpu_sdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // V17.0.3: Python 側 (bl_info) と版が食い違っていないかを確かめるための版番号。
+    // 版を切るときは bl_info と一緒に上げる (build_sdf_addon の検証で突き合わせる)。
+    m.add("__version__", SDF_R_NATIVE_VERSION)?;
     m.add_class::<SdfPrimitive>()?;
     m.add_function(wrap_pyfunction!(calculate_sdf_at_point, m)?)?;
     m.add_function(wrap_pyfunction!(request_mesh_update, m)?)?;
