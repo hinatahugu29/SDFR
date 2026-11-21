@@ -1429,7 +1429,11 @@ def update_sdf_mesh(output_obj, depsgraph=None, allow_forced_eval=True):
             requested = rust_gpu_sdf.request_chunked_mesh_update(primitives, res, domain, sym_mask, chunk_w_thresh, chunk_cells)
             _cpu_chunked_fallback_active[owner] = requested
         else:
-            requested = rust_gpu_sdf.request_mesh_update(primitives, res, domain, use_dc, sym_mask, w_thresh)
+            # V17.0.3: 非チャンク GPU 経路は Rust 側でしきい値をワールド距離のまま使っていた
+            # (既定 0.001 が、たまたまサンプル規模で ~0.05 ボクセル相当になっていた)。
+            # ボクセル倍率に揃えたうえで、GPU ブロック境界の継ぎ目もチャンク境界と同じ
+            # 性質なので、チャンク経路と同じ Seam Weld 下限を使う。
+            requested = rust_gpu_sdf.request_mesh_update(primitives, res, domain, use_dc, sym_mask, chunk_w_thresh)
 
         if requested:
             # V16.2.1: 受理されたのでここで初めてハッシュを確定し、この計算の
@@ -1543,7 +1547,7 @@ def apply_mesh_data(output_obj, data, force_normals=False):
                 retry_res = max(props.safe_retry_min_res, prev_res // 2)
                 if retry_res < prev_res:
                     print(f"SDF Mesh Protect: retrying at lower resolution {retry_res} after {health}.")
-                    if rust_gpu_sdf.request_mesh_update(primitives, retry_res, domain, use_dc, sym_mask, w_thresh):
+                    if rust_gpu_sdf.request_mesh_update(primitives, retry_res, domain, use_dc, sym_mask, _chunk_weld_threshold(props, w_thresh)):
                         _safe_retry_active[owner] = True
                         _inflight_owner = owner
                         _pending_updates.pop(owner, None)

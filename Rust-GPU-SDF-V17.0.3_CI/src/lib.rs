@@ -1376,7 +1376,37 @@ fn weld_mesh(vertices: Vec<f32>, indices: Vec<u32>, threshold: f32) -> (Vec<f32>
     // V17.0.3: Weld で連結された「キャップ三角形」(3頂点がほぼ一直線) を辺フリップで解消する。
     flip_cap_triangles(&final_vertices, &mut new_indices);
 
+    // V17.0.3: 縮退面の除去で参照されなくなった頂点を詰める。残すと Finalize/Snapshot の
+    // 結果に孤立頂点として残る (サンプル実測: res 329 で 36 個、res 658/1024 で 12 個)。
+    let final_vertices = compact_unused_vertices(final_vertices, &mut new_indices);
+
     (final_vertices, new_indices)
+}
+
+/// どの面からも参照されない頂点を取り除き、インデックスを詰め直す。
+fn compact_unused_vertices(vertices: Vec<f32>, indices: &mut [u32]) -> Vec<f32> {
+    let n = vertices.len() / 11;
+    let mut remap = vec![u32::MAX; n];
+    for &i in indices.iter() {
+        remap[i as usize] = 0;
+    }
+    let used = remap.iter().filter(|&&r| r == 0).count();
+    if used == n {
+        return vertices;
+    }
+    let mut out = Vec::with_capacity(used * 11);
+    let mut next = 0u32;
+    for v in 0..n {
+        if remap[v] == 0 {
+            remap[v] = next;
+            next += 1;
+            out.extend_from_slice(&vertices[v * 11..v * 11 + 11]);
+        }
+    }
+    for i in indices.iter_mut() {
+        *i = remap[*i as usize];
+    }
+    out
 }
 
 /// 頂角がほぼ 180° の三角形 (キャップ) を、最長辺のフリップで解消する。
@@ -1544,6 +1574,23 @@ mod flip_cap_tests {
         ]);
         let (wv, _wi) = weld_mesh(v, vec![0, 1, 2, 3, 4, 5], 0.01);
         assert_eq!(wv.len() / 11, 6);
+    }
+
+    #[test]
+    fn weld_drops_vertices_left_only_by_degenerate_faces() {
+        // 2面目は 0.001 以内に潰れて縮退 → 除去。その頂点 (0.5,0.5,0) は孤立するので消える。
+        let v = vbuf(&[
+            [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0],
+            [0.5, 0.5, 0.0], [0.5, 0.5, 0.0002], [0.5, 0.5, 0.0004],
+            [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0],
+        ]);
+        let (wv, wi) = weld_mesh(v, (0..9).collect(), 0.001);
+        assert_eq!(wi.len(), 6);
+        assert_eq!(wv.len() / 11, 4);
+        assert!(wi.iter().all(|&i| (i as usize) < wv.len() / 11));
+        let mut used = vec![false; wv.len() / 11];
+        for &i in &wi { used[i as usize] = true; }
+        assert!(used.iter().all(|&u| u));
     }
 
     #[test]
@@ -2464,8 +2511,12 @@ fn generate_sdf_mesh_internal(primitives: Vec<SdfPrimitive>, res: usize, size: f
         
         let (v_w, i_w) = if weld_threshold > 0.0 {
             let v_w_old_len = v.len() / 11;
-            let res_weld = weld_mesh(v, i, weld_threshold);
-            println!("Rust Debug: Weld Applied. Threshold: {}, Verts: {} -> {}", weld_threshold, v_w_old_len, res_weld.0.len() / 11);
+            // V17.0.3: weld_threshold は「ボクセル幅に対する倍率」(UI: Weld Threshold (Scale))。
+            // この経路だけワールド単位の距離としてそのまま渡していたため、小さいモデルほど
+            // 過剰に結合していた。他の経路 (チャンク/CPU) と同じく step を掛ける。
+            let actual_threshold = (size / res as f32) * weld_threshold;
+            let res_weld = weld_mesh(v, i, actual_threshold);
+            println!("Rust Debug: Weld Applied. Threshold: {:.6}, Verts: {} -> {}", actual_threshold, v_w_old_len, res_weld.0.len() / 11);
             res_weld
         } else { (v, i) };
 
