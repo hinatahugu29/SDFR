@@ -2796,7 +2796,7 @@ fn get_log_path() -> Option<String> {
 }
 
 /// アドオン本体 (bl_info["version"]) と同じ版番号。
-const SDF_R_NATIVE_VERSION: &str = "17.0.5";
+const SDF_R_NATIVE_VERSION: &str = "17.0.6";
 
 #[pymodule]
 fn rust_gpu_sdf(m: &Bound<'_, PyModule>) -> PyResult<()> {
